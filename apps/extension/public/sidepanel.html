@@ -6,7 +6,10 @@
 <section><label for="api">PWA origin</label><input id="api" value="http://localhost:3000" placeholder="https://your-project.vercel.app">
 <label for="code">Demo access code (not saved)</label><input id="code" type="password" autocomplete="off">
 <label for="profile">Private voice profile ID</label><input id="profile" placeholder="Copy the UUID from the enrollment website">
-<button id="grant" class="secondary">Enable current website</button></section>
+<button id="grant" class="secondary" type="button">Enable current website</button>
+<button id="disable" class="secondary" type="button">Disable current website</button>
+<p class="help">Chrome's permission to call the speech API is separate. A website is not controlled until you enable it, including localhost and Vercel pages. Disable removes it from your list.</p>
+<ul id="enabled"></ul></section>
 <section><label for="listen">Listen control</label><select id="listen"><option value="toggle" selected>One toggle button</option><option value="separate">Separate start and stop</option></select>
 <label for="maxsec">Maximum clip length (seconds)</label><input id="maxsec" type="number" min="0.5" max="30" step="0.5" value="5">
 <label><input id="autostop" type="checkbox" checked> Stop automatically at the time limit</label>
@@ -14,6 +17,8 @@
 <button id="record" type="button" aria-pressed="false">🎙 Start listening</button>
 <button id="stop" type="button" hidden disabled>■ Stop and recognize</button>
 <button id="silence" type="button" class="secondary" disabled>Stop speaking</button>
+<button id="test-scroll" type="button" class="secondary">Test scroll down</button>
+<p class="help">Test scroll down runs the canonical phrase through the official Controller. It does not use the microphone and does not call the speech model. It still requires this website to be enabled.</p>
 <div id="status" class="status" role="status" aria-live="polite">Ready. Enable the current website first.</div></section>
 <p class="help">Only recognized commands run. Read aloud uses speechSynthesis in this panel and is not recorded or uploaded. Undo last setting reverses a display setting only, not scrolling or Back. This prototype does not run on browser-restricted pages.</p>
 <script src="sidepanel.js"></script></body></html>

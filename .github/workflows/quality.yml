@@ -37,7 +37,8 @@ jobs:
       - run: pip install -r services/speech-api/requirements-dev.txt
       - run: npm install
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - run: npm run build:extension
+      - run: xvfb-run -a npm run test:e2e
         env:
           CI: '1'
           NEXT_TELEMETRY_DISABLED: '1'

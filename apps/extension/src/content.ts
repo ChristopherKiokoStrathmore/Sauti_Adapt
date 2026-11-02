@@ -2,6 +2,7 @@
 import { createController } from '@toolkit/controller/createController.js';
 import { createDomReceiver } from '@toolkit/controller/web/dom-receiver.js';
 import { TOOLKIT_UTTERANCE } from '@sauti/shared';
+import { ENABLED_ORIGINS_KEY, httpOrigin, readEnabledOrigins } from './allowlist';
 
 const win = globalThis as typeof globalThis & { __SAUTI_CONTENT_READY__?: boolean };
 if (!win.__SAUTI_CONTENT_READY__) {
@@ -20,9 +21,17 @@ if (!win.__SAUTI_CONTENT_READY__) {
       respond({ ok: false, reason: 'Command is outside the allowlist' });
       return false;
     }
-    controller.handle(message.utterance).then(result => {
-      respond({ ok: Boolean(result.ok), pending: Boolean(result.pending), feedback: String(result.say || '') });
-    }).catch(() => respond({ ok: false, reason: 'Controller did not complete.' }));
+    const origin = httpOrigin(location.href);
+    chrome.storage.local.get(ENABLED_ORIGINS_KEY).then(stored => {
+      const enabled = readEnabledOrigins(stored[ENABLED_ORIGINS_KEY]);
+      if (!origin || !enabled.includes(origin)) {
+        respond({ ok: false, reason: 'This website is not enabled.' });
+        return;
+      }
+      controller.handle(message.utterance).then(result => {
+        respond({ ok: Boolean(result.ok), pending: Boolean(result.pending), feedback: String(result.say || '') });
+      }).catch(() => respond({ ok: false, reason: 'Controller did not complete.' }));
+    }).catch(() => respond({ ok: false, reason: 'This website is not enabled.' }));
     return true;
   });
 }

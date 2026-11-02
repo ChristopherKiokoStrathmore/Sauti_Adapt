@@ -63,7 +63,7 @@ The toolkit's stock `controller/web/ui.js` creates browser `SpeechRecognition` c
 * Model and recordings live outside Git and public folders.
 * Next.js protects demo endpoints using a shared team access code, then forwards a separate private backend token. This is suitable only for a controlled hackathon demo, NOT for public production.
 * Release requires proper per-person authentication/authorization, deletion and retention controls, encrypted storage, rate limiting, privacy notices and abuse protection.
-* A browser extension needs per-site permission and can be disabled by the user. The user must understand sensitive sites should not be enabled casually.
+* A browser extension may hold host permission for its speech API, including a localhost app and `*.vercel.app`. That permission does not enable control. The person keeps a separate list of enabled website origins in extension storage. The content script rejects commands unless the current origin is on that list. Disable removes the origin. Browser-internal pages are refused.
 * Do not claim Android or iOS system-wide control is provided by a browser PWA.
 * No audio/transcripts or identifiable co-designer details go into test fixtures, the repo or model cards without appropriately scoped consent.
 

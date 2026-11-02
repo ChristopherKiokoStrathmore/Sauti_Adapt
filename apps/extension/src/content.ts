@@ -3,13 +3,17 @@ import { createController } from '@toolkit/controller/createController.js';
 import { createDomReceiver } from '@toolkit/controller/web/dom-receiver.js';
 import { TOOLKIT_UTTERANCE } from '@sauti/shared';
 import { ENABLED_ORIGINS_KEY, httpOrigin, readEnabledOrigins } from './allowlist';
+import { capReadPort } from './page-text';
 
 const win = globalThis as typeof globalThis & { __SAUTI_CONTENT_READY__?: boolean };
 if (!win.__SAUTI_CONTENT_READY__) {
   win.__SAUTI_CONTENT_READY__ = true;
-  const receiver = createDomReceiver(document.documentElement, {
-    scrollTarget: document.scrollingElement || document.documentElement
-  });
+  const receiver = capReadPort(
+    createDomReceiver(document.documentElement, {
+      scrollTarget: document.scrollingElement || document.documentElement
+    }),
+    () => document.body?.innerText || '',
+  );
   const controller = createController({ control: receiver, operator: { abilityModel: { supportAreas: ['motor'] } } });
 
   chrome.runtime.onMessage.addListener((message, sender, respond) => {

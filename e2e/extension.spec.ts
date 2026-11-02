@@ -100,6 +100,12 @@ test('enabled sites use the real Controller and other sites do not', async () =>
     await expect(panel.locator('#status')).toContainText('Enabled http://127.0.0.1:3000');
     await press(panel, alphaId, 'test-scroll');
     await expect(panel.locator('#status')).toHaveText('Scrolling down.');
+    const read = await worker.evaluate(async (id: number) => {
+      const api = (globalThis as unknown as { chrome: typeof chrome }).chrome;
+      return api.tabs.sendMessage(id, { kind: 'SAUTI_APPROVED_COMMAND', utterance: 'read this' });
+    }, alphaId);
+    expect(String(read.feedback)).toContain('ALPHA-SITE');
+    expect(String(read.feedback)).not.toContain('SECRET-TOKEN');
     await expect.poll(() => scrollTop(alpha)).toBeGreaterThan(0);
     expect(await scrollTop(beta)).toBe(0);
 

@@ -3,9 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { COMMAND_LABELS, commandToUtterance, validRecognition, type Intent, type Language, type Recognition } from '@sauti/shared';
 import { clampClipMs, startRecording, type RecordingSession } from '@sauti/shared/audio';
 import { isReadAloudUtterance, speakText, stopSpeaking } from '@sauti/shared/speak';
-import { createController } from '@toolkit/controller/createController.js';
-import { createDomReceiver } from '@toolkit/controller/web/dom-receiver.js';
 import { CONTROLLER_CSS } from '@toolkit/controller/web/ui.js';
+import { createController, createDomReceiver } from '@/lib/official-controller';
 
 const INTENT_OPTIONS: Intent[] = ['SCROLL_DOWN', 'SCROLL_UP', 'GO_BACK', 'READ_PAGE', 'UNDO', 'UNKNOWN'];
 const TEST_COMMANDS = [
@@ -52,9 +51,6 @@ export function SautiDashboard() {
     const root = document.getElementById('controlled-site');
     if (root) controller.current = createController({
       control: createDomReceiver(root, { scrollTarget: root }),
-      // createController.js defaults `operator = null`, so tsc infers null and drops the JSDoc.
-      // The implementation reads operator.abilityModel (see createController.js).
-      // @ts-expect-error upstream JS default hides the documented operator object type
       operator: { abilityModel: { supportAreas: ['motor'] } }
     });
     return () => { recording.current?.cancel(); stopSpeaking(); controller.current = null; };

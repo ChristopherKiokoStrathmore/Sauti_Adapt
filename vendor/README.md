@@ -38,7 +38,7 @@ Sauti Adapt does not import `controller/web/ui.js` or `controller/mount/index.js
 ## Upstream notes at this pin
 
 - `controller/DESIGN.md` shows `createController({ mount, operator: { uid } })`. The function accepts `{ control, llm, operator, rawToTask }`. Mounting is a separate `mountController()` call. `operator` is `{ abilityModel, librarian }`, and the code reads `operator.abilityModel`.
-- The default `operator = null` makes TypeScript infer `null` and ignore the JSDoc object type. `apps/web` suppresses that one error at the call site. The value passed is still the real options object.
+- The default `operator = null` makes TypeScript infer `null` and ignore the JSDoc object type. `packages/shared/src/toolkit-modules.d.ts` declares the documented operator object so call sites pass it without a cast. The value passed is still the real options object.
 - `handle()` includes `pending` only on the confirmation return. Other returns do not have that property.
 - `supportAreas: ['motor']` sets `confirmActions`. Confirmation applies to `activate`, `submit`, and `navigate`, not to scroll, back, read, undo, or font changes.
 - `mount/index.js` companion mode moves the target into a wrapper. `unmount()` does not put the target back.

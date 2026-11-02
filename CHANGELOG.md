@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Bootstrap verifies upstream AI4A11y commit `7cf5006dbab9e328fadf54b654147c6bca44113d` and exits non-zero on a different SHA, a dirty checkout, or missing Controller files. The clone stays gitignored.
-- Next.js typecheck calls the real `createController` / `createDomReceiver`. TypeScript's inference from `operator = null` is suppressed at that call site only. `handle()` results are narrowed before reading `pending`.
+- Next.js typecheck calls the real `createController` / `createDomReceiver`. A module declaration types `operator` as the documented ability-model object, so the `operator = null` default no longer forces a cast. `handle()` results are narrowed before reading `pending`.
 - Recorded provenance and upstream notes in `vendor/README.md`.
 - Baseline on this checkout, with no product change: speech API tests 16 passed, shared command tests 2 passed, web typecheck passed, and both the extension and Next.js builds passed. Mock mode still returns `rejected` / `UNKNOWN` and does not execute speech.
 - Docs and UI state that the app path freezes `facebook/wav2vec2-base` and uses per-command prototypes. It does not fine-tune, the notebook is not wired in, and no accuracy is claimed.

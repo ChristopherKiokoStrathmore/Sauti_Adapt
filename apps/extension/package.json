@@ -1,0 +1,8 @@
+{
+  "name":"@sauti/extension",
+  "private":true,
+  "version":"0.1.0",
+  "scripts":{"build":"node build.mjs"},
+  "dependencies":{"@sauti/shared":"file:../../packages/shared"},
+  "devDependencies":{"@types/chrome":"^0.0.300"}
+}

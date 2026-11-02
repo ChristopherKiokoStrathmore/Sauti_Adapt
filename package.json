@@ -1,0 +1,17 @@
+{
+  "name": "sauti-adapt-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["apps/web", "apps/extension", "packages/shared"],
+  "scripts": {
+    "setup:toolkit": "python scripts/bootstrap_toolkit.py",
+    "dev:web": "npm run dev --workspace @sauti/web",
+    "build:web": "npm run build --workspace @sauti/web",
+    "build:extension": "npm run build --workspace @sauti/extension",
+    "test:shared": "node --experimental-strip-types --test packages/shared/test/*.test.ts",
+    "test:api": "python -m pytest services/speech-api/tests -q",
+    "typecheck:web": "npm run typecheck --workspace @sauti/web",
+    "check": "npm run test:shared && npm run typecheck:web && npm run build:extension && npm run test:api"
+  },
+  "devDependencies": {"esbuild": "^0.25.0", "typescript": "^5.9.0"}
+}

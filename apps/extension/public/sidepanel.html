@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sauti Adapt</title><style>
+:root{font-family:system-ui,sans-serif;color:#201d37;background:#faf9ff}body{margin:0;padding:18px}h1{font-size:1.7rem;margin:0 0 8px}.help{color:#5c6172;font-size:.85rem}section{background:#fff;padding:16px;border:1px solid #ddd7f0;border-radius:14px;margin:12px 0}label{font-weight:600;display:block;margin:10px 0 5px}input{font:inherit;width:100%;padding:10px;border:1px solid #8f84b9;border-radius:8px;box-sizing:border-box}button{font:inherit;background:#4d33ad;color:white;border:0;border-radius:10px;padding:11px 13px;cursor:pointer;margin:4px 0;width:100%}button:disabled{opacity:.5}button.secondary{color:#3d268b;background:#e9e5f7}.status{background:#eeeaf9;border-radius:10px;padding:13px;overflow-wrap:anywhere;white-space:pre-wrap;min-height:36px}:focus-visible{outline:3px solid #e4a716;outline-offset:2px}
+</style></head><body>
+<h1>Sauti Adapt</h1><p class="help">Team 4 • Personalized voice controller • Kenyan English and Kiswahili</p>
+<section><label for="api">PWA origin</label><input id="api" value="http://localhost:3000" placeholder="https://your-project.vercel.app">
+<label for="code">Demo access code (not saved)</label><input id="code" type="password" autocomplete="off">
+<label for="profile">Private voice profile ID</label><input id="profile" placeholder="Copy the UUID from the enrollment website">
+<button id="grant" class="secondary">Enable current website</button></section>
+<section><button id="record">🎙 Start listening</button><p class="help">Select Stop to send one utterance. No microphone recording occurs until you start it.</p>
+<button id="stop" disabled>■ Stop and recognize</button>
+<div id="status" class="status" role="status" aria-live="polite">Ready. Enable the current website first.</div></section>
+<p class="help">Only recognized and authorized commands are executed. This prototype does not function on browser restricted pages or without site permission.</p>
+<script src="sidepanel.js"></script></body></html>

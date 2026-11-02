@@ -16,7 +16,9 @@ __pycache__/
 *.mp3
 *.ogg
 *.webm
+*.npy
 *.npz
+*.bin
 *.pt
 *.pth
 *.safetensors

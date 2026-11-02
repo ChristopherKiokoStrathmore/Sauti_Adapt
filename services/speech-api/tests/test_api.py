@@ -29,9 +29,52 @@ def payload():
 
 def test_health_does_not_expose_secrets(monkeypatch):
     monkeypatch.setenv('SAUTI_API_TOKEN', 'secret-in-health-test')
+    monkeypatch.setenv('SAUTI_TOKEN_PEPPER', 'pepper-in-health-test')
+    monkeypatch.delenv('SPEECH_MODE', raising=False)
+    monkeypatch.delenv('ALLOW_ENROLLMENT', raising=False)
     resp = client.get('/health')
     assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {'status', 'mode', 'enrollment_enabled'}
+    assert body == {'status': 'ok', 'mode': 'mock', 'enrollment_enabled': False}
     assert 'secret-in-health-test' not in resp.text
+    assert 'pepper-in-health-test' not in resp.text
+
+
+def test_unset_speech_mode_and_enrollment_fail_closed(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.delenv('SPEECH_MODE', raising=False)
+    monkeypatch.delenv('ALLOW_ENROLLMENT', raising=False)
+    health = client.get('/health')
+    assert health.json()['mode'] == 'mock'
+    assert health.json()['enrollment_enabled'] is False
+    enrolled = client.post('/v1/enroll', data=payload() | {'session_id': str(uuid4()), 'intent': 'SCROLL_DOWN', 'consent': 'true'},
+                           files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert enrolled.status_code == 403
+    assert enrolled.status_code != 200
+    recognized = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert recognized.status_code == 200
+    assert recognized.json()['status'] == 'rejected'
+    assert recognized.json()['intent'] == 'UNKNOWN'
+    assert not list(tmp_path.rglob('*.wav'))
+
+
+def test_unauthorized_requests_never_succeed(monkeypatch):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    audio = {'audio': ('test.wav', wav(), 'audio/wav')}
+    cases = [
+        ({}, 401),
+        ({'x-api-key': 'wrong-key', 'x-sauti-user': USER_ID, 'x-sauti-user-token': USER_TOKEN}, 401),
+        ({'x-api-key': 'test-secret', 'x-sauti-user': USER_ID}, 401),
+        ({'x-api-key': 'test-secret', 'x-sauti-user': USER_ID, 'x-sauti-user-token': 'wrong-token'}, 401),
+        ({'x-api-key': 'test-secret', 'x-sauti-user': '33333333-3333-4333-8333-333333333333', 'x-sauti-user-token': 'no-such-user'}, 401),
+        ({'x-api-key': 'test-secret', 'x-sauti-user': 'not-a-uuid', 'x-sauti-user-token': USER_TOKEN}, 422),
+    ]
+    for headers, status in cases:
+        resp = client.post('/v1/recognize', data=payload(), files=audio, headers=headers)
+        assert resp.status_code == status, (headers, resp.status_code, resp.text)
+        assert resp.status_code != 200
 
 
 def test_missing_auth_rejected(monkeypatch):

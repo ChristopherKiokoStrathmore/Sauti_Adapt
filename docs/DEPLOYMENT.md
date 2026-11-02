@@ -23,6 +23,45 @@ Environment variables for the Vercel project. Do not prefix them with `NEXT_PUBL
 | `SPEECH_API_TOKEN` | Service credential sent only from the Next.js server to the API |
 | `SAUTI_ALLOWED_ORIGINS` | Comma-separated browser origins. Include the Vercel origin and `chrome-extension://<extension-id>`. If empty, only the app's own host is allowed. |
 
+Vercel project settings:
+
+* Root Directory: `apps/web`
+* Framework: Next.js
+* Install command: `cd ../.. && npm install` (the monorepo root, so `packages/shared` is installed)
+* Build command: `cd ../.. && python3 scripts/bootstrap_toolkit.py && npm run build:web`
+
+The build must run `scripts/bootstrap_toolkit.py`. The pinned AI4A11y toolkit is gitignored, and the web app imports it. `apps/web/vercel.json` already sets those two commands. Do not put secrets in `vercel.json`.
+
+The extension is not built by Vercel. `apps/extension/public/sidepanel.html` defaults the PWA origin field to `http://localhost:3000`. For a staging deploy, set that field to the Vercel URL before use. `apps/extension/public/manifest.json` already grants host access to `https://*.vercel.app/*`, plus localhost. Rebuild with `npm run build:extension` after any manifest change. The sidepanel stores the chosen origin in `chrome.storage.local` under `apiOrigin`.
+
+## Speech API on Fly.io
+
+These commands are the procedure. This repository does not run them.
+
+```bash
+cd services/speech-api
+fly apps create sauti-adapt-speech
+fly volumes create sauti_data --region jnb --size 1 -a sauti-adapt-speech
+fly secrets set \
+  SAUTI_API_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" \
+  SAUTI_TOKEN_PEPPER="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" \
+  SAUTI_STORAGE_KEY="$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" \
+  SAUTI_ACCOUNTS='{"USER-UUID":"HMAC-HEX"}' \
+  SAUTI_ALLOWED_ORIGINS='https://your-app.vercel.app' \
+  -a sauti-adapt-speech
+fly deploy -a sauti-adapt-speech
+```
+
+`SAUTI_ACCOUNTS` values are HMAC-SHA256 digests, not the person's token:
+
+```bash
+python -c "import hmac,hashlib,secrets,uuid; u=uuid.uuid4(); t=secrets.token_urlsafe(32); p='the-SAUTI_TOKEN_PEPPER'; print('user', u); print('token', t); print('hmac', hmac.new(p.encode(), t.encode(), hashlib.sha256).hexdigest())"
+```
+
+Give the person the user id and token through a private channel. Put only the printed hmac in `SAUTI_ACCOUNTS`.
+
+`services/speech-api/fly.toml` sets `primary_region = "jnb"` (Johannesburg, the closest Fly region to Kenya), `internal_port = 8000`, `force_https = true`, `min_machines_running = 1` with `auto_stop_machines = "off"` so the retention timer keeps running, `[env]` `SPEECH_MODE=mock` and `ALLOW_ENROLLMENT=false`, a `/health` check, and the `sauti_data` volume mounted at `/data`. No secret values are in that file.
+
 ## Speech API
 
 Run the image with a volume at `/data` and these variables:

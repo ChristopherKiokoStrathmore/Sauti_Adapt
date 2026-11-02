@@ -12,3 +12,4 @@
 - Clip length and the listen control are configurable. Defaults are one toggle button and a 5 second auto-stop. The server still enforces its cap. Final values must be agreed with the participant. Recording starts only from the button.
 - The PWA injects upstream `CONTROLLER_CSS` so toolkit text-size and contrast rules render. It still does not mount the stock speech widget. Playwright checks real `handle()` markers from the pinned toolkit and that mock-mode audio is rejected.
 - The extension controls a website only after the person enables that origin. Chrome host permissions for the speech API do not enable control. Disable removes the origin. The content script rejects by default.
+- Enrollment stores consented clips only when `ALLOW_ENROLLMENT=true` and `SAUTI_PRIVATE_DIR` is outside the git repository. The person can delete one clip or the whole profile. Withdrawal works even when new enrollment is off.

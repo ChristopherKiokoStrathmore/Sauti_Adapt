@@ -5,7 +5,7 @@ from functools import lru_cache
 from fastapi import FastAPI, Depends, File, Form, Header, HTTPException, UploadFile
 from .audio import AudioValidationError, decode_wav
 from .contracts import Intent, Language, Recognition, reject
-from .storage import canonical_uuid, profile_dir, store_enrollment
+from .storage import canonical_uuid, delete_profile, delete_recording, profile_dir, store_enrollment
 from .prototype import PrototypeModel
 
 app = FastAPI(title='Sauti Adapt Speech API', version='0.1.0', docs_url=None, redoc_url=None)
@@ -38,7 +38,8 @@ def health():
 async def enroll(
     audio: UploadFile = File(...), profile_id: str = Form(...),
     session_id: str = Form(...), intent: Intent = Form(...),
-    language: Language = Form(...), consent: bool = Form(False)
+    language: Language = Form(...), consent: bool = Form(False),
+    session_role: str | None = Form(default=None)
 ):
     if os.environ.get('ALLOW_ENROLLMENT') != 'true':
         raise HTTPException(status_code=403, detail='Enrollment disabled on this server.')
@@ -47,11 +48,34 @@ async def enroll(
     try:
         canonical_uuid(profile_id)
         canonical_uuid(session_id)
+        samples = await read_audio(audio)
+        recording_id = store_enrollment(profile_id, session_id, intent, language, samples, session_role or None)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    samples = await read_audio(audio)
-    recording_id = store_enrollment(profile_id, session_id, intent, language, samples)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {'recording_id': recording_id, 'status': 'stored', 'profile_id': canonical_uuid(profile_id)}
+
+
+@app.delete('/v1/profile/{profile_id}', dependencies=[Depends(require_token)])
+def remove_profile(profile_id: str):
+    """Withdrawal: delete every clip and model for this profile. Works even when enrollment is off."""
+    try:
+        return delete_profile(profile_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.delete('/v1/profile/{profile_id}/recordings/{recording_id}', dependencies=[Depends(require_token)])
+def remove_recording(profile_id: str, recording_id: str):
+    try:
+        return delete_recording(profile_id, recording_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @lru_cache(maxsize=1)

@@ -21,11 +21,15 @@ type ToolkitController = ReturnType<typeof createController>;
 export function SautiDashboard() {
   const [profileId, setProfileId] = useState('');
   const sessionId = useRef('');
+  const [sessionShown, setSessionShown] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [language, setLanguage] = useState<Language>('en-KE');
   const [intent, setIntent] = useState<Intent>('SCROLL_DOWN');
   const [consent, setConsent] = useState(false);
   const [mode, setMode] = useState<'enroll'|'recognize'>('recognize');
+  const [sessionRole, setSessionRole] = useState<'train'|'calibration'|'test'>('train');
+  const [chosen, setChosen] = useState<Intent[]>(['SCROLL_DOWN', 'SCROLL_UP', 'GO_BACK', 'READ_PAGE', 'UNDO']);
+  const [deleteArmed, setDeleteArmed] = useState(false);
   const [state, setState] = useState<'idle'|'listening'|'processing'>('idle');
   const [listenMethod, setListenMethod] = useState<'toggle'|'separate'>('toggle');
   const [autoStop, setAutoStop] = useState(true);
@@ -42,6 +46,7 @@ export function SautiDashboard() {
     window.localStorage.setItem('sauti-demo-profile', id);
     setProfileId(id);
     sessionId.current = crypto.randomUUID();
+    setSessionShown(sessionId.current);
     if ('serviceWorker' in navigator) { void navigator.serviceWorker.register('/sw.js').catch(() => undefined); }
     const root = document.getElementById('controlled-site');
     if (root) controller.current = createController({
@@ -87,6 +92,7 @@ export function SautiDashboard() {
     if (mode === 'enroll') {
       form.append('intent', intent);
       form.append('session_id', sessionId.current);
+      form.append('session_role', sessionRole);
       form.append('consent', String(consent));
     }
     const response = await fetch(mode === 'enroll' ? '/api/enroll' : '/api/recognize', {
@@ -121,6 +127,7 @@ export function SautiDashboard() {
     if (busy.current || recording.current) return;
     if (!profileId || !accessCode.trim()) { setStatus('Set your demo access code first.'); return; }
     if (mode === 'enroll' && !consent) { setStatus('Explicit consent is required to store enrollment recordings.'); return; }
+    if (mode === 'enroll' && intent !== 'UNKNOWN' && !chosen.includes(intent)) { setStatus('Choose this command before recording it.'); return; }
     silence();
     const maxDurationMs = clampClipMs(Number(maxSeconds) * 1000);
     try {
@@ -152,9 +159,15 @@ export function SautiDashboard() {
         <div className="field"><label htmlFor="language">Language</label><select id="language" value={language} onChange={e => setLanguage(e.target.value as Language)}><option value="en-KE">Kenyan English</option><option value="sw-KE">Kiswahili</option></select></div>
         <div className="field"><label htmlFor="mode">Task</label><select id="mode" value={mode} onChange={e => setMode(e.target.value as 'enroll'|'recognize')}><option value="recognize">Recognize and act</option><option value="enroll">Record an enrollment example</option></select></div>
         {mode === 'enroll' && <>
-          <div className="field"><label htmlFor="intent">Intended command</label><select id="intent" value={intent} onChange={e => setIntent(e.target.value as Intent)}>{INTENT_OPTIONS.map(i => <option key={i} value={i}>{COMMAND_LABELS[i][language === 'sw-KE' ? 'sw' : 'en']}</option>)}</select></div>
-          <label><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}/> I have explained and obtained explicit consent to record and retain this voice sample.</label>
-          <p className="muted">A fresh recording session begins when you reload this page. Collect separate sessions for validation.</p>
+          <fieldset className="stack"><legend>Commands this person chose</legend>
+            {INTENT_OPTIONS.filter(i => i !== 'UNKNOWN').map(i => <label key={i}><input type="checkbox" checked={chosen.includes(i)} onChange={e => { setChosen(current => e.target.checked ? [...current, i] : current.filter(x => x !== i)); if (!e.target.checked && intent === i) setIntent('UNKNOWN'); }}/> {COMMAND_LABELS[i][language === 'sw-KE' ? 'sw' : 'en']}</label>)}
+          </fieldset>
+          <div className="field"><label htmlFor="intent">This clip</label><select id="intent" value={intent} onChange={e => setIntent(e.target.value as Intent)}>{[...chosen, 'UNKNOWN' as Intent].map(i => <option key={i} value={i}>{COMMAND_LABELS[i][language === 'sw-KE' ? 'sw' : 'en']}</option>)}</select></div>
+          <div className="field"><label htmlFor="role">Recording session</label><select id="role" value={sessionRole} onChange={e => setSessionRole(e.target.value as 'train'|'calibration'|'test')}><option value="train">Training session</option><option value="calibration">Calibration session</option><option value="test">Untouched test session</option></select></div>
+          <div className="field"><label htmlFor="session">Session identifier</label><input id="session" readOnly value={sessionShown}/></div>
+          <button type="button" className="secondary" onClick={() => { const id = crypto.randomUUID(); sessionId.current = id; setSessionShown(id); setStatus('Started a new recording session. Earlier clips stay in their own session.'); }}>Start a new recording session</button>
+          <label><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}/> I have explained this recording, and the person consents to store this voice clip until they delete it.</label>
+          <p className="muted">Clips stay in private server storage outside this git repository. Use a separate session for calibration and another for the untouched test. Unknown speech is recorded on purpose so uncertain clips can be rejected.</p>
         </>}
         <div className="field"><label htmlFor="listen">Listen control</label><select id="listen" value={listenMethod} onChange={e => setListenMethod(e.target.value as 'toggle'|'separate')}><option value="toggle">One toggle button</option><option value="separate">Separate start and stop</option></select></div>
         <div className="field"><label htmlFor="maxsec">Maximum clip length (seconds)</label><input id="maxsec" type="number" min={0.5} max={30} step={0.5} value={maxSeconds} onChange={e => setMaxSeconds(e.target.value)}/></div>
@@ -164,6 +177,16 @@ export function SautiDashboard() {
           ? <button type="button" aria-pressed={state === 'listening'} disabled={state === 'processing'} onClick={() => { if (state === 'listening') void finishRecording(); else void beginRecording(); }}>{state === 'listening' ? '■ Stop and process voice' : state === 'processing' ? 'Processing…' : '🎙 Start voice recording'}</button>
           : <><button type="button" disabled={state !== 'idle'} onClick={() => void beginRecording()}>🎙 Start voice recording</button><button type="button" disabled={state !== 'listening'} onClick={() => void finishRecording()}>■ Stop and process voice</button></>}
         <button type="button" className="secondary" disabled={!speaking} onClick={silence}>Stop speaking</button>
+        <label><input type="checkbox" checked={deleteArmed} onChange={e => setDeleteArmed(e.target.checked)}/> I want every recording and model for this profile deleted.</label>
+        <button type="button" className="secondary" disabled={!deleteArmed || !accessCode.trim()} onClick={() => {
+          void (async () => {
+            const response = await fetch(`/api/profile?profile_id=${encodeURIComponent(profileId)}`, { method: 'DELETE', headers: { 'x-sauti-demo-code': accessCode } });
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) { setStatus(body.detail || body.error || 'Deletion failed.'); return; }
+            setDeleteArmed(false);
+            setStatus(body.deleted ? `Deleted ${body.recordings_removed} recording(s). They will not be used again.` : 'No stored recordings were found for this profile.');
+          })();
+        }}>Delete this voice profile</button>
         <div role="status" aria-live="polite" className="status">{status}</div>
         {prediction && <small>Last recognition: {prediction.intent} • {prediction.status} • {prediction.confidence === null ? 'unscored' : prediction.confidence.toFixed(3)} • {prediction.model_version}</small>}
       </section>

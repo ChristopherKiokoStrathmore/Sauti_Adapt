@@ -15,11 +15,19 @@ if (!win.__SAUTI_CONTENT_READY__) {
     control: receiver,
     operator: { abilityModel: { supportAreas: ['motor'] } },
   });
+  const documentNonce = crypto.randomUUID();
 
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
-    if (message?.kind !== 'SAUTI_APPROVED_COMMAND') return false;
-    // The sender must be this extension, not a website postMessage event.
     if (sender.id !== chrome.runtime.id) { respond({ ok: false, reason: 'Unauthorized sender' }); return false; }
+    if (message?.kind === 'SAUTI_PAGE_IDENTITY') {
+      respond({ ok: true, nonce: documentNonce, href: location.href });
+      return false;
+    }
+    if (message?.kind !== 'SAUTI_APPROVED_COMMAND') return false;
+    if (typeof message.documentNonce === 'string' && message.documentNonce !== documentNonce) {
+      respond({ ok: false, reason: 'This page changed since you started speaking. No action was taken.' });
+      return false;
+    }
     // "what's on screen" is the official outline query. It is read-only.
     const allowed = [...Object.values(TOOLKIT_UTTERANCE), "what's on screen"];
     if (typeof message.utterance !== 'string' || !allowed.includes(message.utterance)) {

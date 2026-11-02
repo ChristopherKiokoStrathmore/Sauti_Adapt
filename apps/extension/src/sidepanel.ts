@@ -22,13 +22,23 @@ function syncButtons() {
   stopBtn.disabled = toggle || !listening || finishing;
 }
 
-async function activeTab() {
+type BoundPage = { tabId: number; origin: string; url: string; documentNonce: string; userId: string; token: string };
+let bound: BoundPage | null = null;
+
+async function focusedHttpTab() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const tab = tabs[0];
   if (!tab?.id || !tab.url || !/^https?:\/\//.test(tab.url)) {
     throw new Error('Open a regular HTTP or HTTPS website. Browser internal pages are protected.');
   }
-  return { tabId: tab.id, origin: new URL(tab.url).origin };
+  return { tabId: tab.id, origin: new URL(tab.url).origin, url: tab.url };
+}
+
+async function pageIdentity(tabId: number): Promise<{ nonce: string; href: string } | null> {
+  await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+  const identity = await chrome.tabs.sendMessage(tabId, { kind: 'SAUTI_PAGE_IDENTITY' });
+  if (!identity?.ok || typeof identity.nonce !== 'string') return null;
+  return { nonce: identity.nonce, href: String(identity.href || '') };
 }
 
 async function enabledOrigins(): Promise<string[]> {
@@ -59,7 +69,7 @@ async function siteEnabled(origin: string) {
 
 input('grant').addEventListener('click', async () => {
   try {
-    const { origin } = await activeTab();
+    const { origin } = await focusedHttpTab();
     const already = await chrome.permissions.contains({ origins: [origin + '/*'] });
     const permitted = already || await chrome.permissions.request({ origins: [origin + '/*'] });
     if (!permitted) { say('Permission denied. No actions will be run.'); return; }
@@ -70,7 +80,7 @@ input('grant').addEventListener('click', async () => {
 
 input('disable').addEventListener('click', async () => {
   try {
-    const { origin } = await activeTab();
+    const { origin } = await focusedHttpTab();
     await rememberOrigin(origin, false);
     say(`Disabled ${origin}. Commands will not run on this website.`);
   } catch (e) { say(String(e)); }
@@ -79,15 +89,18 @@ input('disable').addEventListener('click', async () => {
 input('test-scroll').addEventListener('click', () => { void executeOnTab('scroll down'); });
 
 async function executeOnTab(utterance: string) {
-  const { tabId, origin } = await activeTab();
+  const { tabId, origin } = await focusedHttpTab();
   if (!(await siteEnabled(origin))) { say(`Access to ${origin} is not granted. Select Enable current website.`); return; }
-  // Inject the bundle into the page's isolated extension world. Do not inject ML outputs into page JS.
   await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
   const reply = await chrome.tabs.sendMessage(tabId, { kind: 'SAUTI_APPROVED_COMMAND', utterance });
   const feedback = String(reply?.feedback || reply?.reason || 'The website did not acknowledge the command.');
   say(feedback);
   if (!isReadAloudUtterance(utterance) || reply?.ok === false || !reply?.feedback) return;
-  const started = speakText(String(reply.feedback), 'en-KE', {
+  speakReadAloud(feedback);
+}
+
+function speakReadAloud(feedback: string) {
+  const started = speakText(feedback, 'en-KE', {
     onend: () => { silenceBtn.disabled = true; },
     onerror: () => { silenceBtn.disabled = true; },
   });
@@ -95,12 +108,35 @@ async function executeOnTab(utterance: string) {
   if (!started) say(feedback + ' Speech playback is unavailable in this panel. The text was not recorded or uploaded.');
 }
 
+async function bindingStillValid(page: BoundPage): Promise<string | null> {
+  if (!page.userId || !page.token || input('user').value.trim() !== page.userId || input('code').value.trim() !== page.token) {
+    return 'Sign-in changed while speech was processing. No action was taken.';
+  }
+  const tab = await chrome.tabs.get(page.tabId).catch(() => null);
+  if (!tab?.id || !tab.url) return 'The page where you started speaking is gone. No action was taken.';
+  let origin = '';
+  try { origin = new URL(tab.url).origin; } catch { return 'The page where you started speaking is gone. No action was taken.'; }
+  if (tab.url !== page.url || origin !== page.origin) return 'The page changed since you started speaking. No action was taken.';
+  if (!(await siteEnabled(page.origin))) return 'This website was disabled while speech was processing. No action was taken.';
+  if (!(await chrome.permissions.contains({ origins: [page.origin + '/*'] }))) return 'Permission for this website was removed. No action was taken.';
+  const identity = await pageIdentity(page.tabId).catch(() => null);
+  if (!identity || identity.nonce !== page.documentNonce || identity.href !== page.url) {
+    return 'The page changed since you started speaking. No action was taken.';
+  }
+  return null;
+}
+
 async function begin() {
   if (recording || finishing) return;
   try {
-    const { origin } = await activeTab();
-    if (!(await siteEnabled(origin))) { say('Enable this website before recording.'); return; }
-    if (!input('user').value.trim() || !input('code').value.trim() || !input('profile').value.trim()) { say('Enter your user ID, personal access token, and profile UUID first.'); return; }
+    const tab = await focusedHttpTab();
+    if (!(await siteEnabled(tab.origin))) { say('Enable this website before recording.'); return; }
+    const userId = input('user').value.trim();
+    const token = input('code').value.trim();
+    if (!userId || !token || !input('profile').value.trim()) { say('Enter your user ID, personal access token, and profile UUID first.'); return; }
+    const identity = await pageIdentity(tab.tabId);
+    if (!identity || identity.href !== tab.url) { say('Could not identify this page. No recording was kept.'); return; }
+    bound = { tabId: tab.tabId, origin: tab.origin, url: tab.url, documentNonce: identity.nonce, userId, token };
     stopSpeaking();
     silenceBtn.disabled = true;
     const maxDurationMs = clampClipMs(Number(input('maxsec').value) * 1000);
@@ -110,14 +146,16 @@ async function begin() {
     say(autoStop
       ? `Listening, because you pressed the button. It stops after ${maxDurationMs / 1000} seconds, or when you stop it.`
       : 'Listening, because you pressed the button. Select Stop when the command is finished.');
-  } catch (e) { recording = null; syncButtons(); say('Unable to access microphone: ' + String(e)); }
+  } catch (e) { recording = null; bound = null; syncButtons(); say('Unable to access microphone: ' + String(e)); }
 }
 
 async function finish() {
   const current = recording;
-  if (!current || finishing) return;
+  const page = bound;
+  if (!current || finishing || !page) return;
   finishing = true;
   recording = null;
+  bound = null;
   syncButtons();
   try {
     say('Processing your recording…');
@@ -127,13 +165,22 @@ async function finish() {
     form.append('profile_id', input('profile').value.trim());
     form.append('language', 'en-KE'); // Model can recognize enrolled commands from either language; language hint is advisory.
     const url = new URL('/api/recognize', input('api').value.trim());
-    const response = await fetch(url, { method: 'POST', body: form, headers: { 'x-sauti-user': input('user').value.trim(), 'x-sauti-user-token': input('code').value.trim() } });
+    const response = await fetch(url, { method: 'POST', body: form, headers: { 'x-sauti-user': page.userId, 'x-sauti-user-token': page.token } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || data.detail || `HTTP ${response.status}`);
     if (!validRecognition(data)) throw new Error('Unexpected inference response.');
     const phrase = commandToUtterance(data);
-    if (!phrase) { say(`Command rejected. ${data.reason || 'Not confident enough.'}`); return; }
-    await executeOnTab(phrase);
+    if (!phrase) { say(`Command rejected. ${data.reason || 'Not confident enough.'} Nothing was spoken.`); return; }
+    const mismatch = await bindingStillValid(page);
+    if (mismatch) { say(mismatch); return; }
+    await chrome.scripting.executeScript({ target: { tabId: page.tabId }, files: ['content.js'] });
+    const reply = await chrome.tabs.sendMessage(page.tabId, {
+      kind: 'SAUTI_APPROVED_COMMAND', utterance: phrase, documentNonce: page.documentNonce,
+    });
+    const feedback = String(reply?.feedback || reply?.reason || 'The website did not acknowledge the command.');
+    say(feedback);
+    if (!reply?.ok) return;
+    if (isReadAloudUtterance(phrase) && reply.feedback) speakReadAloud(feedback);
   } catch (e) { say('Command not executed: ' + String(e)); }
   finally { finishing = false; syncButtons(); }
 }

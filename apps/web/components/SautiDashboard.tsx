@@ -43,6 +43,9 @@ export function SautiDashboard() {
   const busy = useRef(false);
   const speakGen = useRef(0);
   const controller = useRef<ToolkitController | null>(null);
+  const liveCreds = useRef({ userId: '', token: '' });
+  const speechBind = useRef({ href: '', userId: '', token: '' });
+  liveCreds.current = { userId, token: userToken };
   useEffect(() => {
     const id = window.localStorage.getItem('sauti-demo-profile') || crypto.randomUUID();
     window.localStorage.setItem('sauti-demo-profile', id);
@@ -106,7 +109,15 @@ export function SautiDashboard() {
     if (!validRecognition(body)) throw new Error('Invalid recognition contract returned by API.');
     setPrediction(body);
     const utterance = commandToUtterance(body);
-    if (!utterance) { setStatus(`No action taken: ${body.reason || 'Unknown or uncertain speech.'}`); return; }
+    if (!utterance) { setStatus(`No action taken: ${body.reason || 'Unknown or uncertain speech.'} Nothing was spoken.`); return; }
+    if (window.location.href !== speechBind.current.href) {
+      setStatus('The page changed while speech was processing. No action was taken.');
+      return;
+    }
+    if (liveCreds.current.userId.trim() !== speechBind.current.userId || liveCreds.current.token !== speechBind.current.token) {
+      setStatus('Sign-in changed while speech was processing. No action was taken.');
+      return;
+    }
     await runToolkit(utterance);
   }
 
@@ -125,6 +136,7 @@ export function SautiDashboard() {
   async function beginRecording() {
     if (busy.current || recording.current) return;
     if (!profileId || !userId.trim() || !userToken.trim()) { setStatus('Enter your personal user ID and access token first.'); return; }
+    speechBind.current = { href: window.location.href, userId: userId.trim(), token: userToken };
     if (mode === 'enroll' && !consent) { setStatus('Explicit consent is required to store enrollment recordings.'); return; }
     if (mode === 'enroll' && intent !== 'UNKNOWN' && !chosen.includes(intent)) { setStatus('Choose this command before recording it.'); return; }
     silence();
@@ -194,7 +206,7 @@ export function SautiDashboard() {
         <h2>2. Test the official Controller</h2>
         <p>These buttons prove the toolkit can control the real webpage <strong>without pretending the AI model is trained.</strong></p>
         <div className="controls">{TEST_COMMANDS.map(c => <button type="button" className="secondary" key={c.utterance} onClick={() => void runToolkit(c.utterance)}>{c.label}</button>)}</div>
-        <p className="muted">Read this page aloud uses the browser speechSynthesis voice for the text already on screen. That speech is not recorded or uploaded. Stop speaking cancels it. Undo last setting reverses the last display setting only, such as text size. It does not undo scrolling or Back.</p>
+        <p className="muted">Read this page aloud uses the browser speechSynthesis voice for the text already on screen. That speech is not recorded or uploaded. Stop speaking cancels it. Undo last setting reverts a recorded display adaptation only, such as text size. It does not undo clicks, scrolling, Back, or any transaction.</p>
         <button type="button" className="secondary" disabled={!speaking} onClick={silence}>Stop speaking</button>
         <div id="controlled-site" className="content" aria-label="Demo article under toolkit control">
           <h3>Welcome to the accessible demo</h3>

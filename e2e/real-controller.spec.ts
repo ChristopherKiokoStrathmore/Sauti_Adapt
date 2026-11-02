@@ -156,6 +156,86 @@ test('read aloud and outline skip hidden headings in Chromium', async ({ page })
   for (const secret of secrets) await expect(status).not.toContainText(secret);
 });
 
+test('read this is spoken and a rejected recognition is silent', async ({ page }) => {
+  await page.goto('/');
+  await expect.poll(() => page.locator('#profile').inputValue()).not.toBe('');
+  await page.evaluate(() => {
+    const slot = window as Window & { __spoken: string[] };
+    slot.__spoken = [];
+    window.speechSynthesis.speak = (utterance: SpeechSynthesisUtterance) => { slot.__spoken.push(utterance.text); };
+  });
+  await page.getByRole('button', { name: 'Read this page aloud' }).click();
+  await expect.poll(() => page.evaluate(() => ((window as Window & { __spoken?: string[] }).__spoken || []).join('\n'))).toContain('Welcome to the accessible demo');
+  await page.locator('#user').fill(USER_ID);
+  await page.locator('#code').fill(USER_TOKEN);
+  await page.locator('#listen').selectOption('separate');
+  await holdRecognition(page, { status: 'rejected', intent: 'UNKNOWN', language: null, confidence: 0.2, model_version: 'fixture', reason: 'UNCERTAIN_OR_UNKNOWN' });
+  await page.getByRole('button', { name: 'Start voice recording' }).click();
+  await expect(page.getByRole('button', { name: 'Stop and process voice' })).toBeEnabled();
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Stop and process voice' }).click();
+  await expect.poll(() => page.evaluate(() => Boolean((window as Window & { __release?: () => void }).__release))).toBeTruthy();
+  await page.evaluate(() => (window as Window & { __release?: () => void }).__release?.());
+  await expect(page.getByRole('status')).toContainText('Nothing was spoken');
+  const spoken = await page.evaluate(() => (window as Window & { __spoken?: string[] }).__spoken || []);
+  expect(spoken.some((line) => line.includes('Welcome'))).toBeTruthy();
+  expect(spoken.filter((line) => !line.includes('Welcome'))).toEqual([]);
+});
+
+test('a route change or cleared token during recognition runs no command', async ({ page }) => {
+  await page.goto('/');
+  await expect.poll(() => page.locator('#profile').inputValue()).not.toBe('');
+  await page.locator('#user').fill(USER_ID);
+  await page.locator('#code').fill(USER_TOKEN);
+  await page.locator('#listen').selectOption('separate');
+  const site = page.locator('#controlled-site');
+  const before = await site.evaluate((element) => element.scrollTop);
+  await holdRecognition(page, { status: 'accepted', intent: 'SCROLL_DOWN', language: 'en-KE', confidence: 0.9, model_version: 'fixture', reason: null });
+  await page.getByRole('button', { name: 'Start voice recording' }).click();
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Stop and process voice' }).click();
+  await expect.poll(() => page.evaluate(() => Boolean((window as Window & { __release?: () => void }).__release))).toBeTruthy();
+  await page.evaluate(() => history.pushState({}, '', '/moved'));
+  await page.evaluate(() => (window as Window & { __release?: () => void }).__release?.());
+  await expect(page.getByRole('status')).toContainText('page changed');
+  expect(await site.evaluate((element) => element.scrollTop)).toBe(before);
+
+  await page.goto('/');
+  await expect.poll(() => page.locator('#profile').inputValue()).not.toBe('');
+  await page.locator('#user').fill(USER_ID);
+  await page.locator('#code').fill(USER_TOKEN);
+  await page.locator('#listen').selectOption('separate');
+  await holdRecognition(page, { status: 'accepted', intent: 'SCROLL_DOWN', language: 'en-KE', confidence: 0.9, model_version: 'fixture', reason: null });
+  await page.getByRole('button', { name: 'Start voice recording' }).click();
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Stop and process voice' }).click();
+  await expect.poll(() => page.evaluate(() => Boolean((window as Window & { __release?: () => void }).__release))).toBeTruthy();
+  await page.locator('#code').fill('');
+  await page.evaluate(() => (window as Window & { __release?: () => void }).__release?.());
+  await expect(page.getByRole('status')).toContainText('Sign-in changed');
+  expect(await site.evaluate((element) => element.scrollTop)).toBe(0);
+});
+
+async function holdRecognition(page: Page, payload: object) {
+  await page.evaluate(async (body) => {
+    const slot = window as Window & { __release?: () => void };
+    const audio = new AudioContext();
+    await audio.resume();
+    const dest = audio.createMediaStreamDestination();
+    const tone = audio.createOscillator();
+    tone.connect(dest);
+    tone.start();
+    navigator.mediaDevices.getUserMedia = async () => dest.stream;
+    const original = window.fetch.bind(window);
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(input).includes('/api/recognize')) return original(input, init);
+      return new Promise(resolve => {
+        slot.__release = () => resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }));
+      });
+    };
+  }, payload);
+}
+
 test('read this page speaks the on-screen article with speechSynthesis', async ({ page }) => {
   await page.goto('/');
   const available = await page.evaluate(() => typeof window.speechSynthesis?.speak === 'function');

@@ -44,6 +44,10 @@ const server = http.createServer((req, res) => {
   res.end(host.startsWith('localhost') ? beta : alpha);
 });
 
+server.on('error', (error) => {
+  console.error(error);
+  process.exit(1);
+});
 server.listen(3000, '127.0.0.1', () => {
   console.log('listening');
 });

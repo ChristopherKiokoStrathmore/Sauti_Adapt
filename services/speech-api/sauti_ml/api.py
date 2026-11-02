@@ -2,16 +2,48 @@
 import hmac
 import json
 import os
+import threading
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from .audio import AudioValidationError, decode_wav
-from .auth import audit, origin_allowed, rate_limit, verify_user
+from .auth import audit, fail_pair_locked, note_auth_failure, note_ip_attempt, origin_allowed, trusted_client_ip, verify_user
 from .contracts import Intent, Language, Recognition, reject
 from .prototype import PrototypeModel
-from .storage import assert_owner, canonical_uuid, delete_profile, delete_recording, profile_dir, purge_expired, store_enrollment
+from .storage import assert_owner, canonical_uuid, delete_profile, delete_recording, profile_dir, purge_expired, purge_expired_profiles, store_enrollment
 
-app = FastAPI(title='Sauti Adapt Speech API', version='0.1.0', docs_url=None, redoc_url=None)
+_retention_stop = threading.Event()
+
+
+def _purge_interval_seconds() -> int:
+    try:
+        return max(30, int(os.environ.get('SAUTI_PURGE_INTERVAL_SECONDS', '3600')))
+    except ValueError:
+        return 3600
+
+
+def _retention_loop() -> None:
+    while not _retention_stop.wait(_purge_interval_seconds()):
+        try:
+            purge_expired_profiles()
+        except Exception:
+            pass
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    try:
+        purge_expired_profiles()
+    except Exception:
+        pass
+    _retention_stop.clear()
+    threading.Thread(target=_retention_loop, name='sauti-retention', daemon=True).start()
+    yield
+    _retention_stop.set()
+
+
+app = FastAPI(title='Sauti Adapt Speech API', version='0.1.0', docs_url=None, redoc_url=None, lifespan=lifespan)
 MAX_REQUEST_BYTES = 2_500_000
 
 
@@ -39,18 +71,18 @@ def require_user(
     origin_allowed(request)
     claimed = (x_sauti_user or '').strip()
     token = x_sauti_user_token or ''
-    peer = request.client.host if request.client and request.client.host else 'unknown'
-    # Count guesses before verify. Limits are in-memory and per process.
-    rate_limit('ip:' + peer[:80])
-    if claimed:
-        rate_limit('user:' + claimed[:80])
-    if not claimed or not token or not verify_user(claimed, token):
-        audit('auth', 'unauthorized')
-        raise HTTPException(status_code=401, detail='Authentication failed.')
+    peer = trusted_client_ip(request)
+    note_ip_attempt(peer)
     try:
         user_id = canonical_uuid(claimed)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if fail_pair_locked(user_id, peer):
+        raise HTTPException(status_code=429, detail='Too many requests.')
+    if not token or not verify_user(user_id, token):
+        note_auth_failure(user_id, peer)
+        audit('auth', 'unauthorized')
+        raise HTTPException(status_code=401, detail='Authentication failed.')
     return user_id
 
 

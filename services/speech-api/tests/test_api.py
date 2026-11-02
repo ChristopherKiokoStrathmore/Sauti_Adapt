@@ -325,7 +325,7 @@ def test_old_clips_are_purged_and_requests_are_rate_limited(monkeypatch, tmp_pat
     monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
     monkeypatch.setenv('ALLOW_ENROLLMENT', 'true')
     monkeypatch.setenv('SAUTI_RETENTION_DAYS', '1')
-    monkeypatch.setenv('SAUTI_RATE_LIMIT_PER_MINUTE', '2')
+    monkeypatch.setenv('SAUTI_IP_RATE_LIMIT_PER_MINUTE', '2')
     from sauti_ml.auth import reset_rate_limits
     reset_rate_limits()
     data = payload() | {'session_id': str(uuid4()), 'intent': 'SCROLL_DOWN', 'consent': 'true'}
@@ -340,27 +340,71 @@ def test_old_clips_are_purged_and_requests_are_rate_limited(monkeypatch, tmp_pat
     assert limited.status_code == 429
 
 
-def test_failed_token_guesses_are_rate_limited_per_user_and_ip(monkeypatch, tmp_path):
+def _recognize_as(headers):
+    return client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=headers)
+
+
+def test_failures_do_not_lock_the_same_user_on_another_ip(monkeypatch, tmp_path):
+    """Failed checks are per user UUID and source IP. Successes do not use that bucket."""
     monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
     monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
-    monkeypatch.setenv('SAUTI_RATE_LIMIT_PER_MINUTE', '2')
+    monkeypatch.setenv('SAUTI_AUTH_FAIL_LIMIT_PER_MINUTE', '3')
+    monkeypatch.setenv('SAUTI_IP_RATE_LIMIT_PER_MINUTE', '100')
     from sauti_ml.auth import reset_rate_limits
     reset_rate_limits()
-    wrong = {**auth(), 'x-sauti-user-token': 'not-the-token'}
-    first = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=wrong)
-    second = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=wrong)
-    assert first.status_code == 401
-    assert second.status_code == 401
-    third = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=wrong)
-    assert third.status_code == 429
+    attacker = {**auth(), 'x-sauti-user-token': 'wrong', 'x-sauti-client-ip': '203.0.113.10'}
+    for _ in range(3):
+        assert _recognize_as(attacker).status_code == 401
+    locked_right_token = {**auth(), 'x-sauti-client-ip': '203.0.113.10'}
+    assert _recognize_as(locked_right_token).status_code == 429
+    from_other_ip = {**auth(), 'x-sauti-client-ip': '203.0.113.20'}
+    other = _recognize_as(from_other_ip)
+    assert other.status_code == 200, other.text
+    assert other.json()['status'] == 'rejected'
+
+
+def test_valid_traffic_is_not_limited_by_the_failure_bucket(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('SAUTI_AUTH_FAIL_LIMIT_PER_MINUTE', '5')
+    monkeypatch.setenv('SAUTI_IP_RATE_LIMIT_PER_MINUTE', '80')
+    from sauti_ml.auth import reset_rate_limits
     reset_rate_limits()
-    for user in ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'):
-        headers = {**auth(), 'x-sauti-user': user, 'x-sauti-user-token': 'guess'}
-        resp = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=headers)
-        assert resp.status_code == 401
-    other_ip_user = {**auth(), 'x-sauti-user': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'x-sauti-user-token': 'guess'}
-    blocked = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=other_ip_user)
-    assert blocked.status_code == 429
+    for _ in range(31):
+        resp = _recognize_as(auth())
+        assert resp.status_code == 200, resp.text
+
+
+def test_client_ip_header_is_trusted_only_with_the_api_key(monkeypatch):
+    from starlette.requests import Request
+    from sauti_ml.auth import trusted_client_ip
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+
+    def request(headers, host='192.0.2.8'):
+        scope = {
+            'type': 'http', 'method': 'POST', 'path': '/', 'query_string': b'',
+            'headers': [(key.lower().encode(), value.encode()) for key, value in headers.items()],
+            'client': (host, 1234),
+        }
+        return Request(scope)
+
+    spoofed = {'x-sauti-client-ip': '203.0.113.50', 'x-api-key': 'not-the-key'}
+    assert trusted_client_ip(request(spoofed)) == '192.0.2.8'
+    honored = {'x-sauti-client-ip': '203.0.113.50', 'x-api-key': 'test-secret'}
+    assert trusted_client_ip(request(honored)) == '203.0.113.50'
+    assert trusted_client_ip(request({'x-api-key': 'test-secret'})) == '192.0.2.8'
+
+
+def test_junk_user_ids_do_not_grow_the_failure_table(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('SAUTI_IP_RATE_LIMIT_PER_MINUTE', '500')
+    from sauti_ml.auth import rate_limit_bucket_count, reset_rate_limits
+    reset_rate_limits()
+    for index in range(200):
+        headers = {**auth(), 'x-sauti-user': f'not-a-uuid-{index}', 'x-sauti-user-token': 'guess'}
+        assert _recognize_as(headers).status_code == 422
+    assert rate_limit_bucket_count() == 1
 
 
 def test_other_user_cannot_enroll_or_recognize_and_expired_clips_stay(monkeypatch, tmp_path):
@@ -420,3 +464,27 @@ def test_expired_clip_removes_its_embedding_and_keeps_the_released_model(monkeyp
     assert not audio.exists()
     assert not embedding.exists()
     assert model.read_bytes() == b'kept-released-model'
+
+
+def test_sweep_removes_expired_clips_and_unauthorized_enroll_deletes_nothing(monkeypatch, tmp_path):
+    import os, time
+    from sauti_ml.storage import purge_expired_profiles
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('ALLOW_ENROLLMENT', 'true')
+    monkeypatch.setenv('SAUTI_RETENTION_DAYS', '1')
+    data = payload() | {'session_id': str(uuid4()), 'intent': 'UNDO', 'consent': 'true'}
+    stored = client.post('/v1/enroll', data=data, files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert stored.status_code == 200, stored.text
+    audio = next(tmp_path.rglob('*.wav'))
+    os.utime(audio, (time.time() - 3 * 86400, time.time() - 3 * 86400))
+    before = list(tmp_path.rglob('*.wav'))
+    no_consent = client.post('/v1/enroll', data=data | {'consent': 'false'}, files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert no_consent.status_code == 403
+    wrong = client.post('/v1/enroll', data=data, files={'audio': ('test.wav', wav(), 'audio/wav')}, headers={**auth(), 'x-sauti-user-token': 'wrong'})
+    assert wrong.status_code == 401
+    assert list(tmp_path.rglob('*.wav')) == before
+    assert audio.exists()
+    assert purge_expired_profiles() >= 1
+    assert not audio.exists()
+    assert purge_expired_profiles() == 0

@@ -15,6 +15,12 @@ export function originAllowed(request: NextRequest): boolean {
   try { return Boolean(host) && new URL(origin).host === host; } catch { return false; }
 }
 
+/** First hop of x-forwarded-for, otherwise x-real-ip. Empty when neither is present. */
+export function forwardedClientIp(forwardedFor: string | null, realIp: string | null): string {
+  const hop = (forwardedFor || '').split(',')[0].trim() || (realIp || '').trim();
+  return hop.slice(0, 80);
+}
+
 export function userCredentials(request: NextRequest): { user: string; token: string } | null {
   const user = (request.headers.get('x-sauti-user') || '').trim();
   const token = request.headers.get('x-sauti-user-token') || '';
@@ -37,9 +43,15 @@ export async function proxyForm(request: NextRequest, endpoint: '/v1/recognize' 
     if (!(audio instanceof File) || audio.size === 0 || audio.size > 2_000_000) {
       return Response.json({ error: 'A WAV recording smaller than 2 MB is required.' }, { status: 400 });
     }
+    const clientIp = forwardedClientIp(request.headers.get('x-forwarded-for'), request.headers.get('x-real-ip'));
     const response = await fetch(new URL(endpoint, base), {
       method: 'POST',
-      headers: { 'x-api-key': token, 'x-sauti-user': creds.user, 'x-sauti-user-token': creds.token },
+      headers: {
+        'x-api-key': token,
+        'x-sauti-user': creds.user,
+        'x-sauti-user-token': creds.token,
+        ...(clientIp ? { 'x-sauti-client-ip': clientIp } : {}),
+      },
       body: form,
       cache: 'no-store',
       signal: AbortSignal.timeout(45000)

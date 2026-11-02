@@ -1,16 +1,27 @@
 """Per-user credentials, rate limits, origin checks, and audit lines.
 
 Audit lines never include audio, tokens, transcripts, or IP addresses.
+
+Rate limits live in memory in this process:
+* `fail:{user-uuid}|{ip}` counts failed password checks only, and only for a
+  canonical user UUID. It is checked before verify, so a locked pair is refused
+  with 429 for both wrong and right tokens. Failures from one IP do not lock
+  that person out from another IP. Successful requests do not increment it.
+* `ip:{address}` counts every attempt, success or failure. Its limit is looser.
 """
 import hashlib
 import hmac
 import json
 import os
+import threading
 import time
 from datetime import datetime, timezone
 from fastapi import HTTPException, Request
 
 _windows: dict[str, list[float]] = {}
+_lock = threading.Lock()
+_MAX_BUCKETS = 4096
+_CLIENT_IP_HEADER = 'x-sauti-client-ip'
 
 
 def accounts() -> dict[str, str]:
@@ -47,22 +58,88 @@ def verify_user(user_id: str, token: str) -> bool:
     return hmac.compare_digest(expected, actual)
 
 
-def rate_limit(bucket: str) -> None:
+def _configured_limit(name: str, default: int) -> int:
     try:
-        limit = int(os.environ.get('SAUTI_RATE_LIMIT_PER_MINUTE', '30'))
+        value = int(os.environ.get(name, str(default)))
     except ValueError:
-        limit = 30
-    limit = max(1, limit)
+        value = default
+    return max(1, value)
+
+
+def _fresh(stamps: list[float], now: float) -> list[float]:
+    return [stamp for stamp in stamps if now - stamp < 60]
+
+
+def _prune(now: float) -> None:
+    stale = [key for key, stamps in _windows.items() if not _fresh(stamps, now)]
+    for key in stale:
+        del _windows[key]
+    if len(_windows) <= _MAX_BUCKETS:
+        return
+    oldest = sorted(_windows, key=lambda key: _windows[key][-1] if _windows[key] else 0)
+    for key in oldest[:len(_windows) - _MAX_BUCKETS]:
+        del _windows[key]
+
+
+def api_key_matches(presented: str | None) -> bool:
+    actual = os.environ.get('SAUTI_API_TOKEN', '')
+    if not actual or not presented:
+        return False
+    return hmac.compare_digest(presented, actual)
+
+
+def trusted_client_ip(request: Request) -> str:
+    """Use the proxy-supplied client IP only together with a valid server API key."""
+    if api_key_matches(request.headers.get('x-api-key')):
+        forwarded = (request.headers.get(_CLIENT_IP_HEADER) or '').split(',')[0].strip()
+        if forwarded:
+            return forwarded[:80]
+    host = request.client.host if request.client and request.client.host else 'unknown'
+    return host[:80]
+
+
+def note_ip_attempt(ip: str) -> None:
+    _consume(f'ip:{ip}', _configured_limit('SAUTI_IP_RATE_LIMIT_PER_MINUTE', 120))
+
+
+def fail_pair_locked(user_id: str, ip: str) -> bool:
     now = time.monotonic()
-    window = _windows.setdefault(bucket, [])
-    window[:] = [stamp for stamp in window if now - stamp < 60]
-    if len(window) >= limit:
-        raise HTTPException(status_code=429, detail='Too many requests.')
-    window.append(now)
+    with _lock:
+        _prune(now)
+        stamps = _fresh(_windows.get(f'fail:{user_id}|{ip}', []), now)
+        return len(stamps) >= _configured_limit('SAUTI_AUTH_FAIL_LIMIT_PER_MINUTE', 10)
+
+
+def note_auth_failure(user_id: str, ip: str) -> None:
+    now = time.monotonic()
+    with _lock:
+        _prune(now)
+        key = f'fail:{user_id}|{ip}'
+        stamps = _fresh(_windows.get(key, []), now)
+        stamps.append(now)
+        _windows[key] = stamps
+
+
+def rate_limit_bucket_count() -> int:
+    with _lock:
+        return len(_windows)
+
+
+def _consume(bucket: str, limit: int) -> None:
+    now = time.monotonic()
+    with _lock:
+        _prune(now)
+        stamps = _fresh(_windows.get(bucket, []), now)
+        if len(stamps) >= limit:
+            _windows[bucket] = stamps
+            raise HTTPException(status_code=429, detail='Too many requests.')
+        stamps.append(now)
+        _windows[bucket] = stamps
 
 
 def reset_rate_limits() -> None:
-    _windows.clear()
+    with _lock:
+        _windows.clear()
 
 
 def origin_allowed(request: Request) -> None:

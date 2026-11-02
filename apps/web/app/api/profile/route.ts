@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { originAllowed, userCredentials } from '@/lib/proxy';
+import { forwardedClientIp, originAllowed, userCredentials } from '@/lib/proxy';
 
 export const runtime = 'nodejs';
 
@@ -27,9 +27,15 @@ export async function DELETE(request: NextRequest) {
   if (url instanceof Response) return url;
   const token = process.env.SPEECH_API_TOKEN as string;
   try {
+    const clientIp = forwardedClientIp(request.headers.get('x-forwarded-for'), request.headers.get('x-real-ip'));
     const response = await fetch(url, {
       method: 'DELETE',
-      headers: { 'x-api-key': token, 'x-sauti-user': creds.user, 'x-sauti-user-token': creds.token },
+      headers: {
+        'x-api-key': token,
+        'x-sauti-user': creds.user,
+        'x-sauti-user-token': creds.token,
+        ...(clientIp ? { 'x-sauti-client-ip': clientIp } : {}),
+      },
       cache: 'no-store',
     });
     return new Response(await response.text(), {

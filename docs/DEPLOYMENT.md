@@ -36,8 +36,11 @@ Run the image with a volume at `/data` and these variables:
 | `SAUTI_PRIVATE_DIR` | `/data` on the volume. The process refuses a path inside the git checkout. |
 | `SPEECH_MODE` | `mock` until a validated personal model exists. `mock` rejects every recording. |
 | `ALLOW_ENROLLMENT` | `false` until the person is ready to record. Deletion still works when this is false. |
-| `SAUTI_RETENTION_DAYS` | Default 30. When the profile owner enrolls, clips older than this are deleted, along with the matching feature-cache embedding for `SAUTI_ENCODER_ID`. The released prototype files stay until the person deletes the profile. Ownership is checked first, so another person's enrollment attempt deletes nothing. |
-| `SAUTI_RATE_LIMIT_PER_MINUTE` | Default 30. The counters live in memory in each API process, so they reset on restart and are not shared across processes. Failed token guesses count against the claimed user id and against the client address. Put another limit on the host if more than one process runs. |
+| `SAUTI_RETENTION_DAYS` | Default 30. At process startup, every `SAUTI_PURGE_INTERVAL_SECONDS` (default 3600), and when the owner enrolls, clips older than this are deleted along with the matching feature-cache embedding for `SAUTI_ENCODER_ID`. The released prototype files stay until the person deletes the profile. Ownership is checked before an enrollment deletes or stores anything. |
+| `SAUTI_PURGE_INTERVAL_SECONDS` | Default 3600, minimum 30. How often the in-process sweep walks every profile. The counters and the sweep are per process. |
+| `SAUTI_AUTH_FAIL_LIMIT_PER_MINUTE` | Default 10. Failed personal-token checks for one canonical user UUID from one client IP. Checked before the token is compared, so a locked IP cannot tell a right token from a wrong one. Failures from another IP do not lock this person out. Successful requests do not count. |
+| `SAUTI_IP_RATE_LIMIT_PER_MINUTE` | Default 120. Every attempt from one client IP, success or failure. Valid traffic under this limit is not rejected by the failure bucket. In-memory per process. |
+| `x-sauti-client-ip` | Set by the Next.js server from the first `x-forwarded-for` hop, or `x-real-ip`. The API uses it only when `x-api-key` matches `SAUTI_API_TOKEN`. Otherwise it uses the TCP peer address. Real Vercel header behavior is not verified in this repository. |
 | `SAUTI_ALLOWED_ORIGINS` | Origins allowed to call the API directly. Leave empty when only the Next.js server calls it. |
 | `SAUTI_ENCODER_ID` | Default `facebook/wav2vec2-base`. The encoder stays frozen. |
 

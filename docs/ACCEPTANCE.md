@@ -1,6 +1,6 @@
 # Acceptance checks
 
-Automated rows name the test that produced the evidence. A row is PASS only for that automated check. Anything that needs a real microphone, a real co-designer's speech, or the participant's own websites is NOT VERIFIED. Fixture audio and stubbed recognition responses are not a substitute for those.
+Automated rows name the test that produced the evidence. CI for the commit that added these checks: https://github.com/ChristopherKiokoStrathmore/Sauti_Adapt/actions/runs/41494762071 (python, javascript, and e2e all passed on `ee70ac3`). A row is PASS only for that automated check. Anything that needs a real microphone, a real co-designer's speech, or the participant's own websites is NOT VERIFIED. Fixture audio and stubbed recognition responses are not a substitute for those.
 
 ## 1. The same command operates two different permitted websites through the real toolkit
 

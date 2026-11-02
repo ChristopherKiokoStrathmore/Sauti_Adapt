@@ -32,6 +32,9 @@ export function SautiDashboard() {
     const root = document.getElementById('controlled-site');
     if (root) controller.current = createController({
       control: createDomReceiver(root, { scrollTarget: root }),
+      // createController.js defaults `operator = null`, so tsc infers null and drops the JSDoc.
+      // The implementation reads operator.abilityModel (see createController.js).
+      // @ts-expect-error upstream JS default hides the documented operator object type
       operator: { abilityModel: { supportAreas: ['motor'] } }
     });
     return () => { recording.current?.cancel(); controller.current = null; };
@@ -40,7 +43,9 @@ export function SautiDashboard() {
   async function runToolkit(utterance: string) {
     if (!controller.current) { setStatus('Controller has not initialized.'); return; }
     const result = await controller.current.handle(utterance);
-    setStatus(result.say + (result.pending ? ' Use the confirmation controls if needed.' : ''));
+    // `pending` is only present on the confirmation branch of handle().
+    const pending = 'pending' in result && result.pending;
+    setStatus(result.say + (pending ? ' Use the confirmation controls if needed.' : ''));
   }
 
   async function processAudio(audio: Blob) {

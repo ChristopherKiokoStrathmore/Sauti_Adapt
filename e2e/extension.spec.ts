@@ -97,7 +97,7 @@ test('enabled sites use the real Controller and other sites do not', async () =>
     const blocked = await worker.evaluate(async (id: number) => {
       const api = (globalThis as unknown as { chrome: typeof chrome }).chrome;
       await api.scripting.executeScript({ target: { tabId: id }, files: ['content.js'] });
-      return api.tabs.sendMessage(id, { kind: 'SAUTI_APPROVED_COMMAND', utterance: 'scroll down' });
+      return api.tabs.sendMessage(id, { kind: 'SAUTI_MANUAL_COMMAND', utterance: 'scroll down' });
     }, alphaId);
     expect(blocked.ok).toBeFalsy();
     expect(String(blocked.reason)).toContain('not enabled');
@@ -110,6 +110,14 @@ test('enabled sites use the real Controller and other sites do not', async () =>
 
     await press(panel, alphaId, 'grant');
     await expect(panel.locator('#status')).toContainText('Enabled http://127.0.0.1:3000');
+    const missingNonce = await worker.evaluate(async (id: number) => {
+      const api = (globalThis as unknown as { chrome: typeof chrome }).chrome;
+      await api.scripting.executeScript({ target: { tabId: id }, files: ['content.js'] });
+      return api.tabs.sendMessage(id, { kind: 'SAUTI_APPROVED_COMMAND', utterance: 'scroll down' });
+    }, alphaId);
+    expect(missingNonce.ok).toBeFalsy();
+    expect(String(missingNonce.reason)).toContain('No action was taken');
+    expect(await scrollTop(alpha)).toBe(0);
     await press(panel, alphaId, 'test-scroll');
     await expect(panel.locator('#status')).toHaveText('Scrolling down.');
     await alpha.evaluate(() => {
@@ -123,7 +131,7 @@ test('enabled sites use the real Controller and other sites do not', async () =>
     });
     const read = await worker.evaluate(async (id: number) => {
       const api = (globalThis as unknown as { chrome: typeof chrome }).chrome;
-      return api.tabs.sendMessage(id, { kind: 'SAUTI_APPROVED_COMMAND', utterance: 'read this' });
+      return api.tabs.sendMessage(id, { kind: 'SAUTI_MANUAL_COMMAND', utterance: 'read this' });
     }, alphaId);
     expect(String(read.feedback)).toContain('Visible title');
     expect(String(read.feedback)).toContain('Visible sentence');
@@ -133,7 +141,7 @@ test('enabled sites use the real Controller and other sites do not', async () =>
     }
     const outline = await worker.evaluate(async (id: number) => {
       const api = (globalThis as unknown as { chrome: typeof chrome }).chrome;
-      return api.tabs.sendMessage(id, { kind: 'SAUTI_APPROVED_COMMAND', utterance: "what's on screen" });
+      return api.tabs.sendMessage(id, { kind: 'SAUTI_MANUAL_COMMAND', utterance: "what's on screen" });
     }, alphaId);
     expect(String(outline.feedback)).toContain('Visible title');
     for (const secret of ['SECRET-DISPLAY', 'SECRET-VISIBILITY', 'SECRET-HIDDEN-ATTR', 'SECRET-ARIA', 'SECRET-NESTED']) {

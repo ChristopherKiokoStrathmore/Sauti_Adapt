@@ -23,8 +23,9 @@ if (!win.__SAUTI_CONTENT_READY__) {
       respond({ ok: true, nonce: documentNonce, href: location.href });
       return false;
     }
-    if (message?.kind !== 'SAUTI_APPROVED_COMMAND') return false;
-    if (typeof message.documentNonce === 'string' && message.documentNonce !== documentNonce) {
+    const manual = message?.kind === 'SAUTI_MANUAL_COMMAND';
+    if (message?.kind !== 'SAUTI_APPROVED_COMMAND' && !manual) return false;
+    if (!manual && message.documentNonce !== documentNonce) {
       respond({ ok: false, reason: 'This page changed since you started speaking. No action was taken.' });
       return false;
     }

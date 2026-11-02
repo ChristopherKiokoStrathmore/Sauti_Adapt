@@ -92,7 +92,7 @@ async function executeOnTab(utterance: string) {
   const { tabId, origin } = await focusedHttpTab();
   if (!(await siteEnabled(origin))) { say(`Access to ${origin} is not granted. Select Enable current website.`); return; }
   await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-  const reply = await chrome.tabs.sendMessage(tabId, { kind: 'SAUTI_APPROVED_COMMAND', utterance });
+  const reply = await chrome.tabs.sendMessage(tabId, { kind: 'SAUTI_MANUAL_COMMAND', utterance });
   const feedback = String(reply?.feedback || reply?.reason || 'The website did not acknowledge the command.');
   say(feedback);
   if (!isReadAloudUtterance(utterance) || reply?.ok === false || !reply?.feedback) return;

@@ -11,7 +11,7 @@ Build co-designed personalized voice accessibility for Kenyan English and Kiswah
 5. Only record audio after deliberate user action and informed consent. No background monitoring. If the participant withdraws, stop using the audio and implement a deletion workflow before public release.
 6. Do not use unlicensed or gated datasets until access and permitted uses are verified. Kenyan atypical English and Kiswahili speech model references are research pointers, NOT predownloaded dependencies.
 7. Never imply the PWA can control other applications on a phone. Chrome extension works only on permitted websites. Android requires native AccessibilityService and explicit OS approval.
-8. Preserve authentication: the browser sends a personal user id and access token. Next.js checks that pair, and relays to the API with a separate server credential (`SPEECH_API_TOKEN`). Do not replace this with one shared team code.
+8. Preserve authentication: the browser sends a personal user id and access token. Next.js only checks that both values are present (`apps/web/lib/proxy.ts`), then relays them with a separate server credential (`SPEECH_API_TOKEN`). The speech API verifies the personal token. Do not replace this with one shared team code.
 9. Require user participation in choosing useful commands, accessible microphone triggers, feedback and confirmation behavior. Never infer functional abilities from diagnoses.
 10. Maintain a changelog and document upstream toolkit bugs. Tests must run before every merge.
 

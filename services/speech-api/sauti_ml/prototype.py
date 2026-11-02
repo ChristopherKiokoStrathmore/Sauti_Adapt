@@ -1,8 +1,24 @@
 """Speaker-specific command prototypes and conservative reject logic."""
+import hashlib
 import json
 from pathlib import Path
 import numpy as np
 from .contracts import Intent, Language, Recognition, reject
+
+
+def model_content_version(prototypes, labels, languages, threshold, margin, encoder_id) -> str:
+    """Hash the weights and calibration. A new training run cannot reuse an older version string."""
+    matrix = np.ascontiguousarray(norm_rows(prototypes), dtype=np.float32)
+    canonical = {
+        'labels': [str(item) for item in labels],
+        'languages': [str(item) for item in languages],
+        'threshold': json.loads(json.dumps(float(threshold))),
+        'margin': json.loads(json.dumps(float(margin))),
+        'encoder_id': str(encoder_id),
+        'vectors_sha256': hashlib.sha256(matrix.tobytes()).hexdigest(),
+    }
+    raw = json.dumps(canonical, sort_keys=True, separators=(',', ':')).encode('utf8')
+    return hashlib.sha256(raw).hexdigest()
 
 
 def norm_rows(values):
@@ -52,6 +68,10 @@ class PrototypeModel:
                                language=None, model_version=self.version, reason='UNCERTAIN_OR_UNKNOWN')
         return Recognition(status='accepted', intent=Intent(label), language=Language(lang),
                            confidence=similarity_score, model_version=self.version, reason=None)
+
+    def content_version(self) -> str:
+        return model_content_version(
+            self.prototypes, self.labels, self.languages, self.threshold, self.margin, self.encoder_id)
 
     def save(self, folder: Path, *, released: bool = False):
         from io import BytesIO

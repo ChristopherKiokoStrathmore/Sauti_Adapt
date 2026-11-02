@@ -146,14 +146,16 @@ def test_validated_model_dispatches_only_known_command(monkeypatch, tmp_path):
     monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
     monkeypatch.setenv('SPEECH_MODE', 'prototype')
     pid = str(uuid4())
-    model = PrototypeModel([[1,0,0],[0,1,0],[0,0,1]],
-                           ['SCROLL_DOWN','SCROLL_UP','GO_BACK'],
-                           ['en-KE','en-KE','sw-KE'], .95, .1, 'test-v1', 'test-encoder')
+    vectors = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    labels = ['SCROLL_DOWN', 'SCROLL_UP', 'GO_BACK']
+    languages = ['en-KE', 'en-KE', 'sw-KE']
+    model = PrototypeModel(vectors, labels, languages, .95, .1, 'placeholder', 'test-encoder')
+    model = PrototypeModel(vectors, labels, languages, .95, .1, model.content_version(), 'test-encoder')
     folder = profile_dir(pid)
     model.save(folder, released=True)
     (folder / 'owner').write_text(USER_ID + '\n', encoding='utf8')
     (folder / 'evaluation.json').write_text(json.dumps({
-        'status': 'pilot-validation-passed', 'model_version': 'test-v1', 'accuracy_claim': False,
+        'status': 'pilot-validation-passed', 'model_version': model.version, 'accuracy_claim': False,
     }), encoding='utf8')
     monkeypatch.setattr(module, 'model_encoder', lambda: FakeEncoder())
     resp = client.post('/v1/recognize', data={'profile_id':pid,'language':'en-KE'},
@@ -178,6 +180,105 @@ def test_save_without_a_release_record_does_not_run(monkeypatch, tmp_path):
     assert resp.status_code == 200, resp.text
     assert resp.json()['status'] == 'rejected'
     assert resp.json()['intent'] == 'UNKNOWN'
+    assert resp.json()['reason'] == 'UNAVAILABLE_OR_INVALID_MODEL'
+
+
+def _released_prototype(version=None):
+    from sauti_ml.prototype import PrototypeModel
+    vectors = [[1, 0, 0]]
+    labels = ['SCROLL_DOWN']
+    languages = ['en-KE']
+    draft = PrototypeModel(vectors, labels, languages, .5, 0, 'placeholder', 'test-encoder')
+    chosen = draft.content_version() if version is None else version
+    return PrototypeModel(vectors, labels, languages, .5, 0, chosen, 'test-encoder')
+
+
+def _recognize(pid):
+    return client.post('/v1/recognize', data={'profile_id': pid, 'language': 'en-KE'},
+                       files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+
+
+def _prepare_profile(tmp_path, model, evaluation):
+    from sauti_ml.storage import profile_dir
+    pid = str(uuid4())
+    folder = profile_dir(pid)
+    model.save(folder, released=True)
+    (folder / 'owner').write_text(USER_ID + '\n', encoding='utf8')
+    (folder / 'evaluation.json').write_text(evaluation, encoding='utf8')
+    return pid
+
+
+def test_default_save_is_rejected(monkeypatch, tmp_path):
+    from sauti_ml.storage import profile_dir
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('SPEECH_MODE', 'prototype')
+    model = _released_prototype()
+    pid = str(uuid4())
+    folder = profile_dir(pid)
+    model.save(folder)
+    (folder / 'owner').write_text(USER_ID + '\n', encoding='utf8')
+    (folder / 'evaluation.json').write_text(json.dumps({
+        'status': 'pilot-validation-passed', 'model_version': model.content_version(),
+    }), encoding='utf8')
+    resp = _recognize(pid)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['status'] == 'rejected'
+    assert resp.json()['reason'] == 'UNAVAILABLE_OR_INVALID_MODEL'
+
+
+def test_bad_release_status_is_rejected(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('SPEECH_MODE', 'prototype')
+    model = _released_prototype()
+    pid = _prepare_profile(tmp_path, model, json.dumps({
+        'status': 'not-released', 'model_version': model.content_version(),
+    }))
+    resp = _recognize(pid)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['status'] == 'rejected'
+    assert resp.json()['reason'] == 'UNAVAILABLE_OR_INVALID_MODEL'
+
+
+def test_mismatched_release_version_is_rejected(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('SPEECH_MODE', 'prototype')
+    model = _released_prototype()
+    pid = _prepare_profile(tmp_path, model, json.dumps({
+        'status': 'pilot-validation-passed', 'model_version': 'sauti-prototype-v1',
+    }))
+    resp = _recognize(pid)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['status'] == 'rejected'
+    assert resp.json()['reason'] == 'UNAVAILABLE_OR_INVALID_MODEL'
+
+
+def test_hardcoded_version_does_not_accept_a_different_model(monkeypatch, tmp_path):
+    from sauti_ml.prototype import PrototypeModel
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('SPEECH_MODE', 'prototype')
+    model = PrototypeModel([[1, 0, 0]], ['SCROLL_DOWN'], ['en-KE'], .5, 0, 'sauti-prototype-v1', 'test-encoder')
+    pid = _prepare_profile(tmp_path, model, json.dumps({
+        'status': 'pilot-validation-passed', 'model_version': 'sauti-prototype-v1',
+    }))
+    resp = _recognize(pid)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['status'] == 'rejected'
+    assert resp.json()['reason'] == 'UNAVAILABLE_OR_INVALID_MODEL'
+
+
+def test_non_object_release_record_is_rejected(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('SPEECH_MODE', 'prototype')
+    model = _released_prototype()
+    pid = _prepare_profile(tmp_path, model, '[]')
+    resp = _recognize(pid)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['status'] == 'rejected'
     assert resp.json()['reason'] == 'UNAVAILABLE_OR_INVALID_MODEL'
 
 

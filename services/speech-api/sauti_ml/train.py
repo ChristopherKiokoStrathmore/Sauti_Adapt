@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 from .audio import decode_wav
 from .storage import canonical_uuid, load_manifest, profile_dir, read_private_bytes, write_private_bytes
-from .prototype import PrototypeModel
+from .prototype import PrototypeModel, model_content_version
 from .encoder import SpeechEncoder
 
 MIN_TRAIN_PER_CLASS = 3
@@ -166,8 +166,9 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
     candidates = []
     best_safe = None
     for threshold in np.arange(0.40, 0.995, 0.005):
+        version = model_content_version(centroids, labels, languages, float(threshold), MARGIN, encoder.model_id)
         model = PrototypeModel(centroids, labels, languages, float(threshold), MARGIN,
-                               'sauti-prototype-v1', encoder.model_id)
+                               version, encoder.model_id)
         metrics = test_predictions(model, positive, negatives)
         if metrics['unknown_false_accepts'] or metrics['known_wrong_accepted']:
             continue

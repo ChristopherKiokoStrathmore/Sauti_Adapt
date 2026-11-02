@@ -162,7 +162,12 @@ async def recognize(
         if not release_path.is_file():
             raise ValueError('Model has no release record.')
         release = json.loads(release_path.read_text(encoding='utf8'))
-        if release.get('status') != 'pilot-validation-passed' or release.get('model_version') != model.version:
+        if not isinstance(release, dict):
+            raise ValueError('Model release record is invalid.')
+        expected = model.content_version()
+        if (release.get('status') != 'pilot-validation-passed'
+                or release.get('model_version') != expected
+                or model.version != expected):
             raise ValueError('Model was not released by training.')
         encoder = model_encoder()
         if encoder.model_id != model.encoder_id:

@@ -51,6 +51,8 @@ def test_training_produces_validated_artifact_only_with_holdout(monkeypatch, tmp
     assert report['metrics']['test']['by_language']['sw-KE']['known_count'] == 0
     assert report['result_kind'] == 'artificial-fixture'
     assert report['accuracy_claim'] is False
+    assert report['model_version'] == exported.content_version()
+    assert report['model_version'] != 'sauti-prototype-v1'
     assert report['latency_seconds'] >= 0
     assert 'en-KE' in report['metrics']['test']['confusion_by_language']
 

@@ -20,6 +20,7 @@ jobs:
       - run: python scripts/bootstrap_toolkit.py
       - run: npm install
       - run: npm run test:shared
+      - run: npm run test:extension
       - run: npm run typecheck:web
       - run: npm run typecheck:extension
       - run: npm run build:extension

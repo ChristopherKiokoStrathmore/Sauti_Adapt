@@ -10,3 +10,4 @@
 - "Read this page aloud" speaks the on-screen text with `speechSynthesis`. That speech is not recorded or uploaded, and Stop speaking cancels it. "Undo last setting" is labeled as a display-setting undo only.
 - Training reports correct, rejected, incorrect, and unknown false accepts per language and per command-language. Release requires a correct activation for every command in each enrolled language. Tests use artificial tones or vectors, not human speech.
 - Clip length and the listen control are configurable. Defaults are one toggle button and a 5 second auto-stop. The server still enforces its cap. Final values must be agreed with the participant. Recording starts only from the button.
+- The PWA injects upstream `CONTROLLER_CSS` so toolkit text-size and contrast rules render. It still does not mount the stock speech widget. Playwright checks real `handle()` markers from the pinned toolkit and that mock-mode audio is rejected.

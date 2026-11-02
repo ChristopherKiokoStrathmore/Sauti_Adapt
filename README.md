@@ -125,9 +125,10 @@ npm run test:shared
 npm run typecheck:web
 npm run build:extension
 npm run build:web
+npm run test:e2e
 ```
 
-The last three commands require `npm install` and the toolkit checkout. For a real deployment, add Playwright end-to-end tests to exercise the PWA/extension in actual Chrome.
+The build commands require `npm install` and the toolkit checkout. `npm run test:e2e` installs Playwright's Chromium and starts the mock speech API plus the Next.js app. It checks the real Controller, not a substitute, and checks that mock-mode audio is rejected.
 
 ## 6. GitHub and Vercel
 

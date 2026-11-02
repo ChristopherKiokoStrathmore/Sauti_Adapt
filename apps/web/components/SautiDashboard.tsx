@@ -5,6 +5,7 @@ import { clampClipMs, startRecording, type RecordingSession } from '@sauti/share
 import { isReadAloudUtterance, speakText, stopSpeaking } from '@sauti/shared/speak';
 import { createController } from '@toolkit/controller/createController.js';
 import { createDomReceiver } from '@toolkit/controller/web/dom-receiver.js';
+import { CONTROLLER_CSS } from '@toolkit/controller/web/ui.js';
 
 const INTENT_OPTIONS: Intent[] = ['SCROLL_DOWN', 'SCROLL_UP', 'GO_BACK', 'READ_PAGE', 'UNDO', 'UNKNOWN'];
 const TEST_COMMANDS = [
@@ -137,6 +138,7 @@ export function SautiDashboard() {
   }
 
   return <main className="container">
+    <style data-aa-upstream-css="">{CONTROLLER_CSS}</style>
     <header className="hero"><h1>Sauti Adapt</h1>
       <p>Kenyan English and Kiswahili commands reach the official AI4A11y Controller only when the prototype accepts them.</p>
       <p className="muted">The running app freezes facebook/wav2vec2-base and keeps one prototype per command and language. It does not fine-tune the encoder. Notebook experiments are not wired in. No accuracy is claimed.</p>
@@ -179,6 +181,11 @@ export function SautiDashboard() {
           <h3>Accessibility matters</h3>
           <p>The person chooses commands. We reject uncertain predictions. We show feedback in a screen reader compatible region.</p>
           <p>Use the buttons above, then start training a private personalized speech profile.</p>
+          <h3>A longer page</h3>
+          <p>This extra section exists so scroll commands have a real distance to move inside the article. It is demonstration copy, not a recording and not a personal story.</p>
+          <p>Kenyan English and Kiswahili commands stay on the allowlist. Uncertain speech does nothing.</p>
+          <p>Text size, contrast, and motion settings are applied on this article by the toolkit DOM receiver.</p>
+          <p>The end of the article is here, below the fold of this panel.</p>
         </div>
         <div className="notice"><strong>Fail closed:</strong> Mock mode rejects every recording. An activated personal model is frozen-encoder prototypes, not a fine-tuned network. Passing its private checks is not an accuracy claim.</div>
       </section>

@@ -23,3 +23,6 @@ services/speech-api/private/
 vendor/ai4a11y-toolkit/
 .DS_Store
 .ipynb_checkpoints/
+test-results/
+playwright-report/
+blob-report/

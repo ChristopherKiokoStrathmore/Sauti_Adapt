@@ -36,7 +36,7 @@ Run the image with a volume at `/data` and these variables:
 | `SAUTI_PRIVATE_DIR` | `/data` on the volume. The process refuses a path inside the git checkout. |
 | `SPEECH_MODE` | `mock` until a validated personal model exists. `mock` rejects every recording. |
 | `ALLOW_ENROLLMENT` | `false` until the person is ready to record. Deletion still works when this is false. |
-| `SAUTI_RETENTION_DAYS` | Default 30. When the profile owner enrolls, clips older than this are deleted. Ownership is checked first, so another person's enrollment attempt deletes nothing. |
+| `SAUTI_RETENTION_DAYS` | Default 30. When the profile owner enrolls, clips older than this are deleted, along with the matching feature-cache embedding for `SAUTI_ENCODER_ID`. The released prototype files stay until the person deletes the profile. Ownership is checked first, so another person's enrollment attempt deletes nothing. |
 | `SAUTI_RATE_LIMIT_PER_MINUTE` | Default 30. The counters live in memory in each API process, so they reset on restart and are not shared across processes. Failed token guesses count against the claimed user id and against the client address. Put another limit on the host if more than one process runs. |
 | `SAUTI_ALLOWED_ORIGINS` | Origins allowed to call the API directly. Leave empty when only the Next.js server calls it. |
 | `SAUTI_ENCODER_ID` | Default `facebook/wav2vec2-base`. The encoder stays frozen. |

@@ -392,3 +392,31 @@ def test_other_user_cannot_enroll_or_recognize_and_expired_clips_stay(monkeypatc
     assert old.exists()
     missing = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')})
     assert missing.status_code == 401
+
+
+def test_expired_clip_removes_its_embedding_and_keeps_the_released_model(monkeypatch, tmp_path):
+    import hashlib, os, time
+    from sauti_ml.storage import read_private_bytes
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('ALLOW_ENROLLMENT', 'true')
+    monkeypatch.setenv('SAUTI_RETENTION_DAYS', '1')
+    data = payload() | {'session_id': str(uuid4()), 'intent': 'SCROLL_DOWN', 'consent': 'true'}
+    stored = client.post('/v1/enroll', data=data, files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert stored.status_code == 200, stored.text
+    audio = next(tmp_path.rglob('*.wav'))
+    raw = read_private_bytes(audio)
+    key = hashlib.sha256(b'facebook/wav2vec2-base|' + raw).hexdigest()
+    profile = audio.parent.parent
+    cache = profile / 'feature-cache'
+    cache.mkdir(mode=0o700)
+    embedding = cache / f'{key}.npy'
+    embedding.write_bytes(b'derived-embedding')
+    model = profile / 'model.json'
+    model.write_bytes(b'kept-released-model')
+    os.utime(audio, (time.time() - 3 * 86400, time.time() - 3 * 86400))
+    again = client.post('/v1/enroll', data=data, files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert again.status_code == 200, again.text
+    assert not audio.exists()
+    assert not embedding.exists()
+    assert model.read_bytes() == b'kept-released-model'

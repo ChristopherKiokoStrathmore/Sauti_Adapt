@@ -1,4 +1,5 @@
 """Private enrollment storage. Never expose these files through static routes or git."""
+import hashlib
 import json
 import os
 import shutil
@@ -37,6 +38,18 @@ def _fernet():
         return Fernet(key.encode('utf-8'))
     except Exception as exc:
         raise RuntimeError('SAUTI_STORAGE_KEY must be a Fernet key.') from exc
+
+
+def discard_clip_derivatives(folder: Path, raw: bytes) -> None:
+    """Remove cached embeddings of this clip. The released prototype model is kept until profile deletion."""
+    cache = folder / 'feature-cache'
+    if not cache.is_dir() or not raw:
+        return
+    model_id = os.environ.get('SAUTI_ENCODER_ID', 'facebook/wav2vec2-base').strip() or 'facebook/wav2vec2-base'
+    name = hashlib.sha256((model_id + '|').encode() + raw).hexdigest() + '.npy'
+    path = cache / name
+    if path.is_file():
+        path.unlink()
 
 
 def write_private_bytes(path: Path, payload: bytes) -> None:
@@ -168,6 +181,10 @@ def delete_recording(profile_id: str, recording_id: str, user_id: str) -> dict:
             if row.get('recording_id') == recording_id:
                 audio = folder / 'audio' / f'{recording_id}.wav'
                 if audio.is_file():
+                    try:
+                        discard_clip_derivatives(folder, read_private_bytes(audio))
+                    except Exception:
+                        pass
                     audio.unlink()
                 removed += 1
                 continue
@@ -200,6 +217,10 @@ def purge_expired(profile_id: str, user_id: str) -> int:
             recording_id = row.get('recording_id', '')
             audio = folder / 'audio' / f'{recording_id}.wav'
             if audio.is_file() and audio.stat().st_mtime < cutoff:
+                try:
+                    discard_clip_derivatives(folder, read_private_bytes(audio))
+                except Exception:
+                    pass
                 audio.unlink()
                 removed += 1
                 continue

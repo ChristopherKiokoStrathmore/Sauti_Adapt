@@ -1,6 +1,7 @@
 {
   "name":"@sauti/extension",
   "private":true,
+  "type":"module",
   "version":"0.1.0",
   "scripts":{"build":"node build.mjs","typecheck":"tsc --noEmit -p tsconfig.json"},
   "dependencies":{"@sauti/shared":"file:../../packages/shared"},

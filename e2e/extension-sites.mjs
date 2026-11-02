@@ -8,6 +8,8 @@ function page(title, marker) {
 <style>body{margin:0;font:20px sans-serif}#spacer{height:1800px}</style></head><body>
 <h1 id="marker">${marker}</h1>
 <p>${title} is a local test page. It is not a recording and not a personal story.</p>
+<span hidden>SECRET-TOKEN-HIDDEN</span>
+<script>window.__SECRET = 'SECRET-TOKEN-SCRIPT';</script>
 <div id="spacer"></div>
 <p id="end">End of ${title}</p>
 </body></html>`;

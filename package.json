@@ -13,6 +13,7 @@
     "build:web": "npm run build --workspace @sauti/web",
     "build:extension": "npm run build --workspace @sauti/extension",
     "test:shared": "node --experimental-strip-types --test packages/shared/test/*.test.ts",
+    "test:extension": "node --experimental-strip-types --test apps/extension/test/*.test.ts",
     "test:api": "python -m pytest services/speech-api/tests -q",
     "typecheck:web": "npm run typecheck --workspace @sauti/web",
     "typecheck:extension": "tsc --noEmit -p apps/extension/tsconfig.json",

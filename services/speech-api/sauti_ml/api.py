@@ -1,5 +1,6 @@
 """Sauti Adapt: private, fail-closed API for enrollment and recognition."""
 import hmac
+import json
 import os
 from functools import lru_cache
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
@@ -157,6 +158,12 @@ async def recognize(
         return reject('NO_VALIDATED_PERSONAL_MODEL')
     try:
         model = PrototypeModel.load(folder)
+        release_path = folder / 'evaluation.json'
+        if not release_path.is_file():
+            raise ValueError('Model has no release record.')
+        release = json.loads(release_path.read_text(encoding='utf8'))
+        if release.get('status') != 'pilot-validation-passed' or release.get('model_version') != model.version:
+            raise ValueError('Model was not released by training.')
         encoder = model_encoder()
         if encoder.model_id != model.encoder_id:
             audit('recognize', 'rejected', user_id, profile_id)

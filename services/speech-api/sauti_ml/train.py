@@ -192,7 +192,7 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
     missing = _unenrolled_activations(test_metrics, enrolled)
     if missing:
         raise RuntimeError('No correct untouched-test activation for ' + ', '.join(missing) + '; model NOT released.')
-    model.save(folder)
+    model.save(folder, released=True)
     report = {
         'status': 'pilot-validation-passed', 'model_version': model.version,
         'profile_id': profile_id, 'encoder_id': encoder.model_id,

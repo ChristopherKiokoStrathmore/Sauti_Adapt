@@ -1,3 +1,4 @@
+import json
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
@@ -148,14 +149,36 @@ def test_validated_model_dispatches_only_known_command(monkeypatch, tmp_path):
     model = PrototypeModel([[1,0,0],[0,1,0],[0,0,1]],
                            ['SCROLL_DOWN','SCROLL_UP','GO_BACK'],
                            ['en-KE','en-KE','sw-KE'], .95, .1, 'test-v1', 'test-encoder')
-    model.save(profile_dir(pid))
-    (profile_dir(pid) / 'owner').write_text(USER_ID + '\n', encoding='utf8')
+    folder = profile_dir(pid)
+    model.save(folder, released=True)
+    (folder / 'owner').write_text(USER_ID + '\n', encoding='utf8')
+    (folder / 'evaluation.json').write_text(json.dumps({
+        'status': 'pilot-validation-passed', 'model_version': 'test-v1', 'accuracy_claim': False,
+    }), encoding='utf8')
     monkeypatch.setattr(module, 'model_encoder', lambda: FakeEncoder())
     resp = client.post('/v1/recognize', data={'profile_id':pid,'language':'en-KE'},
                        files={'audio':('test.wav',wav(),'audio/wav')}, headers=auth())
     assert resp.status_code == 200, resp.text
     assert resp.json()['status']=='accepted'
     assert resp.json()['intent']=='SCROLL_DOWN'
+
+
+def test_save_without_a_release_record_does_not_run(monkeypatch, tmp_path):
+    from sauti_ml.prototype import PrototypeModel
+    from sauti_ml.storage import profile_dir
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('SPEECH_MODE', 'prototype')
+    pid = str(uuid4())
+    folder = profile_dir(pid)
+    PrototypeModel([[1, 0, 0]], ['SCROLL_DOWN'], ['en-KE'], .5, 0, 'unreleased', 'test-encoder').save(folder, released=True)
+    (folder / 'owner').write_text(USER_ID + '\n', encoding='utf8')
+    resp = client.post('/v1/recognize', data={'profile_id': pid, 'language': 'en-KE'},
+                       files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['status'] == 'rejected'
+    assert resp.json()['intent'] == 'UNKNOWN'
+    assert resp.json()['reason'] == 'UNAVAILABLE_OR_INVALID_MODEL'
 
 
 def test_stored_audio_is_encrypted_and_audit_omits_the_token(monkeypatch, tmp_path):

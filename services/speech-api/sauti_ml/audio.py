@@ -70,4 +70,4 @@ def decode_wav(payload: bytes) -> np.ndarray:
 
 
 def encode_private_wav(samples: np.ndarray, path) -> None:
-    sf.write(str(path), samples, SAMPLE_RATE, subtype='PCM_16')
+    sf.write(path, samples, SAMPLE_RATE, subtype='PCM_16', format='WAV')

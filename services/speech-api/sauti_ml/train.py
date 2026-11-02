@@ -13,11 +13,11 @@ import json
 import time
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 import numpy as np
-import soundfile as sf
 from .audio import decode_wav
-from .storage import canonical_uuid, load_manifest, profile_dir
+from .storage import canonical_uuid, load_manifest, profile_dir, read_private_bytes, write_private_bytes
 from .prototype import PrototypeModel
 from .encoder import SpeechEncoder
 
@@ -112,7 +112,7 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
     if not training or not calibration or not test:
         raise ValueError('Three distinct data partitions are required: train, calibration, untouched test.')
     def fingerprints(rows):
-        return {hashlib.sha256(Path(e['absolute_path']).read_bytes()).hexdigest() for e in rows}
+        return {hashlib.sha256(read_private_bytes(Path(e['absolute_path']))).hexdigest() for e in rows}
     a, b, c = fingerprints(training), fingerprints(calibration), fingerprints(test)
     if a & b or a & c or b & c:
         raise ValueError('Identical audio appears across train/calibration/test partitions: data leakage.')
@@ -136,13 +136,15 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
 
     def feature(e):
         path = Path(e['absolute_path'])
-        raw = path.read_bytes()
+        raw = read_private_bytes(path)
         key = hashlib.sha256((encoder.model_id + '|').encode() + raw).hexdigest()
         cache_path = cache_dir / (key + '.npy')
         if cache_path.is_file():
-            return np.load(cache_path, allow_pickle=False)
+            return np.load(BytesIO(read_private_bytes(cache_path)), allow_pickle=False)
         v = encoder.embed(decode_wav(raw))
-        np.save(cache_path, v, allow_pickle=False)
+        buffer = BytesIO()
+        np.save(buffer, v, allow_pickle=False)
+        write_private_bytes(cache_path, buffer.getvalue())
         return v
 
     groups = defaultdict(list)

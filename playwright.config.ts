@@ -1,5 +1,8 @@
+import { createHash } from 'node:crypto';
 import { defineConfig } from '@playwright/test';
-import { ACCESS_CODE, API_PORT, API_TOKEN, API_URL, WEB_PORT, WEB_URL } from './e2e/env';
+import { API_PORT, API_TOKEN, API_URL, USER_ID, USER_TOKEN, WEB_PORT, WEB_URL } from './e2e/env';
+
+const accounts = JSON.stringify({ [USER_ID]: createHash('sha256').update(USER_TOKEN).digest('hex') });
 
 export default defineConfig({
   testDir: './e2e',
@@ -24,6 +27,7 @@ export default defineConfig({
       env: {
         SPEECH_MODE: 'mock',
         SAUTI_API_TOKEN: API_TOKEN,
+        SAUTI_ACCOUNTS: accounts,
         ALLOW_ENROLLMENT: 'false',
         SAUTI_PRIVATE_DIR: '/tmp/sauti-e2e-private',
       },
@@ -35,7 +39,6 @@ export default defineConfig({
       command: `npm run dev -- --port ${WEB_PORT}`,
       cwd: 'apps/web',
       env: {
-        DEMO_ACCESS_CODE: ACCESS_CODE,
         SPEECH_API_URL: API_URL,
         SPEECH_API_TOKEN: API_TOKEN,
         NEXT_TELEMETRY_DISABLED: '1',

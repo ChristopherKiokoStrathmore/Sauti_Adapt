@@ -100,7 +100,7 @@ async function begin() {
   try {
     const { origin } = await activeTab();
     if (!(await siteEnabled(origin))) { say('Enable this website before recording.'); return; }
-    if (!input('code').value.trim() || !input('profile').value.trim()) { say('Enter the access code and your private profile UUID first.'); return; }
+    if (!input('user').value.trim() || !input('code').value.trim() || !input('profile').value.trim()) { say('Enter your user ID, personal access token, and profile UUID first.'); return; }
     stopSpeaking();
     silenceBtn.disabled = true;
     const maxDurationMs = clampClipMs(Number(input('maxsec').value) * 1000);
@@ -127,7 +127,7 @@ async function finish() {
     form.append('profile_id', input('profile').value.trim());
     form.append('language', 'en-KE'); // Model can recognize enrolled commands from either language; language hint is advisory.
     const url = new URL('/api/recognize', input('api').value.trim());
-    const response = await fetch(url, { method: 'POST', body: form, headers: { 'x-sauti-demo-code': input('code').value.trim() } });
+    const response = await fetch(url, { method: 'POST', body: form, headers: { 'x-sauti-user': input('user').value.trim(), 'x-sauti-user-token': input('code').value.trim() } });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || data.detail || `HTTP ${response.status}`);
     if (!validRecognition(data)) throw new Error('Unexpected inference response.');

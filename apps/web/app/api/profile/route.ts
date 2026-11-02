@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { authorize } from '@/lib/proxy';
+import { originAllowed, userCredentials } from '@/lib/proxy';
 
 export const runtime = 'nodejs';
 
@@ -18,14 +18,20 @@ function target(profileId: string, recordingId: string | null): URL | Response {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!authorize(request)) return Response.json({ error: 'Access code invalid or not configured.' }, { status: 401 });
+  if (!originAllowed(request)) return Response.json({ error: 'Origin is not allowed.' }, { status: 403 });
+  const creds = userCredentials(request);
+  if (!creds) return Response.json({ error: 'Personal access token required.' }, { status: 401 });
   const profileId = request.nextUrl.searchParams.get('profile_id') || '';
   const recordingId = request.nextUrl.searchParams.get('recording_id');
   const url = target(profileId, recordingId);
   if (url instanceof Response) return url;
   const token = process.env.SPEECH_API_TOKEN as string;
   try {
-    const response = await fetch(url, { method: 'DELETE', headers: { 'x-api-key': token }, cache: 'no-store' });
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: { 'x-api-key': token, 'x-sauti-user': creds.user, 'x-sauti-user-token': creds.token },
+      cache: 'no-store',
+    });
     return new Response(await response.text(), {
       status: response.status,
       headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },

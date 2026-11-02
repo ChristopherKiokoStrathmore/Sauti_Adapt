@@ -60,11 +60,11 @@ Start with `SPEECH_MODE=mock`. This mode **rejects** speech; it is not a fake re
 ```bash
 # Open a second terminal at repo root
 cp apps/web/.env.example apps/web/.env.local
-# Configure matching SPEECH_API_TOKEN, SPEECH_API_URL, and different DEMO_ACCESS_CODE
+# Configure SPEECH_API_URL, SPEECH_API_TOKEN, and per-user SAUTI_ACCOUNTS. See docs/DEPLOYMENT.md.
 npm run dev:web
 ```
 
-Open `http://localhost:3000`. Enter your demo access code. The Controller test buttons operate the demo article through the OFFICIAL toolkit without model downloads. Microphone inference in mock mode returns `MODEL_NOT_READY` and executes nothing.
+Open `http://localhost:3000`. Enter the personal user ID and access token. The Controller test buttons operate the demo article through the OFFICIAL toolkit without model downloads. Microphone inference in mock mode returns `MODEL_NOT_READY` and executes nothing.
 
 ## 3. Build and load Chrome extension
 
@@ -75,7 +75,7 @@ npm run build:extension
 In Chrome, open `chrome://extensions`, enable Developer Mode and select **Load unpacked**. Select `apps/extension/dist`. Click the extension icon to open the Side Panel.
 
 1. Set the PWA origin to `http://localhost:3000` (or your authorized `.vercel.app` preview).
-2. Enter the demo access code and copy the profile UUID shown by the PWA.
+2. Enter the personal user ID, access token, and the profile UUID shown by the PWA.
 3. On a normal test website, select **Enable current website**, then grant the requested permission.
 4. Start and stop recording. The extension calls `/api/recognize`, rejects uncertain results and only injects the official Controller if the site is authorized.
 
@@ -136,7 +136,7 @@ The build commands require `npm install` and the toolkit checkout. `npm run test
 2. Create `feature/frontend`, `feature/speech-api`, `feature/ml`, `feature/toolkit`, and `feature/testing` branches.
 3. Connect a Vercel project to this monorepo. Set **Root Directory** to `apps/web`.
 4. Set the Vercel Build Command to `cd ../.. && python scripts/bootstrap_toolkit.py && npm install && npm run build:web` **only after verifying Vercel build root/relative path behavior**. It may be simpler to use repository root as Vercel root and build output `apps/web/.next`; test the deployment configuration in preview before merging.
-5. Configure `SPEECH_API_URL`, `SPEECH_API_TOKEN` and `DEMO_ACCESS_CODE` in Vercel project environment settings. Do not prefix private values with `NEXT_PUBLIC_`.
+5. Follow `docs/DEPLOYMENT.md` for Vercel and the separate speech-api host. Do not prefix private values with `NEXT_PUBLIC_`.
 6. Deploy the FastAPI service separately where model weights and CPU/GPU requirements fit. Do not assume Vercel Functions are suitable for persistent large models. Store personal artifacts privately on durable storage.
 7. The Chrome extension is built as an artifact with `npm run build:extension` and loaded unpacked for the hackathon. It is not deployed to Vercel as a website.
 

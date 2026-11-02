@@ -54,21 +54,27 @@ class PrototypeModel:
                            confidence=similarity_score, model_version=self.version, reason=None)
 
     def save(self, folder: Path):
+        from io import BytesIO
+        from .storage import write_private_bytes
         folder.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(folder / 'prototypes.npz', vectors=self.prototypes,
+        buffer = BytesIO()
+        np.savez_compressed(buffer, vectors=self.prototypes,
                             labels=np.array(self.labels, dtype='U32'), languages=np.array(self.languages, dtype='U8'))
-        (folder / 'model.json').write_text(json.dumps({
+        write_private_bytes(folder / 'prototypes.npz', buffer.getvalue())
+        write_private_bytes(folder / 'model.json', json.dumps({
             'threshold': self.threshold, 'margin': self.margin, 'model_version': self.version,
             'encoder_id': self.encoder_id, 'validated': True,
             'score_semantics': 'bounded cosine similarity, NOT probability'
-        }, indent=2), encoding='utf8')
+        }).encode('utf8'))
 
     @classmethod
     def load(cls, folder: Path):
-        meta = json.loads((folder / 'model.json').read_text(encoding='utf8'))
+        from io import BytesIO
+        from .storage import read_private_bytes
+        meta = json.loads(read_private_bytes(folder / 'model.json'))
         if not meta.get('validated'):
             raise ValueError('Model has not been validated.')
-        with np.load(folder / 'prototypes.npz', allow_pickle=False) as data:
+        with np.load(BytesIO(read_private_bytes(folder / 'prototypes.npz')), allow_pickle=False) as data:
             vectors = data['vectors']
             labels = data['labels'].tolist()
             languages = data['languages'].tolist()

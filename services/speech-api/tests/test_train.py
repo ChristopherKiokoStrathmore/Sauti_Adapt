@@ -28,12 +28,12 @@ def test_training_produces_validated_artifact_only_with_holdout(monkeypatch, tmp
             for ix in range(n):
                 phase = {train_id:0.0, cal_id:0.6, test_id:1.2}[sid] + .08 * ix
                 x = (.1*np.sin(2*np.pi*frequency*np.arange(16000)/16000+phase)).astype(np.float32)
-                store_enrollment(pid, sid, intent, Language.KENYAN_ENGLISH, x)
+                store_enrollment(pid, sid, intent, Language.KENYAN_ENGLISH, x, user_id='11111111-1111-4111-8111-111111111111')
     for ix in range(5):
         x=(.1*np.sin(2*np.pi*720*np.arange(16000)/16000+.11*ix)).astype(np.float32)
         y=(.1*np.sin(2*np.pi*720*np.arange(16000)/16000+1.0+.11*ix)).astype(np.float32)
-        store_enrollment(pid,cal_id,Intent.UNKNOWN,Language.KENYAN_ENGLISH,x)
-        store_enrollment(pid,test_id,Intent.UNKNOWN,Language.KENYAN_ENGLISH,y)
+        store_enrollment(pid,cal_id,Intent.UNKNOWN,Language.KENYAN_ENGLISH,x, user_id='11111111-1111-4111-8111-111111111111')
+        store_enrollment(pid,test_id,Intent.UNKNOWN,Language.KENYAN_ENGLISH,y, user_id='11111111-1111-4111-8111-111111111111')
     report = run(pid,cal_id,test_id,encoder=FakeEncoder(), result_kind='artificial-fixture')
     assert report['metrics']['test']['unknown_false_accepts']==0
     assert report['metrics']['test']['correct_accepted']==6
@@ -41,7 +41,9 @@ def test_training_produces_validated_artifact_only_with_holdout(monkeypatch, tmp
     assert (path/'evaluation.json').exists()
     exported=PrototypeModel.load(path)
     assert exported.predict([1,0,0]).intent==Intent.SCROLL_DOWN
-    assert json.loads((path/'model.json').read_text())['validated'] is True
+    from sauti_ml.storage import read_private_bytes
+    assert not (path/'model.json').read_bytes().startswith(b'{')
+    assert json.loads(read_private_bytes(path/'model.json'))['validated'] is True
     english = report['metrics']['test']['by_language']['en-KE']
     assert english['correct'] == 6
     assert english['incorrect'] == 0
@@ -75,11 +77,11 @@ def test_release_requires_each_enrolled_language(monkeypatch, tmp_path):
                     heard = frequency
                     if language is Language.KISWAHILI and sid != train_id:
                         heard = 720
-                    store_enrollment(pid, sid, intent, language, _tone(heard, phase))
+                    store_enrollment(pid, sid, intent, language, _tone(heard, phase), user_id='11111111-1111-4111-8111-111111111111')
     for language in (Language.KENYAN_ENGLISH, Language.KISWAHILI):
         for sid in (cal_id, test_id):
             for ix in range(5):
-                store_enrollment(pid, sid, Intent.UNKNOWN, language, _tone(720, .11 * ix + (0 if sid == cal_id else 1)))
+                store_enrollment(pid, sid, Intent.UNKNOWN, language, _tone(720, .11 * ix + (0 if sid == cal_id else 1)), user_id='11111111-1111-4111-8111-111111111111')
     try:
         run(pid, cal_id, test_id, encoder=FakeEncoder())
     except RuntimeError as exc:

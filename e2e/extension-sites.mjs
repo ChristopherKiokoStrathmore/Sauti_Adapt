@@ -23,6 +23,8 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       const body = Buffer.concat(chunks);
       const headers = { ...req.headers, host: new URL(upstream).host };
+      delete headers.origin;
+      delete headers.cookie;
       const forwarded = http.request(upstream + req.url, { method: req.method, headers }, (proxied) => {
         res.writeHead(proxied.statusCode || 502, proxied.headers);
         proxied.pipe(res);

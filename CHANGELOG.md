@@ -15,3 +15,4 @@
 - Enrollment stores consented clips only when `ALLOW_ENROLLMENT=true` and `SAUTI_PRIVATE_DIR` is outside the git repository. The person can delete one clip or the whole profile. Withdrawal works even when new enrollment is off.
 - `scripts/train_profile.py` runs prototype training once private sessions exist. The report adds per-language confusion counts and latency. Fixture tests are labelled `artificial-fixture`. Real co-designer results are not verified.
 - `docs/RESEARCH.md` records a future frozen-encoder head and a Whisper comparison. Neither is implemented. Gated Kenyan corpora stay unused until rights are verified.
+- Personal access tokens replace the shared demo passphrase. Private audio and models are encrypted, requests are rate limited and size limited, origins are checked, and audit lines omit audio and tokens. `docs/DEPLOYMENT.md` describes Vercel plus a separate API host. Nothing was deployed.

@@ -22,7 +22,8 @@ export function SautiDashboard() {
   const [profileId, setProfileId] = useState('');
   const sessionId = useRef('');
   const [sessionShown, setSessionShown] = useState('');
-  const [accessCode, setAccessCode] = useState('');
+  const [userId, setUserId] = useState('');
+  const [userToken, setUserToken] = useState('');
   const [language, setLanguage] = useState<Language>('en-KE');
   const [intent, setIntent] = useState<Intent>('SCROLL_DOWN');
   const [consent, setConsent] = useState(false);
@@ -96,7 +97,7 @@ export function SautiDashboard() {
       form.append('consent', String(consent));
     }
     const response = await fetch(mode === 'enroll' ? '/api/enroll' : '/api/recognize', {
-      method: 'POST', headers: { 'x-sauti-demo-code': accessCode }, body: form, cache: 'no-store'
+      method: 'POST', headers: { 'x-sauti-user': userId.trim(), 'x-sauti-user-token': userToken }, body: form, cache: 'no-store'
     });
     const body = await response.json();
     if (!response.ok) throw new Error(body.detail || body.error || `HTTP ${response.status}`);
@@ -125,7 +126,7 @@ export function SautiDashboard() {
 
   async function beginRecording() {
     if (busy.current || recording.current) return;
-    if (!profileId || !accessCode.trim()) { setStatus('Set your demo access code first.'); return; }
+    if (!profileId || !userId.trim() || !userToken.trim()) { setStatus('Enter your personal user ID and access token first.'); return; }
     if (mode === 'enroll' && !consent) { setStatus('Explicit consent is required to store enrollment recordings.'); return; }
     if (mode === 'enroll' && intent !== 'UNKNOWN' && !chosen.includes(intent)) { setStatus('Choose this command before recording it.'); return; }
     silence();
@@ -155,7 +156,8 @@ export function SautiDashboard() {
         <h2>1. Voice profile and enrollment</h2>
         <p className="muted">This is a private prototype. Do not upload a person's voice without their informed consent.</p>
         <div className="field"><label htmlFor="profile">Private profile identifier</label><input id="profile" readOnly value={profileId}/></div>
-        <div className="field"><label htmlFor="code">Demo access code</label><input id="code" type="password" autoComplete="off" value={accessCode} onChange={e => setAccessCode(e.target.value)} placeholder="Local team code"/></div>
+        <div className="field"><label htmlFor="user">Personal user ID</label><input id="user" autoComplete="off" value={userId} onChange={e => setUserId(e.target.value)} placeholder="Your account UUID"/></div>
+        <div className="field"><label htmlFor="code">Personal access token</label><input id="code" type="password" autoComplete="off" value={userToken} onChange={e => setUserToken(e.target.value)} placeholder="Not saved in the browser"/></div>
         <div className="field"><label htmlFor="language">Language</label><select id="language" value={language} onChange={e => setLanguage(e.target.value as Language)}><option value="en-KE">Kenyan English</option><option value="sw-KE">Kiswahili</option></select></div>
         <div className="field"><label htmlFor="mode">Task</label><select id="mode" value={mode} onChange={e => setMode(e.target.value as 'enroll'|'recognize')}><option value="recognize">Recognize and act</option><option value="enroll">Record an enrollment example</option></select></div>
         {mode === 'enroll' && <>
@@ -178,9 +180,9 @@ export function SautiDashboard() {
           : <><button type="button" disabled={state !== 'idle'} onClick={() => void beginRecording()}>🎙 Start voice recording</button><button type="button" disabled={state !== 'listening'} onClick={() => void finishRecording()}>■ Stop and process voice</button></>}
         <button type="button" className="secondary" disabled={!speaking} onClick={silence}>Stop speaking</button>
         <label><input type="checkbox" checked={deleteArmed} onChange={e => setDeleteArmed(e.target.checked)}/> I want every recording and model for this profile deleted.</label>
-        <button type="button" className="secondary" disabled={!deleteArmed || !accessCode.trim()} onClick={() => {
+        <button type="button" className="secondary" disabled={!deleteArmed || !userId.trim() || !userToken.trim()} onClick={() => {
           void (async () => {
-            const response = await fetch(`/api/profile?profile_id=${encodeURIComponent(profileId)}`, { method: 'DELETE', headers: { 'x-sauti-demo-code': accessCode } });
+            const response = await fetch(`/api/profile?profile_id=${encodeURIComponent(profileId)}`, { method: 'DELETE', headers: { 'x-sauti-user': userId.trim(), 'x-sauti-user-token': userToken } });
             const body = await response.json().catch(() => ({}));
             if (!response.ok) { setStatus(body.detail || body.error || 'Deletion failed.'); return; }
             setDeleteArmed(false);

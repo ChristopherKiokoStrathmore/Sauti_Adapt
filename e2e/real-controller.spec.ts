@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ACCESS_CODE, API_URL } from './env';
+import { API_URL, USER_ID, USER_TOKEN } from './env';
 
 /** One second of a 440 Hz tone. Not a person's voice. */
 function sineWav(): Buffer {
@@ -40,6 +40,18 @@ async function clientSource(page: Page): Promise<string> {
 async function fontScale(page: Page): Promise<string> {
   return page.locator('#controlled-site').evaluate((element) => element.style.getPropertyValue('--aa-font-scale'));
 }
+
+test('a foreign browser origin cannot call the speech proxy', async ({ request }) => {
+  const response = await request.post('/api/recognize', {
+    headers: { origin: 'https://evil.example', 'x-sauti-user': USER_ID, 'x-sauti-user-token': USER_TOKEN },
+    multipart: {
+      audio: { name: 'tone.wav', mimeType: 'audio/wav', buffer: sineWav() },
+      profile_id: '11111111-1111-4111-8111-111111111111',
+      language: 'en-KE',
+    },
+  });
+  expect(response.status()).toBe(403);
+});
 
 test('the page bundles the pinned upstream Controller and not the stock speech widget', async ({ page }) => {
   await page.goto('/');
@@ -99,7 +111,7 @@ test('mock-mode audio is rejected and does not move the demo DOM', async ({ page
     status: await page.getByRole('status').innerText(),
   };
 
-  const result = await page.evaluate(async ({ code, profileId, wav }) => {
+  const result = await page.evaluate(async ({ user, token, profileId, wav }) => {
     const bytes = Uint8Array.from(atob(wav), (char) => char.charCodeAt(0));
     const form = new FormData();
     form.append('audio', new Blob([bytes], { type: 'audio/wav' }), 'tone.wav');
@@ -108,10 +120,10 @@ test('mock-mode audio is rejected and does not move the demo DOM', async ({ page
     const response = await fetch('/api/recognize', {
       method: 'POST',
       body: form,
-      headers: { 'x-sauti-demo-code': code },
+      headers: { 'x-sauti-user': user, 'x-sauti-user-token': token },
     });
     return { http: response.status, body: await response.json() };
-  }, { code: ACCESS_CODE, profileId: profile, wav: sineWav().toString('base64') });
+  }, { user: USER_ID, token: USER_TOKEN, profileId: profile, wav: sineWav().toString('base64') });
 
   expect(result.http).toBe(200);
   expect(result.body.status).toBe('rejected');

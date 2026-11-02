@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { ACCESS_CODE } from './env';
+import { USER_ID, USER_TOKEN } from './env';
 
 const extensionPath = path.resolve('apps/extension/dist');
 
@@ -127,7 +127,8 @@ test('enabled sites use the real Controller and other sites do not', async () =>
     await expect(panel.locator('#status')).toContainText('not granted');
     expect(await scrollTop(alpha)).toBeLessThanOrEqual(settled + 1);
 
-    await panel.locator('#code').fill(ACCESS_CODE);
+    await panel.locator('#user').fill(USER_ID);
+    await panel.locator('#code').fill(USER_TOKEN);
     await panel.locator('#profile').fill('11111111-1111-4111-8111-111111111111');
     const calls = await panel.evaluate(() => {
       const state = { calls: 0 };
@@ -148,7 +149,7 @@ test('enabled sites use the real Controller and other sites do not', async () =>
     await expect(panel.locator('#status')).toContainText('microphone');
     const betaAfterMic = await scrollTop(beta);
 
-    const recognized = await panel.evaluate(async ({ code, wav }) => {
+    const recognized = await panel.evaluate(async ({ user, token, wav }) => {
       const bytes = Uint8Array.from(atob(wav), (char) => char.charCodeAt(0));
       const form = new FormData();
       form.append('audio', new Blob([bytes], { type: 'audio/wav' }), 'tone.wav');
@@ -157,10 +158,10 @@ test('enabled sites use the real Controller and other sites do not', async () =>
       const response = await fetch('http://127.0.0.1:3000/api/recognize', {
         method: 'POST',
         body: form,
-        headers: { 'x-sauti-demo-code': code },
+        headers: { 'x-sauti-user': user, 'x-sauti-user-token': token },
       });
       return { http: response.status, body: await response.json() };
-    }, { code: ACCESS_CODE, wav: sineWav().toString('base64') });
+    }, { user: USER_ID, token: USER_TOKEN, wav: sineWav().toString('base64') });
     expect(recognized.http).toBe(200);
     expect(recognized.body.status).toBe('rejected');
     expect(recognized.body.intent).toBe('UNKNOWN');

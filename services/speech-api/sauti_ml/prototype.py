@@ -53,7 +53,7 @@ class PrototypeModel:
         return Recognition(status='accepted', intent=Intent(label), language=Language(lang),
                            confidence=similarity_score, model_version=self.version, reason=None)
 
-    def save(self, folder: Path):
+    def save(self, folder: Path, *, released: bool = False):
         from io import BytesIO
         from .storage import write_private_bytes
         folder.mkdir(parents=True, exist_ok=True)
@@ -63,7 +63,7 @@ class PrototypeModel:
         write_private_bytes(folder / 'prototypes.npz', buffer.getvalue())
         write_private_bytes(folder / 'model.json', json.dumps({
             'threshold': self.threshold, 'margin': self.margin, 'model_version': self.version,
-            'encoder_id': self.encoder_id, 'validated': True,
+            'encoder_id': self.encoder_id, 'validated': bool(released),
             'score_semantics': 'bounded cosine similarity, NOT probability'
         }).encode('utf8'))
 

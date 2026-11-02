@@ -10,6 +10,7 @@ unknown speech examples, an untouched test session, and prevents activation if s
 import argparse
 import hashlib
 import json
+import time
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,10 +47,12 @@ def test_predictions(model, known, unknown):
     wrong_accepted = 0
     by_language = {'en-KE': _language_bucket(), 'sw-KE': _language_bucket()}
     by_command = defaultdict(lambda: {'correct': 0, 'rejected': 0, 'incorrect': 0})
+    confusion_by_language = defaultdict(Counter)
     for label, language, embedding in known:
         result = model.predict(embedding)
         predicted = result.intent.value if result.status == 'accepted' else 'REJECTED'
         confusion[f'{language}:{label}->{predicted}'] += 1
+        confusion_by_language[language][f'{label}->{predicted}'] += 1
         bucket = by_language.setdefault(language, _language_bucket())
         bucket['known_count'] += 1
         command = by_command[f'{label}|{language}']
@@ -80,6 +83,7 @@ def test_predictions(model, known, unknown):
         'observed_unknown_false_accept_rate': round(unknown_accepts / max(len(unknown), 1), 4),
         'by_language': by_language,
         'by_command_language': {key: dict(value) for key, value in sorted(by_command.items())},
+        'confusion_by_language': {lang: dict(counts) for lang, counts in sorted(confusion_by_language.items())},
         'confusion': dict(confusion),
     }
 
@@ -94,7 +98,8 @@ def _unenrolled_activations(metrics, pairs):
     return missing
 
 
-def run(profile_id: str, calibration_session: str, test_session: str, *, encoder=None) -> dict:
+def run(profile_id: str, calibration_session: str, test_session: str, *, encoder=None, result_kind: str = 'private-session') -> dict:
+    started = time.perf_counter()
     profile_id = canonical_uuid(profile_id)
     calibration_session = canonical_uuid(calibration_session)
     test_session = canonical_uuid(test_session)
@@ -194,7 +199,10 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
         'evaluated_at': datetime.now(timezone.utc).isoformat(),
         'training_examples': len(training), 'calibration_examples': len(calibration), 'test_examples': len(test),
         'metrics': {'calibration': metrics, 'test': test_metrics},
-        'warning': 'Small test sets cannot establish a low real-world false activation rate. Per-language and per-command counts are not an accuracy claim. Requires co-designer usability evaluation.'
+        'latency_seconds': round(time.perf_counter() - started, 3),
+        'result_kind': result_kind,
+        'accuracy_claim': False,
+        'warning': 'Small test sets cannot establish a low real-world false activation rate. Per-language confusion counts and false-activation counts are not an accuracy claim. Requires co-designer usability evaluation.'
     }
     (folder / 'evaluation.json').write_text(json.dumps(report, indent=2), encoding='utf8')
     return report

@@ -87,17 +87,17 @@ The sample manifest authorizes API requests only to localhost and `.vercel.app`;
 
 **Never collect speech just to fill a dataset. Begin with your co-designer's chosen useful commands and informed consent.**
 
-The PWA supports recorded examples and sessions. Each page reload creates a new recording session. The server stores only consented examples in `services/speech-api/private/profiles/<UUID>/` when `ALLOW_ENROLLMENT=true`.
+The PWA supports recorded examples and sessions. Start a new session in the enrollment form for training, calibration, and the untouched test. The server stores only consented examples under `SAUTI_PRIVATE_DIR` (outside this repository) when `ALLOW_ENROLLMENT=true`.
 
 For initial pilot training, collect at least three examples per command and language in training sessions, at least two examples per command and language in a **separate calibration session**, at least two more in an untouched final test session, and five unknown/unrelated utterances in each of the calibration and test sessions. More varied consented data and stronger test sets are needed for rigorous evaluation.
 
 Identify the calibration and test session UUIDs in the **private** `manifest.jsonl`, not in public logs. Then run:
 
 ```bash
-cd services/speech-api
-pip install -r requirements-ml.txt
-# Ensure SAUTI_PRIVATE_DIR points to the SAME private folder as the API
-python -m sauti_ml.train --profile-id YOUR_PROFILE_UUID --calibration-session CALIBRATION_SESSION_UUID --test-session TEST_SESSION_UUID
+pip install -r services/speech-api/requirements-ml.txt
+# SAUTI_PRIVATE_DIR must be outside this repository and the same folder the API uses.
+export SAUTI_PRIVATE_DIR=/absolute/path/outside/the/repo
+python scripts/train_profile.py YOUR_PROFILE_UUID CALIBRATION_SESSION_UUID TEST_SESSION_UUID
 ```
 
 The trainer:

@@ -34,7 +34,7 @@ def test_training_produces_validated_artifact_only_with_holdout(monkeypatch, tmp
         y=(.1*np.sin(2*np.pi*720*np.arange(16000)/16000+1.0+.11*ix)).astype(np.float32)
         store_enrollment(pid,cal_id,Intent.UNKNOWN,Language.KENYAN_ENGLISH,x)
         store_enrollment(pid,test_id,Intent.UNKNOWN,Language.KENYAN_ENGLISH,y)
-    report = run(pid,cal_id,test_id,encoder=FakeEncoder())
+    report = run(pid,cal_id,test_id,encoder=FakeEncoder(), result_kind='artificial-fixture')
     assert report['metrics']['test']['unknown_false_accepts']==0
     assert report['metrics']['test']['correct_accepted']==6
     path=profile_dir(pid)
@@ -47,6 +47,10 @@ def test_training_produces_validated_artifact_only_with_holdout(monkeypatch, tmp
     assert english['incorrect'] == 0
     assert english['unknown_false_accepts'] == 0
     assert report['metrics']['test']['by_language']['sw-KE']['known_count'] == 0
+    assert report['result_kind'] == 'artificial-fixture'
+    assert report['accuracy_claim'] is False
+    assert report['latency_seconds'] >= 0
+    assert 'en-KE' in report['metrics']['test']['confusion_by_language']
 
 
 def _tone(frequency, phase=0.0):

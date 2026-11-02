@@ -5,6 +5,7 @@ import { clampClipMs, startRecording, type RecordingSession } from '@sauti/share
 import { isReadAloudUtterance, speakText, stopSpeaking } from '@sauti/shared/speak';
 import { CONTROLLER_CSS } from '@toolkit/controller/web/ui.js';
 import { createController, createDomReceiver } from '@sauti/shared/controller';
+import { capReadPort } from '@sauti/shared/page-text';
 
 const INTENT_OPTIONS: Intent[] = ['SCROLL_DOWN', 'SCROLL_UP', 'GO_BACK', 'READ_PAGE', 'UNDO', 'UNKNOWN'];
 const TEST_COMMANDS = [
@@ -50,7 +51,7 @@ export function SautiDashboard() {
     if ('serviceWorker' in navigator) { void navigator.serviceWorker.register('/sw.js').catch(() => undefined); }
     const root = document.getElementById('controlled-site');
     if (root) controller.current = createController({
-      control: createDomReceiver(root, { scrollTarget: root }),
+      control: capReadPort(createDomReceiver(root, { scrollTarget: root }), root),
       operator: { abilityModel: { supportAreas: ['motor'] } }
     });
     return () => { recording.current?.cancel(); stopSpeaking(); controller.current = null; };

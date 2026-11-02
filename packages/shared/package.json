@@ -3,5 +3,5 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "exports": {".": "./src/index.ts", "./audio": "./src/audio.ts", "./speak": "./src/speak.ts", "./controller": "./src/controller.ts"}
+  "exports": {".": "./src/index.ts", "./audio": "./src/audio.ts", "./speak": "./src/speak.ts", "./controller": "./src/controller.ts", "./page-text": "./src/page-text.ts"}
 }

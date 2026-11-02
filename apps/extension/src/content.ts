@@ -2,17 +2,15 @@
 import { TOOLKIT_UTTERANCE } from '@sauti/shared';
 import { createController, createDomReceiver } from '@sauti/shared/controller';
 import { ENABLED_ORIGINS_KEY, httpOrigin, readEnabledOrigins } from './allowlist';
-import { capReadPort } from './page-text';
+import { capReadPort } from '@sauti/shared/page-text';
 
 const win = globalThis as typeof globalThis & { __SAUTI_CONTENT_READY__?: boolean };
 if (!win.__SAUTI_CONTENT_READY__) {
   win.__SAUTI_CONTENT_READY__ = true;
   const root = document.documentElement;
   const scroller = (document.scrollingElement instanceof HTMLElement ? document.scrollingElement : root);
-  const receiver = capReadPort(
-    createDomReceiver(root, { scrollTarget: scroller }),
-    () => document.body?.innerText || '',
-  );
+  const readRoot = document.body instanceof HTMLElement ? document.body : root;
+  const receiver = capReadPort(createDomReceiver(root, { scrollTarget: scroller }), readRoot);
   const controller = createController({
     control: receiver,
     operator: { abilityModel: { supportAreas: ['motor'] } },

@@ -1,8 +1,12 @@
 /**
+ * Hand-written types for the pinned AI4A11y Controller.
+ * Upstream SHA: 7cf5006dbab9e328fadf54b654147c6bca44113d
+ *
  * The pinned controller defaults `operator = null`, so TypeScript infers
  * `operator?: null` and rejects the documented operator object (TS2322).
  * These declarations restore the JSDoc parameter types. They do not change
- * the runtime modules.
+ * the runtime modules. packages/shared/test/toolkit-signature.test.ts fails
+ * if this SHA or the upstream function signatures drift.
  */
 declare module '@toolkit/controller/createController.js' {
   export interface ToolkitOperator {

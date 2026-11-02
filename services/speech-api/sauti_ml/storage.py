@@ -193,20 +193,21 @@ def delete_recording(profile_id: str, recording_id: str, user_id: str) -> dict:
     return {'deleted': removed > 0, 'recordings_removed': removed}
 
 
-def purge_expired(profile_id: str, user_id: str) -> int:
-    """Delete clips older than SAUTI_RETENTION_DAYS (default 30). Returns how many were removed."""
-    import time
+def retention_days() -> int:
     try:
         days = int(os.environ.get('SAUTI_RETENTION_DAYS', '30'))
     except ValueError:
         days = 30
-    days = max(1, days)
-    assert_owner(profile_id, user_id)
-    folder = profile_dir(profile_id)
+    return max(1, days)
+
+
+def purge_expired_folder(folder: Path) -> int:
+    """Delete expired clips and their cached embeddings. Does not remove a released model."""
+    import time
     manifest = folder / 'manifest.jsonl'
     if not manifest.is_file():
         return 0
-    cutoff = time.time() - days * 86400
+    cutoff = time.time() - retention_days() * 86400
     kept = []
     removed = 0
     with _lock:
@@ -227,6 +228,34 @@ def purge_expired(profile_id: str, user_id: str) -> int:
             kept.append(line)
         _store_manifest(folder, ('\n'.join(kept) + '\n') if kept else '')
     return removed
+
+
+def purge_expired_profiles() -> int:
+    """Sweep every profile. Safe to call repeatedly and from a background thread."""
+    if not os.environ.get('SAUTI_PRIVATE_DIR', '').strip():
+        return 0
+    try:
+        root = private_root() / 'profiles'
+    except RuntimeError:
+        return 0
+    if not root.is_dir():
+        return 0
+    removed = 0
+    for child in list(root.iterdir()):
+        if not child.is_dir():
+            continue
+        try:
+            canonical_uuid(child.name)
+        except ValueError:
+            continue
+        removed += purge_expired_folder(child)
+    return removed
+
+
+def purge_expired(profile_id: str, user_id: str) -> int:
+    """Delete this owner's expired clips. Ownership is checked before any file is removed."""
+    assert_owner(profile_id, user_id)
+    return purge_expired_folder(profile_dir(profile_id))
 
 
 def delete_profile(profile_id: str, user_id: str) -> dict:

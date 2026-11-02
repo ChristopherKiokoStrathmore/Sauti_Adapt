@@ -1,7 +1,6 @@
 /** The OFFICIAL AI4A11y controller runs inside the isolated content-script context. */
-import { createController } from '@toolkit/controller/createController.js';
-import { createDomReceiver } from '@toolkit/controller/web/dom-receiver.js';
 import { TOOLKIT_UTTERANCE } from '@sauti/shared';
+import { createController, createDomReceiver } from '@sauti/shared/controller';
 import { ENABLED_ORIGINS_KEY, httpOrigin, readEnabledOrigins } from './allowlist';
 
 const win = globalThis as typeof globalThis & { __SAUTI_CONTENT_READY__?: boolean };
@@ -13,7 +12,7 @@ if (!win.__SAUTI_CONTENT_READY__) {
   const controller = createController({
     control: receiver,
     operator: { abilityModel: { supportAreas: ['motor'] } },
-  } as unknown as Parameters<typeof createController>[0]);
+  });
 
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (message?.kind !== 'SAUTI_APPROVED_COMMAND') return false;

@@ -4,7 +4,7 @@ import { COMMAND_LABELS, commandToUtterance, validRecognition, type Intent, type
 import { clampClipMs, startRecording, type RecordingSession } from '@sauti/shared/audio';
 import { isReadAloudUtterance, speakText, stopSpeaking } from '@sauti/shared/speak';
 import { CONTROLLER_CSS } from '@toolkit/controller/web/ui.js';
-import { createController, createDomReceiver } from '@/lib/official-controller';
+import { createController, createDomReceiver } from '@sauti/shared/controller';
 
 const INTENT_OPTIONS: Intent[] = ['SCROLL_DOWN', 'SCROLL_UP', 'GO_BACK', 'READ_PAGE', 'UNDO', 'UNKNOWN'];
 const TEST_COMMANDS = [

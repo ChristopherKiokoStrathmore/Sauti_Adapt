@@ -17,7 +17,7 @@
     "typecheck:web": "npm run typecheck --workspace @sauti/web",
     "typecheck:extension": "tsc --noEmit -p apps/extension/tsconfig.json",
     "test:e2e": "playwright test",
-    "check": "npm run test:shared && npm run typecheck:web && npm run build:extension && npm run test:api"
+    "check": "npm run test:shared && npm run typecheck:web && npm run typecheck:extension && npm run build:extension && npm run test:api"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

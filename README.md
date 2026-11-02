@@ -12,8 +12,8 @@
 | Chrome MV3 sidepanel | `apps/extension` | Source complete; requires build + Chrome verification |
 | Official AI4A11y Controller | `scripts/bootstrap_toolkit.py` | Pinned upstream import; requires network to download |
 | API and audio validation | `services/speech-api` | Implemented and tested locally |
-| Real personalized prototype training | `sauti_ml/train.py` | Runnable once consented audio, model weights and separate calibration and test sessions are available |
-| Fine-tuned speech encoder | Research next stage | Not implemented or validated in this starter |
+| Frozen Wav2Vec2 plus prototypes | `sauti_ml/encoder.py`, `sauti_ml/train.py` | The app path freezes `facebook/wav2vec2-base` and stores one prototype per command and language. It does not fine-tune. No accuracy is claimed. |
+| Notebook experiments | `ml/notebooks` | Not imported by the API, the PWA, or the extension |
 | Android adapter | Product roadmap | Not implemented |
 
 ## 2. First run: required software
@@ -103,14 +103,18 @@ python -m sauti_ml.train --profile-id YOUR_PROFILE_UUID --calibration-session CA
 The trainer:
 
 * Loads preprocessed, consented audio.
-* Downloads a pretrained `facebook/wav2vec2-base` audio encoder if needed.
+* Downloads a frozen pretrained `facebook/wav2vec2-base` encoder if needed. Its weights are not updated. This is not fine-tuning.
+* Does not import or run `ml/notebooks`.
 * Extracts and caches normalized speech embeddings privately.
-* Builds prototypes per intended command and language.
-* Selects a conservative similarity threshold using calibration and unknown examples, then independently tests on untouched session.
-* Refuses to release a model when its basic observed safety tests fail.
+* Builds one prototype per intended command and language.
+* Selects a conservative similarity threshold using calibration and unknown examples, then independently tests on an untouched session.
+* Reports correct accepts, rejections, wrong-command accepts, and unknown false accepts for Kenyan English and Kiswahili, and for each command in each language.
+* Refuses to release a model unless every enrolled command activates in each language it was enrolled in, and unless no false activation was observed. Those counts are not an accuracy claim.
 * Saves `model.json`, `prototypes.npz` and `evaluation.json` privately after the independent final test passes.
 
 Only after reviewing the evaluation and involving the co-designer should you set `SPEECH_MODE=prototype` and restart the API. **The similarity score is not a calibrated probability.** No accuracy on real Kenyan atypical speech is asserted by this starter.
+
+Recording starts only when the person presses the microphone control. The default control is one toggle button, with an optional auto-stop at 5 seconds. Separate start and stop buttons are available. The server enforces `SAUTI_MAX_CLIP_SECONDS` (default 5; invalid settings stay at 5 and the value cannot exceed 30). Agree the final clip length and control with the participant. "Read this page aloud" speaks on-screen text with the browser `speechSynthesis` API and does not record or upload that speech. "Undo last setting" reverts the last display setting only. It does not undo scrolling or Back.
 
 ## 5. Running quality gates
 

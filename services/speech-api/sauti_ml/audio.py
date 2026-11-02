@@ -1,4 +1,5 @@
 """Fail closed audio decoding and normalization. All model inputs are single channel 16 kHz PCM."""
+import os
 from io import BytesIO
 from math import gcd
 import numpy as np
@@ -8,8 +9,27 @@ from scipy.signal import resample_poly
 SAMPLE_RATE = 16000
 MAX_BYTES = 2_000_000
 MIN_DURATION_SECONDS = 0.3
-MAX_DURATION_SECONDS = 5.0
+DEFAULT_MAX_DURATION_SECONDS = 5.0
+MAX_CONFIGURABLE_SECONDS = 30.0
 MIN_RMS = 0.002
+
+
+def max_duration_seconds() -> float:
+    """Server clip limit. Default 5s. Invalid values fall back to the default.
+
+    The participant must agree the final limit. This function still rejects
+    anything above the configured cap; it does not accept unbounded audio.
+    """
+    raw = os.environ.get('SAUTI_MAX_CLIP_SECONDS', '').strip()
+    if not raw:
+        return DEFAULT_MAX_DURATION_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_MAX_DURATION_SECONDS
+    if not (0.5 <= value <= MAX_CONFIGURABLE_SECONDS):
+        return DEFAULT_MAX_DURATION_SECONDS
+    return value
 
 class AudioValidationError(ValueError):
     pass
@@ -29,14 +49,15 @@ def decode_wav(payload: bytes) -> np.ndarray:
     if not np.isfinite(samples).all():
         raise AudioValidationError('Audio contains invalid values.')
     mono = samples.mean(axis=1)
-    if len(mono) / sample_rate > MAX_DURATION_SECONDS + .05:
-        raise AudioValidationError('Recording must be at most five seconds.')
+    limit = max_duration_seconds()
+    if len(mono) / sample_rate > limit + .05:
+        raise AudioValidationError(f'Recording must be at most {limit:g} seconds.')
     if sample_rate != SAMPLE_RATE:
         factor = gcd(sample_rate, SAMPLE_RATE)
         mono = resample_poly(mono, SAMPLE_RATE // factor, sample_rate // factor)
     seconds = len(mono) / SAMPLE_RATE
-    if not (MIN_DURATION_SECONDS <= seconds <= MAX_DURATION_SECONDS + .1):
-        raise AudioValidationError('Recording must be between 0.3 and 5 seconds.')
+    if not (MIN_DURATION_SECONDS <= seconds <= limit + .1):
+        raise AudioValidationError(f'Recording must be between 0.3 and {limit:g} seconds.')
     mono = np.asarray(mono, dtype=np.float32)
     mono = mono - float(mono.mean())
     rms = float(np.sqrt(np.mean(np.square(mono, dtype=np.float64))))

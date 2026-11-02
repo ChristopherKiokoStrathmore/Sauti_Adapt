@@ -1,4 +1,8 @@
-"""Pretrained audio embeddings. Torch and Transformers are imported only in real ML mode."""
+"""Frozen pretrained audio embeddings. Torch and Transformers are imported only in real ML mode.
+
+The app path loads facebook/wav2vec2-base, calls eval(), and embeds under inference_mode.
+It does not fine-tune. Notebook experiments are not imported here.
+"""
 import os
 import numpy as np
 

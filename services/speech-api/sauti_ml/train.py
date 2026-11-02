@@ -26,27 +26,72 @@ MIN_UNKNOWN_VALID = 5
 MARGIN = 0.05
 
 
+def _language_bucket():
+    return {
+        'correct': 0, 'rejected': 0, 'incorrect': 0,
+        'unknown_false_accepts': 0, 'known_count': 0, 'unknown_count': 0,
+    }
+
+
 def test_predictions(model, known, unknown):
+    """Score known items (intent, language, embedding) and unknown items (language, embedding).
+
+    `correct` is an enrolled command accepted as itself. `rejected` was not accepted.
+    `incorrect` is a known command accepted as a different command. `unknown_false_accepts`
+    is speech enrolled as UNKNOWN that was accepted as a command. These counts are not
+    an accuracy claim. Unit tests pass artificial vectors, not human speech.
+    """
     confusion = Counter()
     correct = 0
     wrong_accepted = 0
-    for label, embedding in known:
+    by_language = {'en-KE': _language_bucket(), 'sw-KE': _language_bucket()}
+    by_command = defaultdict(lambda: {'correct': 0, 'rejected': 0, 'incorrect': 0})
+    for label, language, embedding in known:
         result = model.predict(embedding)
         predicted = result.intent.value if result.status == 'accepted' else 'REJECTED'
-        confusion[f'{label}->{predicted}'] += 1
+        confusion[f'{language}:{label}->{predicted}'] += 1
+        bucket = by_language.setdefault(language, _language_bucket())
+        bucket['known_count'] += 1
+        command = by_command[f'{label}|{language}']
         if predicted == label:
             correct += 1
+            bucket['correct'] += 1
+            command['correct'] += 1
         elif predicted != 'REJECTED':
             wrong_accepted += 1
-    unknown_accepts = sum(model.predict(e).status == 'accepted' for e in unknown)
+            bucket['incorrect'] += 1
+            command['incorrect'] += 1
+        else:
+            bucket['rejected'] += 1
+            command['rejected'] += 1
+    unknown_accepts = 0
+    for language, embedding in unknown:
+        accepted = model.predict(embedding).status == 'accepted'
+        bucket = by_language.setdefault(language, _language_bucket())
+        bucket['unknown_count'] += 1
+        if accepted:
+            unknown_accepts += 1
+            bucket['unknown_false_accepts'] += 1
     return {
         'known_count': len(known), 'correct_accepted': correct,
         'known_wrong_accepted': wrong_accepted, 'known_rejected': len(known) - correct - wrong_accepted,
         'unknown_count': len(unknown), 'unknown_false_accepts': unknown_accepts,
         'command_acceptance_recall': round(correct / max(len(known), 1), 4),
         'observed_unknown_false_accept_rate': round(unknown_accepts / max(len(unknown), 1), 4),
-        'confusion': dict(confusion)
+        'by_language': by_language,
+        'by_command_language': {key: dict(value) for key, value in sorted(by_command.items())},
+        'confusion': dict(confusion),
     }
+
+
+def _unenrolled_activations(metrics, pairs):
+    missing = []
+    by_command = metrics.get('by_command_language', {})
+    for intent, language in pairs:
+        row = by_command.get(f'{intent}|{language}', {})
+        if row.get('correct', 0) < 1:
+            missing.append(f'{intent} in {language}')
+    return missing
 
 
 def run(profile_id: str, calibration_session: str, test_session: str, *, encoder=None) -> dict:
@@ -107,32 +152,39 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
         labels.append(label)
         languages.append(language)
 
-    positive = [(e['intent'], feature(e)) for e in calibration if e['intent'] != 'UNKNOWN']
-    negatives = [feature(e) for e in calibration if e['intent'] == 'UNKNOWN']
+    positive = [(e['intent'], e['language'], feature(e)) for e in calibration if e['intent'] != 'UNKNOWN']
+    negatives = [(e['language'], feature(e)) for e in calibration if e['intent'] == 'UNKNOWN']
+    enrolled = list(zip(labels, languages))
     # Calibration chooses the policy. Test is NEVER used to pick thresholds.
     candidates = []
+    best_safe = None
     for threshold in np.arange(0.40, 0.995, 0.005):
         model = PrototypeModel(centroids, labels, languages, float(threshold), MARGIN,
                                'sauti-prototype-v1', encoder.model_id)
         metrics = test_predictions(model, positive, negatives)
-        if metrics['unknown_false_accepts'] == 0 and metrics['known_wrong_accepted'] == 0:
-            candidates.append((metrics['correct_accepted'], float(threshold), metrics, model))
+        if metrics['unknown_false_accepts'] or metrics['known_wrong_accepted']:
+            continue
+        row = (metrics['correct_accepted'], float(threshold), metrics, model)
+        if best_safe is None or row[0] > best_safe[0] or (row[0] == best_safe[0] and row[1] > best_safe[1]):
+            best_safe = row
+        if not _unenrolled_activations(metrics, enrolled):
+            candidates.append(row)
     if not candidates:
-        raise RuntimeError('No validation threshold prevented false activations; model NOT released.')
+        if best_safe is None:
+            raise RuntimeError('No validation threshold prevented false activations; model NOT released.')
+        missing = _unenrolled_activations(best_safe[2], enrolled)
+        detail = ', '.join(missing) if missing else 'every enrolled command and language'
+        raise RuntimeError(f'No validation threshold covered {detail} without a false activation; model NOT released.')
     candidates.sort(key=lambda r: (r[0], r[1]), reverse=True)
     correct, threshold, metrics, model = candidates[0]
-    # A model that fails to recognize even a single example of a class is not ready.
-    for intent in sorted(set(labels)):
-        if metrics['confusion'].get(f'{intent}->{intent}', 0) < 1:
-            raise RuntimeError(f'No correct held-out activation for {intent}; model NOT released.')
-    test_positive = [(e['intent'], feature(e)) for e in test if e['intent'] != 'UNKNOWN']
-    test_negatives = [feature(e) for e in test if e['intent'] == 'UNKNOWN']
+    test_positive = [(e['intent'], e['language'], feature(e)) for e in test if e['intent'] != 'UNKNOWN']
+    test_negatives = [(e['language'], feature(e)) for e in test if e['intent'] == 'UNKNOWN']
     test_metrics = test_predictions(model, test_positive, test_negatives)
     if test_metrics['unknown_false_accepts'] or test_metrics['known_wrong_accepted']:
         raise RuntimeError('Final untouched test detected false command activation; model NOT released.')
-    for intent in sorted(set(labels)):
-        if test_metrics['confusion'].get(f'{intent}->{intent}', 0) < 1:
-            raise RuntimeError(f'No correct untouched-test activation for {intent}; model NOT released.')
+    missing = _unenrolled_activations(test_metrics, enrolled)
+    if missing:
+        raise RuntimeError('No correct untouched-test activation for ' + ', '.join(missing) + '; model NOT released.')
     model.save(folder)
     report = {
         'status': 'pilot-validation-passed', 'model_version': model.version,
@@ -142,7 +194,7 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
         'evaluated_at': datetime.now(timezone.utc).isoformat(),
         'training_examples': len(training), 'calibration_examples': len(calibration), 'test_examples': len(test),
         'metrics': {'calibration': metrics, 'test': test_metrics},
-        'warning': 'Small test sets cannot establish a low real-world false activation rate. Requires co-designer usability evaluation.'
+        'warning': 'Small test sets cannot establish a low real-world false activation rate. Per-language and per-command counts are not an accuracy claim. Requires co-designer usability evaluation.'
     }
     (folder / 'evaluation.json').write_text(json.dumps(report, indent=2), encoding='utf8')
     return report

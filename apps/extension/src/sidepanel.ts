@@ -1,12 +1,25 @@
 import { commandToUtterance, validRecognition } from '@sauti/shared';
-import { startRecording, type RecordingSession } from '@sauti/shared/audio';
+import { clampClipMs, startRecording, type RecordingSession } from '@sauti/shared/audio';
+import { isReadAloudUtterance, speakText, stopSpeaking } from '@sauti/shared/speak';
 
 const input = (id: string) => document.getElementById(id) as HTMLInputElement;
 const recordBtn = input('record') as HTMLButtonElement;
 const stopBtn = input('stop') as HTMLButtonElement;
+const silenceBtn = input('silence') as HTMLButtonElement;
 const status = document.getElementById('status')!;
 let recording: RecordingSession | null = null;
+let finishing = false;
 function say(message: string) { status.textContent = message; }
+function toggleMode() { return (document.getElementById('listen') as HTMLSelectElement).value !== 'separate'; }
+function syncButtons() {
+  const listening = recording !== null;
+  const toggle = toggleMode();
+  recordBtn.disabled = finishing || (!toggle && listening);
+  recordBtn.setAttribute('aria-pressed', toggle && listening ? 'true' : 'false');
+  recordBtn.textContent = toggle && listening ? '■ Stop and recognize' : '🎙 Start listening';
+  stopBtn.hidden = toggle;
+  stopBtn.disabled = toggle || !listening || finishing;
+}
 
 async function activeTab() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -35,27 +48,41 @@ async function executeOnTab(utterance: string) {
   // Inject the bundle into the page's isolated extension world. Do not inject ML outputs into page JS.
   await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
   const reply = await chrome.tabs.sendMessage(tabId, { kind: 'SAUTI_APPROVED_COMMAND', utterance });
-  say(reply?.feedback || reply?.reason || 'The website did not acknowledge the command.');
+  const feedback = String(reply?.feedback || reply?.reason || 'The website did not acknowledge the command.');
+  say(feedback);
+  if (!isReadAloudUtterance(utterance) || reply?.ok === false || !reply?.feedback) return;
+  const started = speakText(String(reply.feedback), 'en-KE', {
+    onend: () => { silenceBtn.disabled = true; },
+    onerror: () => { silenceBtn.disabled = true; },
+  });
+  silenceBtn.disabled = !started;
+  if (!started) say(feedback + ' Speech playback is unavailable in this panel. The text was not recorded or uploaded.');
 }
 
-recordBtn.addEventListener('click', async () => {
-  if (recording) return;
+async function begin() {
+  if (recording || finishing) return;
   try {
     const { origin } = await activeTab();
     if (!(await siteAllowed(origin))) { say('Enable this website before recording.'); return; }
     if (!input('code').value.trim() || !input('profile').value.trim()) { say('Enter the access code and your private profile UUID first.'); return; }
-    recording = await startRecording();
-    recordBtn.disabled = true;
-    stopBtn.disabled = false;
-    say('Listening. Speak one command and select Stop.');
-  } catch (e) { say('Unable to access microphone: ' + String(e)); }
-});
+    stopSpeaking();
+    silenceBtn.disabled = true;
+    const maxDurationMs = clampClipMs(Number(input('maxsec').value) * 1000);
+    const autoStop = input('autostop').checked;
+    recording = await startRecording({ maxDurationMs, autoStop, onAutoStop: () => { void finish(); } });
+    syncButtons();
+    say(autoStop
+      ? `Listening, because you pressed the button. It stops after ${maxDurationMs / 1000} seconds, or when you stop it.`
+      : 'Listening, because you pressed the button. Select Stop when the command is finished.');
+  } catch (e) { recording = null; syncButtons(); say('Unable to access microphone: ' + String(e)); }
+}
 
-stopBtn.addEventListener('click', async () => {
+async function finish() {
   const current = recording;
-  if (!current) return;
+  if (!current || finishing) return;
+  finishing = true;
   recording = null;
-  stopBtn.disabled = true;
+  syncButtons();
   try {
     say('Processing your recording…');
     const audio = await current.stop();
@@ -72,8 +99,14 @@ stopBtn.addEventListener('click', async () => {
     if (!phrase) { say(`Command rejected. ${data.reason || 'Not confident enough.'}`); return; }
     await executeOnTab(phrase);
   } catch (e) { say('Command not executed: ' + String(e)); }
-  finally { recordBtn.disabled = false; }
-});
+  finally { finishing = false; syncButtons(); }
+}
+
+recordBtn.addEventListener('click', () => { if (recording && toggleMode()) void finish(); else void begin(); });
+stopBtn.addEventListener('click', () => { void finish(); });
+silenceBtn.addEventListener('click', () => { stopSpeaking(); silenceBtn.disabled = true; });
+document.getElementById('listen')!.addEventListener('change', syncButtons);
+syncButtons();
 
 async function loadSavedSettings() {
   const stored = await chrome.storage.local.get(['profileId', 'apiOrigin']);

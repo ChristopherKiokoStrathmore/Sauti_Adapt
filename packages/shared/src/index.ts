@@ -25,8 +25,8 @@ export const COMMAND_LABELS: Record<Intent, { en: string; sw: string }> = {
   SCROLL_DOWN: { en: 'Scroll down', sw: 'Shuka chini' },
   SCROLL_UP: { en: 'Scroll up', sw: 'Panda juu' },
   GO_BACK: { en: 'Go back', sw: 'Rudi nyuma' },
-  READ_PAGE: { en: 'Read this page', sw: 'Soma ukurasa huu' },
-  UNDO: { en: 'Undo', sw: 'Tengua' },
+  READ_PAGE: { en: 'Read this page aloud', sw: 'Soma ukurasa kwa sauti' },
+  UNDO: { en: 'Undo last setting', sw: 'Tengua mpangilio' },
   UNKNOWN: { en: 'Unknown speech', sw: 'Sauti isiyotambuliwa' }
 };
 

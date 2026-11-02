@@ -42,3 +42,44 @@ def test_training_produces_validated_artifact_only_with_holdout(monkeypatch, tmp
     exported=PrototypeModel.load(path)
     assert exported.predict([1,0,0]).intent==Intent.SCROLL_DOWN
     assert json.loads((path/'model.json').read_text())['validated'] is True
+    english = report['metrics']['test']['by_language']['en-KE']
+    assert english['correct'] == 6
+    assert english['incorrect'] == 0
+    assert english['unknown_false_accepts'] == 0
+    assert report['metrics']['test']['by_language']['sw-KE']['known_count'] == 0
+
+
+def _tone(frequency, phase=0.0):
+    # Deterministic sine wave. Not human speech.
+    return (.1 * np.sin(2 * np.pi * frequency * np.arange(16000) / 16000 + phase)).astype(np.float32)
+
+
+def test_release_requires_each_enrolled_language(monkeypatch, tmp_path):
+    """Artificial tones and a fake encoder. Not human speech and not an accuracy result.
+
+    Kiswahili calibration and test tones do not match their prototypes, so the
+    model must not be released even though Kenyan English would have passed.
+    """
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    pid, train_id, cal_id, test_id = str(uuid4()), str(uuid4()), str(uuid4()), str(uuid4())
+    commands = [(Intent.SCROLL_DOWN, 220), (Intent.SCROLL_UP, 330), (Intent.GO_BACK, 440)]
+    for intent, frequency in commands:
+        for language in (Language.KENYAN_ENGLISH, Language.KISWAHILI):
+            for sid, n in ((train_id, 3), (cal_id, 2), (test_id, 2)):
+                for ix in range(n):
+                    phase = {train_id: 0.0, cal_id: 0.6, test_id: 1.2}[sid] + .08 * ix
+                    heard = frequency
+                    if language is Language.KISWAHILI and sid != train_id:
+                        heard = 720
+                    store_enrollment(pid, sid, intent, language, _tone(heard, phase))
+    for language in (Language.KENYAN_ENGLISH, Language.KISWAHILI):
+        for sid in (cal_id, test_id):
+            for ix in range(5):
+                store_enrollment(pid, sid, Intent.UNKNOWN, language, _tone(720, .11 * ix + (0 if sid == cal_id else 1)))
+    try:
+        run(pid, cal_id, test_id, encoder=FakeEncoder())
+    except RuntimeError as exc:
+        assert 'sw-KE' in str(exc)
+        assert 'NOT released' in str(exc)
+    else:
+        raise AssertionError('Model was released without a correct Kiswahili activation')

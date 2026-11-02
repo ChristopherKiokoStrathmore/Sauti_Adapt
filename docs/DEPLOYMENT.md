@@ -29,14 +29,15 @@ Run the image with a volume at `/data` and these variables:
 
 | Variable | Purpose |
 | --- | --- |
-| `SAUTI_API_TOKEN` | Same service credential as Vercel `SPEECH_API_TOKEN` |
-| `SAUTI_ACCOUNTS` | JSON object of user UUID to the sha256 hex of that person's access token. The token itself is not stored. |
+| `SAUTI_API_TOKEN` | Same service credential as Vercel `SPEECH_API_TOKEN`. The browser never sees it. |
+| `SAUTI_TOKEN_PEPPER` | Server secret used as the HMAC key for personal access tokens. |
+| `SAUTI_ACCOUNTS` | JSON object of user UUID to `HMAC-SHA256(pepper, personal token)`. The token itself is not stored. |
 | `SAUTI_STORAGE_KEY` | Fernet key. Audio, prototypes, and `model.json` are encrypted with it. |
 | `SAUTI_PRIVATE_DIR` | `/data` on the volume. The process refuses a path inside the git checkout. |
 | `SPEECH_MODE` | `mock` until a validated personal model exists. `mock` rejects every recording. |
 | `ALLOW_ENROLLMENT` | `false` until the person is ready to record. Deletion still works when this is false. |
-| `SAUTI_RETENTION_DAYS` | Default 30. Older clips are removed on the next enrollment for that profile. |
-| `SAUTI_RATE_LIMIT_PER_MINUTE` | Default 30 requests per user per process. Put a second limit on the host if more than one process runs. |
+| `SAUTI_RETENTION_DAYS` | Default 30. When the profile owner enrolls, clips older than this are deleted. Ownership is checked first, so another person's enrollment attempt deletes nothing. |
+| `SAUTI_RATE_LIMIT_PER_MINUTE` | Default 30. The counters live in memory in each API process, so they reset on restart and are not shared across processes. Failed token guesses count against the claimed user id and against the client address. Put another limit on the host if more than one process runs. |
 | `SAUTI_ALLOWED_ORIGINS` | Origins allowed to call the API directly. Leave empty when only the Next.js server calls it. |
 | `SAUTI_ENCODER_ID` | Default `facebook/wav2vec2-base`. The encoder stays frozen. |
 
@@ -45,10 +46,10 @@ Generate values locally. Do not commit them.
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-python -c "import hashlib,uuid; u=uuid.uuid4(); t='replace-with-a-person-token'; print(u, hashlib.sha256(t.encode()).hexdigest())"
+python -c "import hmac,hashlib,secrets,uuid; u=uuid.uuid4(); t=secrets.token_urlsafe(32); p='replace-with-SAUTI_TOKEN_PEPPER'; print('user', u); print('token', t); print('hmac', hmac.new(p.encode(), t.encode(), hashlib.sha256).hexdigest())"
 ```
 
-The third command prints a user id and the hash to put in `SAUTI_ACCOUNTS`. Give the person the token through a private channel. The browser sends the user id and token. The shared demo passphrase is no longer accepted.
+The first command prints a value for `SAUTI_API_TOKEN` or for `SAUTI_TOKEN_PEPPER`. The third command prints a user id, a 256-bit personal token, and the HMAC to put in `SAUTI_ACCOUNTS`. Give the person the user id and token through a private channel. The browser sends those two values. Next.js adds `SPEECH_API_TOKEN` only on the server-to-API call.
 
 ## Behaviour that must stay true
 

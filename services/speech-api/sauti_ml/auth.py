@@ -26,11 +26,24 @@ def accounts() -> dict[str, str]:
     return {str(user): str(digest) for user, digest in parsed.items()}
 
 
+def token_digest(token: str) -> str:
+    """HMAC-SHA256 of a personal token. The pepper stays on the server.
+
+    Raw SHA-256 is only safe for tokens with at least 128 bits of randomness.
+    The documented generator used a placeholder string, so the stored value is
+    an HMAC keyed by SAUTI_TOKEN_PEPPER instead.
+    """
+    pepper = os.environ.get('SAUTI_TOKEN_PEPPER', '').strip()
+    if not pepper or not token:
+        return ''
+    return hmac.new(pepper.encode('utf-8'), token.encode('utf-8'), hashlib.sha256).hexdigest()
+
+
 def verify_user(user_id: str, token: str) -> bool:
     expected = accounts().get(user_id)
-    if not expected or not token:
+    actual = token_digest(token)
+    if not expected or not actual:
         return False
-    actual = hashlib.sha256(token.encode('utf-8')).hexdigest()
     return hmac.compare_digest(expected, actual)
 
 

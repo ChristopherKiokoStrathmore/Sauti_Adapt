@@ -291,6 +291,8 @@ def test_stored_audio_is_encrypted_and_audit_omits_the_token(monkeypatch, tmp_pa
     assert resp.status_code == 200, resp.text
     clip = next(tmp_path.rglob('*.wav'))
     assert not clip.read_bytes().startswith(b'RIFF')
+    manifest = next(tmp_path.rglob('manifest.jsonl'))
+    assert not manifest.read_bytes().lstrip().startswith(b'{')
     log = (tmp_path / 'audit.log').read_text(encoding='utf8')
     assert 'test-user-token' not in log
     assert 'enroll' in log
@@ -305,10 +307,11 @@ def test_other_user_cannot_delete_a_profile(monkeypatch, tmp_path):
     stored = client.post('/v1/enroll', data=data, files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
     assert stored.status_code == 200, stored.text
     other = '22222222-2222-4222-8222-222222222222'
-    import hashlib, json as js
+    import json as js
+    from sauti_ml.auth import token_digest
     monkeypatch.setenv('SAUTI_ACCOUNTS', js.dumps({
-        USER_ID: __import__('hashlib').sha256(USER_TOKEN.encode()).hexdigest(),
-        other: hashlib.sha256(b'other-token').hexdigest(),
+        USER_ID: token_digest(USER_TOKEN),
+        other: token_digest('other-token'),
     }))
     denied = client.delete(f"/v1/profile/{stored.json()['profile_id']}", headers={
         'x-api-key': 'test-secret', 'x-sauti-user': other, 'x-sauti-user-token': 'other-token'})
@@ -335,3 +338,57 @@ def test_old_clips_are_purged_and_requests_are_rate_limited(monkeypatch, tmp_pat
     assert not old.exists()
     limited = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
     assert limited.status_code == 429
+
+
+def test_failed_token_guesses_are_rate_limited_per_user_and_ip(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('SAUTI_RATE_LIMIT_PER_MINUTE', '2')
+    from sauti_ml.auth import reset_rate_limits
+    reset_rate_limits()
+    wrong = {**auth(), 'x-sauti-user-token': 'not-the-token'}
+    first = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=wrong)
+    second = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=wrong)
+    assert first.status_code == 401
+    assert second.status_code == 401
+    third = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=wrong)
+    assert third.status_code == 429
+    reset_rate_limits()
+    for user in ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'):
+        headers = {**auth(), 'x-sauti-user': user, 'x-sauti-user-token': 'guess'}
+        resp = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=headers)
+        assert resp.status_code == 401
+    other_ip_user = {**auth(), 'x-sauti-user': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'x-sauti-user-token': 'guess'}
+    blocked = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=other_ip_user)
+    assert blocked.status_code == 429
+
+
+def test_other_user_cannot_enroll_or_recognize_and_expired_clips_stay(monkeypatch, tmp_path):
+    import os, time
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('ALLOW_ENROLLMENT', 'true')
+    monkeypatch.setenv('SAUTI_RETENTION_DAYS', '1')
+    data = payload() | {'session_id': str(uuid4()), 'intent': 'SCROLL_DOWN', 'consent': 'true'}
+    stored = client.post('/v1/enroll', data=data, files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert stored.status_code == 200, stored.text
+    profile = stored.json()['profile_id']
+    old = next(tmp_path.rglob('*.wav'))
+    os.utime(old, (time.time() - 3 * 86400, time.time() - 3 * 86400))
+    other = '22222222-2222-4222-8222-222222222222'
+    from sauti_ml.auth import token_digest
+    import json as js
+    monkeypatch.setenv('SAUTI_ACCOUNTS', js.dumps({
+        USER_ID: token_digest(USER_TOKEN),
+        other: token_digest('other-token'),
+    }))
+    headers = {'x-api-key': 'test-secret', 'x-sauti-user': other, 'x-sauti-user-token': 'other-token'}
+    denied = client.post('/v1/enroll', data=data | {'profile_id': profile}, files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=headers)
+    assert denied.status_code == 403
+    assert old.exists()
+    recognized = client.post('/v1/recognize', data={'profile_id': profile, 'language': 'en-KE'},
+                             files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=headers)
+    assert recognized.status_code == 403
+    assert old.exists()
+    missing = client.post('/v1/recognize', data=payload(), files={'audio': ('test.wav', wav(), 'audio/wav')})
+    assert missing.status_code == 401

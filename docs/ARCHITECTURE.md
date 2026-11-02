@@ -9,7 +9,7 @@ The co-designer chooses a handful of useful voice commands in Kenyan English and
 flowchart TB
     User[Person speaks preferred command] --> Capture[Consented short WAV recording]
     Capture --> W[PWA / Chrome sidepanel]
-    W --> Proxy[Next.js /api/recognize\nDemo access gate + server-side token]
+    W --> Proxy[Next.js /api/recognize\nPersonal token + server credential]
     Proxy --> API[FastAPI /v1/recognize\nPrivate speech model]
     API -->|Accepted canonical intent| G[Allowlist + reject unknown]
     API -->|Rejected| NoAction[No action + accessible feedback]
@@ -61,7 +61,7 @@ The toolkit's stock `controller/web/ui.js` creates browser `SpeechRecognition` c
 * Clip length defaults to 5 seconds, with an optional auto-stop, and the listen control defaults to one toggle button. `SAUTI_MAX_CLIP_SECONDS` can change the server cap (invalid values stay at 5 seconds, and the cap cannot exceed 30). The server still rejects anything longer than its cap. Final length and the start/stop control must be agreed with the participant.
 * Enrollment requires a consent flag, and cannot run until explicitly enabled on the API.
 * Model and recordings live outside Git and public folders.
-* Next.js protects demo endpoints using a shared team access code, then forwards a separate private backend token. This is suitable only for a controlled hackathon demo, NOT for public production.
+* The browser sends a personal user id (`x-sauti-user`) and that person's access token (`x-sauti-user-token`). Next.js requires those credentials, checks `Origin` when the browser sends one, and adds a separate server credential (`SPEECH_API_TOKEN`) as `x-api-key` on the request to the speech API. A missing `Origin` is allowed for the Next.js server and other non-browser clients; those callers still need the personal token. The API stores HMAC-SHA256(token, `SAUTI_TOKEN_PEPPER`), not the token. Personal tokens are generated with `secrets.token_urlsafe(32)` (256 bits). Rate limits are in-memory per process and count failed guesses per claimed user id and per client address.
 * Release requires proper per-person authentication/authorization, deletion and retention controls, encrypted storage, rate limiting, privacy notices and abuse protection.
 * A browser extension may hold host permission for its speech API, including a localhost app and `*.vercel.app`. That permission does not enable control. The person keeps a separate list of enabled website origins in extension storage. The content script rejects commands unless the current origin is on that list. Disable removes the origin. Browser-internal pages are refused.
 * Do not claim Android or iOS system-wide control is provided by a browser PWA.

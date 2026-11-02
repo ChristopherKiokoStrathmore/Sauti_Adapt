@@ -37,14 +37,20 @@ def require_user(
     x_sauti_user_token: str | None = Header(default=None),
 ) -> str:
     origin_allowed(request)
-    if not x_sauti_user or not x_sauti_user_token or not verify_user(x_sauti_user, x_sauti_user_token):
+    claimed = (x_sauti_user or '').strip()
+    token = x_sauti_user_token or ''
+    peer = request.client.host if request.client and request.client.host else 'unknown'
+    # Count guesses before verify. Limits are in-memory and per process.
+    rate_limit('ip:' + peer[:80])
+    if claimed:
+        rate_limit('user:' + claimed[:80])
+    if not claimed or not token or not verify_user(claimed, token):
         audit('auth', 'unauthorized')
         raise HTTPException(status_code=401, detail='Authentication failed.')
     try:
-        user_id = canonical_uuid(x_sauti_user)
+        user_id = canonical_uuid(claimed)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    rate_limit(user_id)
     return user_id
 
 
@@ -80,7 +86,8 @@ async def enroll(
     try:
         canonical_uuid(profile_id)
         canonical_uuid(session_id)
-        purge_expired(profile_id)
+        assert_owner(profile_id, user_id)
+        purge_expired(profile_id, user_id)
         samples = await read_audio(audio)
         recording_id = store_enrollment(profile_id, session_id, intent, language, samples, session_role or None, user_id)
     except PermissionError as exc:
@@ -98,8 +105,7 @@ async def enroll(
 def remove_profile(profile_id: str, user_id: str = Depends(require_user)):
     """Withdrawal: delete every clip and model for this profile. Works even when enrollment is off."""
     try:
-        assert_owner(profile_id, user_id)
-        result = delete_profile(profile_id)
+        result = delete_profile(profile_id, user_id)
     except PermissionError as exc:
         audit('delete-profile', 'forbidden', user_id, profile_id)
         raise HTTPException(status_code=403, detail=str(exc)) from exc
@@ -114,8 +120,7 @@ def remove_profile(profile_id: str, user_id: str = Depends(require_user)):
 @app.delete('/v1/profile/{profile_id}/recordings/{recording_id}', dependencies=[Depends(require_token)])
 def remove_recording(profile_id: str, recording_id: str, user_id: str = Depends(require_user)):
     try:
-        assert_owner(profile_id, user_id)
-        result = delete_recording(profile_id, recording_id)
+        result = delete_recording(profile_id, recording_id, user_id)
     except PermissionError as exc:
         audit('delete-recording', 'forbidden', user_id, profile_id)
         raise HTTPException(status_code=403, detail=str(exc)) from exc

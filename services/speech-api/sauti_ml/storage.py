@@ -77,10 +77,9 @@ def claim_owner(profile_id: str, user_id: str) -> None:
 def assert_owner(profile_id: str, user_id: str) -> None:
     profile_id = canonical_uuid(profile_id)
     user_id = canonical_uuid(user_id)
-    try:
-        folder = profile_dir(profile_id)
-    except RuntimeError:
+    if not os.environ.get('SAUTI_PRIVATE_DIR', '').strip():
         return
+    folder = profile_dir(profile_id)
     if not folder.exists():
         return
     owner = folder / 'owner'
@@ -112,20 +111,33 @@ def store_enrollment(profile_id: str, session_id: str, intent: Intent, language:
         record['session_role'] = session_role
     buffer = BytesIO()
     encode_private_wav(samples, buffer)
+    line = json.dumps(record, ensure_ascii=False) + '\n'
     with _lock:
         write_private_bytes(path, buffer.getvalue())
-        with (folder / 'manifest.jsonl').open('a', encoding='utf8') as f:
-            f.write(json.dumps(record, ensure_ascii=False) + '\n')
+        _store_manifest(folder, _manifest_text(folder) + line)
     return recording_id
 
 
-def load_manifest(profile_id: str):
+def _manifest_text(folder: Path) -> str:
+    path = folder / 'manifest.jsonl'
+    if not path.is_file():
+        return ''
+    return read_private_bytes(path).decode('utf8')
+
+
+def _store_manifest(folder: Path, text: str) -> None:
+    write_private_bytes(folder / 'manifest.jsonl', text.encode('utf8'))
+
+
+def load_manifest(profile_id: str, user_id: str | None = None):
+    if user_id:
+        assert_owner(profile_id, user_id)
     folder = profile_dir(profile_id)
     path = folder / 'manifest.jsonl'
     if not path.exists():
         raise ValueError('No recordings found for this profile.')
     result = []
-    for line in path.read_text(encoding='utf8').splitlines():
+    for line in _manifest_text(folder).splitlines():
         r = json.loads(line)
         if not r.get('consent'):
             continue
@@ -138,7 +150,8 @@ def load_manifest(profile_id: str):
     return result
 
 
-def delete_recording(profile_id: str, recording_id: str) -> dict:
+def delete_recording(profile_id: str, recording_id: str, user_id: str) -> dict:
+    assert_owner(profile_id, user_id)
     profile_id = canonical_uuid(profile_id)
     recording_id = canonical_uuid(recording_id)
     folder = profile_dir(profile_id)
@@ -148,7 +161,7 @@ def delete_recording(profile_id: str, recording_id: str) -> dict:
     kept = []
     removed = 0
     with _lock:
-        for line in manifest.read_text(encoding='utf8').splitlines():
+        for line in _manifest_text(folder).splitlines():
             if not line.strip():
                 continue
             row = json.loads(line)
@@ -159,11 +172,11 @@ def delete_recording(profile_id: str, recording_id: str) -> dict:
                 removed += 1
                 continue
             kept.append(line)
-        manifest.write_text(('\n'.join(kept) + '\n') if kept else '', encoding='utf8')
+        _store_manifest(folder, ('\n'.join(kept) + '\n') if kept else '')
     return {'deleted': removed > 0, 'recordings_removed': removed}
 
 
-def purge_expired(profile_id: str) -> int:
+def purge_expired(profile_id: str, user_id: str) -> int:
     """Delete clips older than SAUTI_RETENTION_DAYS (default 30). Returns how many were removed."""
     import time
     try:
@@ -171,6 +184,7 @@ def purge_expired(profile_id: str) -> int:
     except ValueError:
         days = 30
     days = max(1, days)
+    assert_owner(profile_id, user_id)
     folder = profile_dir(profile_id)
     manifest = folder / 'manifest.jsonl'
     if not manifest.is_file():
@@ -179,7 +193,7 @@ def purge_expired(profile_id: str) -> int:
     kept = []
     removed = 0
     with _lock:
-        for line in manifest.read_text(encoding='utf8').splitlines():
+        for line in _manifest_text(folder).splitlines():
             if not line.strip():
                 continue
             row = json.loads(line)
@@ -190,11 +204,12 @@ def purge_expired(profile_id: str) -> int:
                 removed += 1
                 continue
             kept.append(line)
-        manifest.write_text(('\n'.join(kept) + '\n') if kept else '', encoding='utf8')
+        _store_manifest(folder, ('\n'.join(kept) + '\n') if kept else '')
     return removed
 
 
-def delete_profile(profile_id: str) -> dict:
+def delete_profile(profile_id: str, user_id: str) -> dict:
+    assert_owner(profile_id, user_id)
     folder = profile_dir(profile_id)
     if not folder.exists():
         return {'deleted': False, 'recordings_removed': 0}

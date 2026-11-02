@@ -1,6 +1,11 @@
 import type { NextRequest } from 'next/server';
 
-/** Browser requests must come from an allowed origin. Server-side calls omit Origin. */
+/** Browser requests that send Origin must match an allowed host.
+ *  A missing Origin is allowed: the Next.js server and other non-browser
+ *  clients do not send one. Those callers still need a personal access token
+ *  plus the separate server credential. Browsers attach Origin on cross-site
+ *  requests, and a foreign Origin is rejected.
+ */
 export function originAllowed(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
   if (!origin) return true;

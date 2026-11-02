@@ -1,8 +1,9 @@
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { defineConfig } from '@playwright/test';
 import { API_PORT, API_TOKEN, API_URL, USER_ID, USER_TOKEN, WEB_PORT, WEB_URL } from './e2e/env';
 
-const accounts = JSON.stringify({ [USER_ID]: createHash('sha256').update(USER_TOKEN).digest('hex') });
+const TOKEN_PEPPER = 'e2e-token-pepper';
+const accounts = JSON.stringify({ [USER_ID]: createHmac('sha256', TOKEN_PEPPER).update(USER_TOKEN).digest('hex') });
 
 export default defineConfig({
   testDir: './e2e',
@@ -27,6 +28,7 @@ export default defineConfig({
       env: {
         SPEECH_MODE: 'mock',
         SAUTI_API_TOKEN: API_TOKEN,
+        SAUTI_TOKEN_PEPPER: TOKEN_PEPPER,
         SAUTI_ACCOUNTS: accounts,
         ALLOW_ENROLLMENT: 'false',
         SAUTI_PRIVATE_DIR: '/tmp/sauti-e2e-private',

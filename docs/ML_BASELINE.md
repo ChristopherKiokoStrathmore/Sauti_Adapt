@@ -33,3 +33,5 @@ python scripts/train_profile.py PROFILE_UUID CALIBRATION_SESSION_UUID TEST_SESSI
 The encoder weights download only if a real `SpeechEncoder` runs. Install `services/speech-api/requirements-ml.txt` before that. If the sessions are missing, the command exits non-zero and does not invent a score.
 
 Automated tests call `run(..., result_kind='artificial-fixture')` with sine tones or hand-written vectors. Those results are fixtures.
+
+An optional later experiment, including a trainable head and a Whisper comparison, is described in `docs/RESEARCH.md`. It is not wired in and it is not a released model. The gated Kenyan speech datasets are not used.

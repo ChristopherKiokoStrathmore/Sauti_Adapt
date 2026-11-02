@@ -15,6 +15,7 @@
     "test:shared": "node --experimental-strip-types --test packages/shared/test/*.test.ts",
     "test:api": "python -m pytest services/speech-api/tests -q",
     "typecheck:web": "npm run typecheck --workspace @sauti/web",
+    "typecheck:extension": "tsc --noEmit -p apps/extension/tsconfig.json",
     "test:e2e": "playwright test",
     "check": "npm run test:shared && npm run typecheck:web && npm run build:extension && npm run test:api"
   },

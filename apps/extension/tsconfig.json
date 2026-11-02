@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["DOM", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "allowJs": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["chrome"],
+    "paths": { "@toolkit/*": ["../../vendor/ai4a11y-toolkit/*"], "@sauti/shared": ["../../packages/shared/src/index.ts"], "@sauti/shared/*": ["../../packages/shared/src/*"] }
+  },
+  "include": ["src/**/*.ts", "types/**/*.d.ts"]
+}

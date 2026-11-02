@@ -7,10 +7,13 @@ import { ENABLED_ORIGINS_KEY, httpOrigin, readEnabledOrigins } from './allowlist
 const win = globalThis as typeof globalThis & { __SAUTI_CONTENT_READY__?: boolean };
 if (!win.__SAUTI_CONTENT_READY__) {
   win.__SAUTI_CONTENT_READY__ = true;
-  const receiver = createDomReceiver(document.documentElement, {
-    scrollTarget: document.scrollingElement || document.documentElement
-  });
-  const controller = createController({ control: receiver, operator: { abilityModel: { supportAreas: ['motor'] } } });
+  const root = document.documentElement;
+  const scroller = (document.scrollingElement instanceof HTMLElement ? document.scrollingElement : root);
+  const receiver = createDomReceiver(root, { scrollTarget: scroller });
+  const controller = createController({
+    control: receiver,
+    operator: { abilityModel: { supportAreas: ['motor'] } },
+  } as unknown as Parameters<typeof createController>[0]);
 
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (message?.kind !== 'SAUTI_APPROVED_COMMAND') return false;
@@ -29,7 +32,8 @@ if (!win.__SAUTI_CONTENT_READY__) {
         return;
       }
       controller.handle(message.utterance).then(result => {
-        respond({ ok: Boolean(result.ok), pending: Boolean(result.pending), feedback: String(result.say || '') });
+        const pending = Boolean(result && typeof result === 'object' && 'pending' in result && result.pending);
+        respond({ ok: Boolean(result.ok), pending, feedback: String(result.say || '') });
       }).catch(() => respond({ ok: false, reason: 'Controller did not complete.' }));
     }).catch(() => respond({ ok: false, reason: 'This website is not enabled.' }));
     return true;

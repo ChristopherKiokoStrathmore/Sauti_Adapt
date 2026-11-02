@@ -12,6 +12,7 @@ const TEST_COMMANDS = [
   { utterance: 'scroll down', label: 'scroll down' },
   { utterance: 'scroll up', label: 'scroll up' },
   { utterance: 'read this', label: 'Read this page aloud' },
+  { utterance: "what's on screen", label: "What's on screen" },
   { utterance: 'bigger text', label: 'bigger text' },
   { utterance: 'undo', label: 'Undo last setting' },
 ];

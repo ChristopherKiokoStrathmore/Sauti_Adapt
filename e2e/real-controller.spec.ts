@@ -134,6 +134,28 @@ test('mock-mode audio is rejected and does not move the demo DOM', async ({ page
   expect(await page.getByRole('status').innerText()).toBe(before.status);
 });
 
+test('read aloud and outline skip hidden headings in Chromium', async ({ page }) => {
+  await page.goto('/');
+  await expect.poll(() => page.locator('#profile').inputValue()).not.toBe('');
+  await page.locator('#controlled-site').evaluate(element => {
+    element.insertAdjacentHTML('afterbegin', `
+      <h2 style="display:none">SECRET-DISPLAY</h2>
+      <h2 style="visibility:hidden">SECRET-VISIBILITY</h2>
+      <h2 hidden>SECRET-HIDDEN-ATTR</h2>
+      <h2 aria-hidden="true">SECRET-ARIA</h2>
+      <h1>Visible title<span style="display:none">SECRET-NESTED</span></h1>
+      <p>Visible sentence</p>`);
+  });
+  const secrets = ['SECRET-DISPLAY', 'SECRET-VISIBILITY', 'SECRET-HIDDEN-ATTR', 'SECRET-ARIA', 'SECRET-NESTED'];
+  await page.getByRole('button', { name: "What's on screen" }).click();
+  const status = page.getByRole('status');
+  await expect(status).toContainText('Visible title');
+  for (const secret of secrets) await expect(status).not.toContainText(secret);
+  await page.getByRole('button', { name: 'Read this page aloud' }).click();
+  await expect(status).toContainText('Visible sentence');
+  for (const secret of secrets) await expect(status).not.toContainText(secret);
+});
+
 test('read this page speaks the on-screen article with speechSynthesis', async ({ page }) => {
   await page.goto('/');
   const available = await page.evaluate(() => typeof window.speechSynthesis?.speak === 'function');

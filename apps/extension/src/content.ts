@@ -20,7 +20,8 @@ if (!win.__SAUTI_CONTENT_READY__) {
     if (message?.kind !== 'SAUTI_APPROVED_COMMAND') return false;
     // The sender must be this extension, not a website postMessage event.
     if (sender.id !== chrome.runtime.id) { respond({ ok: false, reason: 'Unauthorized sender' }); return false; }
-    const allowed = Object.values(TOOLKIT_UTTERANCE);
+    // "what's on screen" is the official outline query. It is read-only.
+    const allowed = [...Object.values(TOOLKIT_UTTERANCE), "what's on screen"];
     if (typeof message.utterance !== 'string' || !allowed.includes(message.utterance)) {
       respond({ ok: false, reason: 'Command is outside the allowlist' });
       return false;

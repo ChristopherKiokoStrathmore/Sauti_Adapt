@@ -12,78 +12,48 @@ test('excerpt trims visible text and caps the length', () => {
   assert.equal(excerpt.startsWith('word'), true);
 });
 
-/**
- * jsdom does not implement innerText. Install the browser behavior the wrapper
- * calls: rendered text only, so a switch back to textContent fails this test.
- */
-function installInnerText(window: JSDOM['window']) {
-  const hidden = (el: Element) => {
-    const tag = el.tagName;
-    if (tag === 'SCRIPT' || tag === 'STYLE') return true;
-    if ((el as HTMLElement).hidden) return true;
-    const style = window.getComputedStyle(el);
-    return style.display === 'none' || style.visibility === 'hidden';
-  };
-  const rendered = (node: Node): string => {
-    if (node.nodeType === window.Node.TEXT_NODE) return node.nodeValue || '';
-    if (node.nodeType !== window.Node.ELEMENT_NODE) return '';
-    if (hidden(node as Element)) return '';
-    let text = '';
-    for (const child of node.childNodes) text += rendered(child);
-    return text;
-  };
-  Object.defineProperty(window.HTMLElement.prototype, 'innerText', {
-    configurable: true,
-    get() { return rendered(this); },
-  });
-}
-
-test('read wrapper uses a real DOM where hidden text differs from textContent', async () => {
+test('read wrapper ignores hidden text even when innerText returns textContent', async () => {
   const dom = new JSDOM(`<!doctype html><body>
-    <h2 style="display:none">SECRET-HEADING</h2>
-    <h1>Visible title<span style="display:none">SECRET-TOKEN</span></h1>
+    <h2 style="display:none">SECRET-DISPLAY</h2>
+    <h2 style="visibility:hidden">SECRET-VISIBILITY</h2>
+    <h2 hidden>SECRET-HIDDEN-ATTR</h2>
+    <h2 aria-hidden="true">SECRET-ARIA</h2>
+    <h1>Visible title<span style="display:none">SECRET-NESTED</span></h1>
     <p>Visible sentence</p>
-    <div style="display:none">SECRET-TOKEN hidden block</div>
   </body>`);
-  installInnerText(dom.window);
+  // HTML spec: innerText of an element that is not rendered returns textContent.
+  // A wrapper that trusts per-element innerText would speak these secrets.
+  Object.defineProperty(dom.window.HTMLElement.prototype, 'innerText', {
+    configurable: true,
+    get() { return this.textContent; },
+  });
   const { document } = dom.window;
-  const secretInDom = document.documentElement.textContent || '';
-  assert.match(secretInDom, /SECRET-TOKEN/);
-  assert.match(secretInDom, /SECRET-HEADING/);
-  assert.equal(document.body.innerText.includes('SECRET-TOKEN'), false);
-  assert.equal(document.body.innerText.includes('SECRET-HEADING'), false);
+  const displayHeading = document.querySelector('h2');
+  assert.ok(displayHeading);
+  assert.match(displayHeading.textContent || '', /SECRET-DISPLAY/);
+  assert.match(String(displayHeading.innerText), /SECRET-DISPLAY/);
 
   let upstreamCalls = 0;
   const port = {
     async getContent() {
       upstreamCalls += 1;
-      return {
-        source: 'untrusted-content',
-        title: 'SECRET-TOKEN',
-        text: secretInDom,
-        outline: ['SECRET-HEADING', 'Visible titleSECRET-TOKEN'],
-      };
+      return { text: 'SECRET-DISPLAY', outline: ['SECRET-ARIA'], title: 'SECRET-VISIBILITY' };
     },
   };
   const wrapped = capReadPort(port, document.body);
-  const text = await wrapped.getContent('text') as { text: string; title: string; source: string; outline?: unknown };
-  assert.equal(text.source, 'untrusted-content');
+  const text = await wrapped.getContent('text') as { text: string; title: string; outline?: unknown };
   assert.equal(text.title, 'Visible title');
-  assert.equal(text.text, visibleExcerpt(document.body.innerText));
   assert.match(text.text, /Visible title/);
   assert.match(text.text, /Visible sentence/);
-  assert.equal(text.text.includes('SECRET-TOKEN'), false);
-  assert.equal(text.text.includes('SECRET-HEADING'), false);
   assert.equal(text.outline, undefined);
+  for (const secret of ['SECRET-DISPLAY', 'SECRET-VISIBILITY', 'SECRET-HIDDEN-ATTR', 'SECRET-ARIA', 'SECRET-NESTED']) {
+    assert.equal(text.text.includes(secret), false, secret);
+    assert.equal(text.title.includes(secret), false, secret);
+  }
 
   const outline = await wrapped.getContent('outline') as { title: string; outline: string[] };
   assert.equal(outline.title, 'Visible title');
   assert.deepEqual(outline.outline, ['Visible title']);
   assert.equal(JSON.stringify(outline).includes('SECRET'), false);
   assert.equal(upstreamCalls, 0);
-
-  const h1 = document.querySelector('h1');
-  assert.ok(h1);
-  assert.match(h1.textContent || '', /SECRET-TOKEN/);
-  assert.equal(h1.innerText.includes('SECRET-TOKEN'), false);
 });

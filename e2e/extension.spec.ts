@@ -53,6 +53,18 @@ async function scrollTop(page: Page): Promise<number> {
   return page.evaluate(() => document.scrollingElement?.scrollTop ?? 0);
 }
 
+/** Smooth scrolling keeps moving after the command returns. Wait until it stops. */
+async function settleScroll(page: Page): Promise<number> {
+  let previous = -1;
+  await expect.poll(async () => {
+    const current = await scrollTop(page);
+    const stable = previous >= 0 && Math.abs(current - previous) < 0.5;
+    previous = current;
+    return stable;
+  }).toBeTruthy();
+  return scrollTop(page);
+}
+
 test('enabled sites use the real Controller and other sites do not', async () => {
   test.setTimeout(90_000);
   const sites = await startSites();
@@ -100,12 +112,33 @@ test('enabled sites use the real Controller and other sites do not', async () =>
     await expect(panel.locator('#status')).toContainText('Enabled http://127.0.0.1:3000');
     await press(panel, alphaId, 'test-scroll');
     await expect(panel.locator('#status')).toHaveText('Scrolling down.');
+    await alpha.evaluate(() => {
+      document.body.insertAdjacentHTML('afterbegin', `
+        <h2 style="display:none">SECRET-DISPLAY</h2>
+        <h2 style="visibility:hidden">SECRET-VISIBILITY</h2>
+        <h2 hidden>SECRET-HIDDEN-ATTR</h2>
+        <h2 aria-hidden="true">SECRET-ARIA</h2>
+        <h1>Visible title<span style="display:none">SECRET-NESTED</span></h1>
+        <p>Visible sentence</p>`);
+    });
     const read = await worker.evaluate(async (id: number) => {
       const api = (globalThis as unknown as { chrome: typeof chrome }).chrome;
       return api.tabs.sendMessage(id, { kind: 'SAUTI_APPROVED_COMMAND', utterance: 'read this' });
     }, alphaId);
-    expect(String(read.feedback)).toContain('ALPHA-SITE');
+    expect(String(read.feedback)).toContain('Visible title');
+    expect(String(read.feedback)).toContain('Visible sentence');
     expect(String(read.feedback)).not.toContain('SECRET-TOKEN');
+    for (const secret of ['SECRET-DISPLAY', 'SECRET-VISIBILITY', 'SECRET-HIDDEN-ATTR', 'SECRET-ARIA', 'SECRET-NESTED']) {
+      expect(String(read.feedback)).not.toContain(secret);
+    }
+    const outline = await worker.evaluate(async (id: number) => {
+      const api = (globalThis as unknown as { chrome: typeof chrome }).chrome;
+      return api.tabs.sendMessage(id, { kind: 'SAUTI_APPROVED_COMMAND', utterance: "what's on screen" });
+    }, alphaId);
+    expect(String(outline.feedback)).toContain('Visible title');
+    for (const secret of ['SECRET-DISPLAY', 'SECRET-VISIBILITY', 'SECRET-HIDDEN-ATTR', 'SECRET-ARIA', 'SECRET-NESTED']) {
+      expect(String(outline.feedback)).not.toContain(secret);
+    }
     await expect.poll(() => scrollTop(alpha)).toBeGreaterThan(0);
     expect(await scrollTop(beta)).toBe(0);
 
@@ -115,9 +148,11 @@ test('enabled sites use the real Controller and other sites do not', async () =>
 
     await press(panel, betaId, 'grant');
     await expect(panel.locator('#status')).toContainText('Enabled http://localhost:3000');
+    const betaBeforeScroll = await scrollTop(beta);
     await press(panel, betaId, 'test-scroll');
     await expect(panel.locator('#status')).toHaveText('Scrolling down.');
-    await expect.poll(() => scrollTop(beta)).toBeGreaterThan(0);
+    const betaSettled = await settleScroll(beta);
+    expect(betaSettled).toBeGreaterThan(betaBeforeScroll);
 
     let previous = -1;
     await expect.poll(async () => {
@@ -153,7 +188,7 @@ test('enabled sites use the real Controller and other sites do not', async () =>
     await press(panel, betaId, 'record');
     await expect.poll(() => panel.evaluate(() => (window as Window & { __micCalls?: { calls: number } }).__micCalls?.calls ?? 0)).toBe(1);
     await expect(panel.locator('#status')).toContainText('microphone');
-    const betaAfterMic = await scrollTop(beta);
+    expect(await scrollTop(beta)).toBe(betaSettled);
 
     const recognized = await panel.evaluate(async ({ user, token, wav }) => {
       const bytes = Uint8Array.from(atob(wav), (char) => char.charCodeAt(0));
@@ -172,7 +207,7 @@ test('enabled sites use the real Controller and other sites do not', async () =>
     expect(recognized.body.status).toBe('rejected');
     expect(recognized.body.intent).toBe('UNKNOWN');
     expect(String(recognized.body.reason)).toContain('MODEL_NOT_READY');
-    expect(await scrollTop(beta)).toBe(betaAfterMic);
+    expect(await scrollTop(beta)).toBe(betaSettled);
 
     const knownTabs = await panel.evaluate(async () => {
       const api = (globalThis as unknown as { chrome: { tabs: { query: (query: object) => Promise<{ id?: number }[]> } } }).chrome;

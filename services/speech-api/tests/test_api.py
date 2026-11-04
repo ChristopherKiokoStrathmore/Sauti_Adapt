@@ -83,8 +83,9 @@ def test_missing_auth_rejected(monkeypatch):
     assert resp.status_code == 401
 
 
-def test_mock_mode_rejects_audio_not_fabricates_intent(monkeypatch):
+def test_mock_mode_rejects_audio_not_fabricates_intent(monkeypatch, tmp_path):
     monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
     monkeypatch.setenv('SPEECH_MODE', 'mock')
     resp = client.post('/v1/recognize', data=payload(),
                        files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())

@@ -175,6 +175,15 @@ footer{text-align:center;padding:28px 18px;color:#716a7d;font-size:.85rem}
   .after-title,.feedback-banner{grid-column:auto}
   .flow-card{width:100%}
 }
+
+/* Optional, comparison-only cloud model lab */
+.model-lab{margin:20px 0;padding:16px;border:1px solid #cdc5e5;border-radius:16px;background:#f8f6ff}
+.model-lab .lab-fields{margin-top:16px}
+.model-results{margin:18px 0;padding:17px;border:1px solid #a9c5ef;border-radius:16px;background:#f5f9ff}
+.model-results h3{margin:0 0 12px}
+.model-result{margin:9px 0;padding:12px 15px;background:#fff;border:1px solid #d6e1f3;border-radius:12px}
+.model-result p{margin:6px 0;color:#373152;overflow-wrap:anywhere}
+
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 
 .hear-step{display:flex;gap:10px;align-items:center;margin-bottom:12px}

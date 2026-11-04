@@ -269,6 +269,7 @@ def purge_expired_folder(folder: Path) -> int:
                 except Exception:
                     pass
                 audio.unlink()
+                invalidate_released_model(folder)
                 removed += 1
                 continue
             kept.append(line)

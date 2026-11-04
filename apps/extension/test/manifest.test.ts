@@ -14,7 +14,8 @@ test('manifest sits at the extension root and is MV3 Headway', () => {
 });
 
 test('no permission is requested that the code does not use', () => {
-  assert.deepEqual([...manifest.permissions].sort(), ['scripting', 'sidePanel', 'storage', 'tabs']);
+  // debugger: real clicks for sites that ignore synthetic ones (Research/001, E)
+  assert.deepEqual([...manifest.permissions].sort(), ['debugger', 'scripting', 'sidePanel', 'storage', 'tabs']);
 });
 
 test('every icon the manifest names exists', () => {

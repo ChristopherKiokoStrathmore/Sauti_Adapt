@@ -44,6 +44,7 @@ const ui = {
   mouthEnabled: byId<HTMLInputElement>('mouth-click-enabled'),
   mouthStatus: byId<HTMLParagraphElement>('mouth-status'),
   calibrateMouthBtn: byId<HTMLButtonElement>('calibrate-mouth-btn'),
+  trustedClicks: byId<HTMLInputElement>('trusted-clicks'),
   promptContainer: byId<HTMLDivElement>('prompt-container'),
   customPrompt: byId<HTMLTextAreaElement>('custom-prompt'),
   apiSummarizer: byId<HTMLElement>('api-summarizer'),
@@ -194,8 +195,9 @@ function showSummary(html: string, title?: string) {
 async function loadSettings() {
   const stored = await chrome.storage.local.get([
     'apiChoice', 'customPrompt', 'displayMode', 'gazeEnabled', 'gazeDwellMs', 'mouthClickEnabled', 'mouthCalV1',
-    'gazeSpeed', 'gazeSteadiness'
+    'gazeSpeed', 'gazeSteadiness', 'trustedClicks'
   ]);
+  ui.trustedClicks.checked = stored.trustedClicks !== false;
   const speed = clampSpeed(stored.gazeSpeed);
   ui.pointerSpeed.value = String(speed);
   ui.speedNumber.textContent = speed.toFixed(1);
@@ -291,6 +293,10 @@ function bindEvents() {
   ui.calibrateMouthBtn.addEventListener('click', () => {
     ui.calibrateMouthBtn.blur();
     sendToActiveTab({ type: 'TRIGGER_MOUTH_CALIBRATION' });
+  });
+
+  ui.trustedClicks.addEventListener('change', () => {
+    void chrome.storage.local.set({ trustedClicks: ui.trustedClicks.checked });
   });
 
   ui.pointerSpeed.addEventListener('input', () => {

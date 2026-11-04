@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | A, B, C and D implemented (2026-11-04). Verified by automated checks only; **not yet tested with a person** |
+| **Status** | A–E implemented (2026-11-04). A–D committed after Brian reported they felt better in use; E built after he saw YouTube reject the click. No measured results yet |
 | **Opened** | 2026-11-04 |
 | **Area** | Head pointer (`src/gaze/`) |
 | **Who it affects** | Anyone using the head pointer, most of all people whose head movement is less steady or has a smaller range, including many people with cerebral palsy |
@@ -29,7 +29,7 @@ These are listed most likely first. None of them has been measured with a person
 
 5. **Holding the mouth open kept clicking.** Found while implementing B. The old check was "ratio above threshold and 800 ms since the last click", so a mouth held open clicked again every 0.8 s. That is dangerous for anyone whose mouth rests open.
 
-6. **Clicks are synthetic.** `synthClick` sends JavaScript mouse events with `isTrusted: false`. Some sites ignore those. We have not yet tested whether YouTube's Skip button does.
+6. **Clicks are synthetic.** `synthClick` sends JavaScript mouse events with `isTrusted: false`. **Confirmed 2026-11-04:** once the pointer could reach Skip (after A–D), YouTube still ignored the click. Brian saw this on a live ad.
 
 ## What others do
 
@@ -83,7 +83,7 @@ Before calling anything solved, test with the people who will use it, not only w
 | C | **Precision picker** instead of a magnifier. A content script can't render a live, clickable zoomed copy of the page. When a click lands where 2 or more targets sit within 40 px and neither is 12 px clearer, Headway numbers them on the page and shows the same numbers as large tiles (72 px tall), placed clear of the targets. Pick a tile with the pointer and a mouth click. Cancel, Esc and a 15 s timeout all close it. | `src/gaze/picker.ts`, `dwell.ts` |
 | D | The follow rate grows with the distance still to cover: 10 % for small corrections up to 45 % for big moves on Balanced. The old rate was a fixed 6–12 %. New side-panel controls: **Pointer speed** (0.6–1.6×) and **Steadiness** (Responsive / Balanced / Steady), which also retunes the One-Euro filter. Per-direction reach still comes from head calibration, which measures left, right, up and down separately. | `src/gaze/motion.ts`, `core.ts`, side panel |
 
-E (trusted clicks) is not done. We first need to see whether synthetic clicks actually fail on Skip.
+E was deferred in round 1, then confirmed necessary; see round 2.
 
 **How it was checked (no person yet)**
 
@@ -102,6 +102,25 @@ E (trusted clicks) is not done. We first need to see whether synthetic clicks ac
 3. Paste each JSON block below, with what the person said and how tired they were.
 
 _Results: none yet._
+
+### Round 2 (2026-11-04): E, real clicks, not yet committed
+
+**Why:** after round 1 the pointer reached Skip, but YouTube ignored the click because it was synthetic.
+
+**What changed**
+
+- `src/background/trusted-click.ts` sends `Input.dispatchMouseEvent` (move, press, release) through `chrome.debugger`. Chrome treats that as real mouse input.
+- The content script picks a point inside the target where the browser's own hit test lands on that target, preferring the pointer's position. It asks the worker to click there, and falls back to a synthetic click if that fails.
+- Headway's own UI (the picker and tooltips) still uses synthetic clicks.
+- The camera preview is now `pointer-events: none`, so a real click under it reaches the page.
+- New permission: `debugger`.
+- New side-panel switch **Real clicks**, on by default.
+
+**Trade-off:** while attached, Chrome shows "Headway started debugging this browser". Headway attaches to a tab only on the first click there, stays attached while tracking is on (so the bar does not flash on every click), and detaches when tracking or Real clicks is turned off. Pressing Cancel on Chrome's bar ends the session, and clicks fall back to synthetic ones.
+
+**How it was checked:** in Chromium with the built extension, a page logged `isTrusted` for each click on a 110 × 44 px button. The synthetic click arrived as `false`; Headway's click from the worker arrived as `true`.
+
+**Not yet checked:** skipping a live YouTube ad with the head pointer. Ads appear unpredictably, so this needs a real session.
 
 ## What worked
 

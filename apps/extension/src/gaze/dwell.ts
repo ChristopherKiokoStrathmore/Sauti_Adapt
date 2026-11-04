@@ -961,6 +961,9 @@ interface GazeJob {
         cancelActiveJob('feature_disabled');
       }
     }
+    if (changes.trustedClicks) {
+      trustedClicks = changes.trustedClicks.newValue !== false;
+    }
     if (changes.gazeDwellMs) {
       const value = changes.gazeDwellMs.newValue;
       if (typeof value === 'number' && value >= 200) {
@@ -1000,6 +1003,54 @@ interface GazeJob {
     clickLock = null;
   });
 
+  // ---------- real clicks (Research/001, solution E) ----------
+
+  /** Side panel "Real clicks" (trustedClicks); on unless the person turns it off. */
+  let trustedClicks = true;
+
+  /** A point inside `el` where the browser's own hit test lands on `el`, preferring the pointer. */
+  function hitPoint(el: Element, px: number, py: number): [number, number] | null {
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return null;
+    const inset = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo + 2), hi - 2);
+    const probes: [number, number][] = [
+      [inset(px, r.left, r.right), inset(py, r.top, r.bottom)],
+      [r.left + r.width / 2, r.top + r.height / 2],
+      [r.left + r.width * 0.25, r.top + r.height / 2],
+      [r.left + r.width * 0.75, r.top + r.height / 2]
+    ];
+    for (const [x, y] of probes) {
+      const hit = document.elementFromPoint(x, y);
+      if (hit && (hit === el || el.contains(hit))) return [x, y];
+    }
+    return null;
+  }
+
+  /**
+   * Click a page element with a real, trusted mouse click when possible (sites such as
+   * YouTube ignore synthetic ones), else fall back to a synthetic click. Headway's own
+   * UI (the picker) always uses synthetic clicks.
+   */
+  async function clickElement(target: Element, button: 0 | 2, px: number, py: number): Promise<'trusted' | 'synthetic'> {
+    const ownUi = isInPicker(target) || !!target.closest('#gaze-summary-tooltip, #hover-summary-tooltip');
+    if (trustedClicks && window.top === window && !ownUi) {
+      const point = hitPoint(target, px, py);
+      if (point) {
+        try {
+          const res: { ok?: boolean; error?: string } | undefined = await chrome.runtime.sendMessage({
+            type: 'TRUSTED_CLICK', x: point[0], y: point[1], button: button === 2 ? 'right' : 'left'
+          });
+          if (res?.ok) return 'trusted';
+          console.debug('[GazeDwell] Real click unavailable, using a synthetic click:', res?.error);
+        } catch (error) {
+          console.debug('[GazeDwell] Real click failed, using a synthetic click:', error);
+        }
+      }
+    }
+    synthClick(target, button);
+    return 'synthetic';
+  }
+
   function performClick(button: 0 | 2) {
     const x = clickLock?.x ?? lastPointerX;
     const y = clickLock?.y ?? lastPointerY;
@@ -1014,9 +1065,10 @@ interface GazeJob {
       if (isAmbiguous(near, PICKER_REACH_PX, PICKER_MARGIN_PX)) {
         beep(480, 90);
         openPicker(near.map((c) => c.element), x, y, (chosen) => {
-          synthClick(chosen, 0);
-          beep(660, 150);
-          invalidateTargets();
+          void clickElement(chosen, 0, x, y).then(() => {
+            beep(660, 150);
+            invalidateTargets();
+          });
         });
         invalidateTargets();
         return;
@@ -1027,10 +1079,11 @@ interface GazeJob {
       beep(280, 140);
       return;
     }
-    synthClick(target, button);
-    beep(button === 2 ? 320 : 660, 150);
-    invalidateTargets();
-    console.debug('[GazeDwell] Click executed on:', target);
+    void clickElement(target, button, x, y).then((kind) => {
+      beep(button === 2 ? 320 : 660, 150);
+      invalidateTargets();
+      console.debug(`[GazeDwell] ${kind} click on:`, target);
+    });
   }
 
   window.addEventListener('blink:click', (event) => {
@@ -1085,7 +1138,8 @@ interface GazeJob {
     window.addEventListener('scroll', handleScroll, true);
     window.addEventListener('resize', handleScroll);
 
-    chrome.storage.local.get(['gazeEnabled', 'gazeDwellMs'], (result) => {
+    chrome.storage.local.get(['gazeEnabled', 'gazeDwellMs', 'trustedClicks'], (result) => {
+      trustedClicks = result?.trustedClicks !== false;
       gazeEnabled = Boolean(result && result.gazeEnabled);
       const dwell = result && typeof result.gazeDwellMs === 'number' ? result.gazeDwellMs : DEFAULT_DWELL_MS;
       dwellThreshold = dwell >= 200 ? dwell : DEFAULT_DWELL_MS;

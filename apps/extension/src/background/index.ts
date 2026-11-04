@@ -4,6 +4,7 @@ import type {
 } from '../shared/types';
 import { errorMessage, errorName } from '../shared/types';
 import { formatAISummary } from '../shared/format';
+import './trusted-click';
 
 
 // ========================================

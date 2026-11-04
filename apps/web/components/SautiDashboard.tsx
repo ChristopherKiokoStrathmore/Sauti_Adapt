@@ -142,7 +142,15 @@ export function SautiDashboard() {
     window.sessionStorage.removeItem('sauti-pilot-account');
     void fetch('/api/participant', { cache: 'no-store' })
       .then(response => response.json())
-      .then(body => setAccountReady(body.authenticated === true))
+      .then(body => {
+        setAccountReady(body.authenticated === true);
+        if (body.authenticated === true && typeof body.profile_id === 'string') {
+          const oldProfile = window.localStorage.getItem('sauti-demo-profile');
+          window.localStorage.setItem('sauti-demo-profile', body.profile_id);
+          setProfileId(body.profile_id);
+          if (oldProfile !== body.profile_id) { setCounts({}); window.localStorage.removeItem('sauti-counts'); }
+        }
+      })
       .catch(() => setAccountReady(false));
     let saved: Record<SessionRole, string> | null = null;
     try { saved = JSON.parse(window.localStorage.getItem('sauti-role-sessions') || 'null'); } catch { saved = null; }
@@ -227,6 +235,11 @@ export function SautiDashboard() {
       });
       const result = await response.json();
       if (!response.ok || result.status !== 'ready') throw new Error(result.detail || result.error || 'Could not create account.');
+      if (typeof result.profile_id !== 'string') throw new Error('Private profile was not created.');
+      window.localStorage.setItem('sauti-demo-profile', result.profile_id);
+      setProfileId(result.profile_id);
+      setCounts({});
+      window.localStorage.removeItem('sauti-counts');
       setAccountReady(true);
       setStatus('Your private voice profile is ready. You can start recording.');
       goTo(3);

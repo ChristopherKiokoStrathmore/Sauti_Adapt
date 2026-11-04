@@ -144,15 +144,16 @@ export function SautiDashboard() {
         }
       })
       .catch(() => setAccountReady(false));
-    let saved: Record<SessionRole, string> | null = null;
-    try { saved = JSON.parse(window.localStorage.getItem('sauti-role-sessions') || 'null'); } catch { saved = null; }
-    const fresh = (value: unknown) => (typeof value === 'string' && /^[0-9a-f-]{36}$/i.test(value) ? value : crypto.randomUUID());
-    const sessions: Record<SessionRole, string> = { train: fresh(saved?.train), calibration: fresh(saved?.calibration), test: fresh(saved?.test) };
+    // Every new page visit starts a fresh three-example onboarding sequence.
+    // Previously uploaded clips remain stored in the private profile until deletion or expiry.
+    const sessions: Record<SessionRole, string> = { train: crypto.randomUUID(), calibration: crypto.randomUUID(), test: crypto.randomUUID() };
+    window.localStorage.removeItem('sauti-counts');
     window.localStorage.setItem('sauti-role-sessions', JSON.stringify(sessions));
+    setCounts({});
+    setSessionRole('train');
     setRoleSessions(sessions);
     sessionId.current = sessions.train;
     setSessionShown(sessions.train);
-    try { setCounts(JSON.parse(window.localStorage.getItem('sauti-counts') || '{}')); } catch { /* start fresh */ }
     void fetch('/api/health', { cache: 'no-store' })
       .then(response => response.json())
       .then(body => setBackendConfigured(Boolean(body.speech_api_configured)))
@@ -173,7 +174,7 @@ export function SautiDashboard() {
     return () => { recording.current?.cancel(); stopSpeaking(); clipAudio.current?.pause(); if (clipUrl.current) URL.revokeObjectURL(clipUrl.current); controller.current = null; };
   }, []);
 
-  useEffect(() => { window.localStorage.setItem('sauti-counts', JSON.stringify(counts)); }, [counts]);
+  // Recording counts describe this visit, not the lifetime history of a private profile.
 
   /** Spoken guidance for each step, so a person never has to read to carry on. */
   function stepScript(forStep: Step): string {
@@ -533,11 +534,6 @@ export function SautiDashboard() {
             <option value="other">Other speech or motor disability</option>
             <option value="none">No diagnosed disability</option>
           </select><small>Optional and not used to decide whether Sauti can understand your voice. These answers stay in this page session and are not uploaded or saved.</small></div>
-          <details className="advanced-settings"><summary>Existing pilot account (optional)</summary>
-            <p>New participants receive a private account automatically. Only open this if the research team gave you an existing pilot account.</p>
-            <div className="field"><label htmlFor="user">Pilot user ID</label><input id="user" autoComplete="off" value={userId} onChange={event => setUserId(event.target.value)} placeholder="Provided by the research team"/></div>
-            <div className="field"><label htmlFor="code">Pilot access token</label><input id="code" type="password" autoComplete="off" value={userToken} onChange={event => setUserToken(event.target.value)} placeholder="Not saved in this browser"/></div>
-          </details>
           <details className="terms-disclosure"><summary>Read full privacy terms</summary><section className="terms-box" tabIndex={0} role="region" aria-label={'Voice data terms, version ' + TERMS_VERSION}>
             <h3>Voice data terms <small>(version {TERMS_VERSION})</small></h3>
             <p><strong>What we keep.</strong> The short voice clips you choose to record, the command each clip is for, its language and tone (calm, happy or frustrated), and your profile ID.</p>

@@ -5,16 +5,18 @@ import { PARTICIPANT_COOKIE, readParticipantSession, sealSession, sessionCookieO
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
+  const session = readParticipantSession(request);
   return NextResponse.json(
-    { authenticated: Boolean(readParticipantSession(request)) },
+    { authenticated: Boolean(session), profile_id: session?.profileId || null },
     { headers: { 'cache-control': 'no-store' } },
   );
 }
 
 export async function POST(request: NextRequest) {
   if (!originAllowed(request)) return Response.json({ error: 'Origin is not allowed.' }, { status: 403 });
-  if (readParticipantSession(request)) {
-    return Response.json({ status: 'ready' }, { headers: { 'cache-control': 'no-store' } });
+  const previous = readParticipantSession(request);
+  if (previous) {
+    return Response.json({ status: 'ready', profile_id: previous.profileId }, { headers: { 'cache-control': 'no-store' } });
   }
   const base = process.env.SPEECH_API_URL;
   const secret = process.env.SPEECH_API_TOKEN;
@@ -41,9 +43,9 @@ export async function POST(request: NextRequest) {
       { error: 'Could not create your private voice profile right now.' },
       { status: response.status, headers: { 'cache-control': 'no-store' } },
     );
-    const body: { user_id?: string; token?: string } = await response.json();
-    const session = sealSession(body.user_id || '', body.token || '');
-    const result = NextResponse.json({ status: 'ready' }, { headers: { 'cache-control': 'no-store' } });
+    const body: { user_id?: string; token?: string; profile_id?: string } = await response.json();
+    const session = sealSession(body.user_id || '', body.token || '', body.profile_id || '');
+    const result = NextResponse.json({ status: 'ready', profile_id: body.profile_id }, { headers: { 'cache-control': 'no-store' } });
     result.cookies.set(PARTICIPANT_COOKIE, session, sessionCookieOptions);
     return result;
   } catch {

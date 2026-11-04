@@ -42,12 +42,12 @@ async function fontScale(page: Page): Promise<string> {
 }
 
 async function openRecognitionCheck(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Check recognition', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Onboarding steps' }).getByRole('button', { name: /Check recognition/i }).click();
 }
 
 async function prepareRecognition(page: Page): Promise<void> {
   await page.locator('#listen').selectOption('separate');
-  await page.getByRole('button', { name: 'Your permission', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Onboarding steps' }).getByRole('button', { name: /Your permission/i }).click();
   await page.locator('#user').fill(USER_ID);
   await page.locator('#code').fill(USER_TOKEN);
   await openRecognitionCheck(page);

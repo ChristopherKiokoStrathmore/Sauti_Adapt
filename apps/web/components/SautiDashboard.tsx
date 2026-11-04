@@ -418,7 +418,16 @@ export function SautiDashboard() {
         ? 'Listening because you pressed the button. Recording stops after ' + maxDurationMs / 1000 + ' seconds or when you stop it.'
         : 'Listening because you pressed the button. Select Stop when the phrase is finished.');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Microphone unavailable.');
+      const failure = error instanceof Error ? error : new Error('Microphone unavailable.');
+      if (failure.name === 'NotAllowedError' || /permission|denied|user agent|not allowed/i.test(failure.message)) {
+        setStatus('Microphone access is blocked. Open Sauti Adapt in Safari or Chrome directly, allow microphone access in the browser site settings, then press Start voice recording again. If you previously blocked access, change the site permission and reload.');
+      } else if (failure.name === 'NotFoundError' || failure.name === 'DevicesNotFoundError') {
+        setStatus('No microphone was found. Connect or enable a microphone, then try recording again.');
+      } else if (failure.name === 'NotReadableError' || failure.name === 'TrackStartError') {
+        setStatus('The microphone is in use or unavailable. Close other apps using it and try again.');
+      } else {
+        setStatus('Could not start voice recording: ' + failure.message);
+      }
     }
   }
 

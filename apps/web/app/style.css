@@ -469,3 +469,11 @@ box-shadow:inset -18px -24px 44px rgba(13,8,60,.74),0 0 70px rgba(173,76,244,.28
   .admin-grid .main-card{border-color:#c2b8de}
   .admin-grid .admin-stat{border-color:#b7add4}
 }
+
+
+/* Only optional research details collapse; essential recording actions stay visible. */
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important}
+.calibration-card summary{font-size:1rem;font-weight:730;color:#5a2bc2;cursor:pointer;min-height:54px;display:flex;align-items:center;gap:9px}
+.calibration-card summary::before{content:"＋";font-size:1.22rem;font-weight:750}
+.calibration-card[open] summary::before{content:"−"}
+.calibration-card[open] summary{border-bottom:1px solid #e5ddf5;margin-bottom:14px}

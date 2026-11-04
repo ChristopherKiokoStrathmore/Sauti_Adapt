@@ -438,25 +438,38 @@ export function SautiDashboard() {
     <style data-aa-upstream-css="">{CONTROLLER_CSS}</style>
     <header className="topbar">
       <a href="#main-onboarding" className="brand" aria-label="Sauti Adapt home"><span className="brand-mark" aria-hidden="true">✚</span><span>Sauti Adapt</span></a>
-      <span className="concept-badge">Research prototype</span>
-      <button className="profile-button" type="button" onClick={() => goTo(2)}><span aria-hidden="true">●</span> My voice profile</button>
+      <span className="concept-badge">Early access · Research prototype</span>
+      <button className="profile-button" type="button" onClick={() => goTo(2)}><span aria-hidden="true">◉</span> My voice profile</button>
     </header>
 
     <section className="intro" aria-labelledby="page-title">
-      <p className="eyebrow">Personalized voice accessibility</p>
-      <h1 id="page-title">Set up Sauti to understand your voice</h1>
-      <p>Choose useful commands. Record at your pace. Test recognition before connecting the extension.</p>
+      <div className="intro-content">
+        <p className="eyebrow"><span className="eyebrow-indicator" aria-hidden="true"/> VOICE ACCESSIBILITY, REIMAGINED</p>
+        <h1 id="page-title">Your voice.<br/><em>Your way.</em></h1>
+        <p className="hero-description">Meet Sauti. A more personal way to navigate the digital world, designed to understand how you speak.</p>
+        <div className="hero-assurances" aria-label="What to expect">
+          <span><span aria-hidden="true">✳</span> At your own pace</span>
+          <span><span aria-hidden="true">◉</span> Your voice stays yours</span>
+        </div>
+      </div>
+      <div className="intro-visual" aria-hidden="true">
+        <div className="voice-orbit voice-orbit-outer"/>
+        <div className="voice-orbit voice-orbit-inner"/>
+        <div className="voice-orb"><div className="voice-orb-shine"/><div className="voice-waveform"><i/><i/><i/><i/><i/><i/><i/></div></div>
+        <span className="intro-visual-label">A VOICE THAT IS UNIQUELY YOURS</span>
+      </div>
+      <span className="hero-watermark" aria-hidden="true">SAUTI</span>
     </section>
 
     <div id="main-onboarding" className="onboarding-layout">
       <nav className="stepper-card" aria-label="Onboarding steps">
+        <div className="stepper-intro"><p className="stepper-eyebrow">YOUR JOURNEY</p><h2>Make it yours</h2><p>Just five simple steps.</p></div>
         <ol>{STEPS.map((item, index) => {
           const number = (index + 1) as Step;
           const complete = number < step;
           return <li key={item} className={number === step ? 'active' : complete ? 'complete' : ''}><button type="button" aria-current={number === step ? 'step' : undefined} onClick={() => goTo(number)}><span className="step-number">{complete ? '✓' : number}</span><span>{item}</span></button></li>;
         })}</ol>
-        <div className="helper-illustration" aria-hidden="true"><div className="voice-waves">)))</div><div className="helper-person"><span className="helper-head"/><span className="helper-body"/><span className="helper-laptop">●</span></div></div>
-        <p className="helper-copy">You can pause setup at any time.</p>
+        <div className="stepper-reassurance"><span className="stepper-reassurance-icon" aria-hidden="true">✳</span><div><strong>No rush.</strong><p>Take a break or try again whenever you need.</p></div></div>
       </nav>
 
       <section className="main-card">

@@ -32,6 +32,18 @@ const TEST_COMMANDS = [
 type Step = 1 | 2 | 3 | 4 | 5;
 type SessionRole = 'train' | 'calibration' | 'test';
 type RecordMode = 'enroll' | 'recognize';
+type ComparisonModel = 'prototype' | 'english' | 'swahili' | 'all';
+type ComparisonLanguage = Language | 'mixed';
+type ComparisonRow = {
+  model: string;
+  status: string;
+  intent?: string | null;
+  transcript?: string | null;
+  error?: string;
+  load_and_inference_seconds?: number | null;
+  correct_intent?: boolean;
+  wer?: number | null;
+};
 type ToolkitController = ReturnType<typeof createController>;
 
 function labelFor(intent: Intent, language: Language) {
@@ -77,6 +89,13 @@ export function SautiDashboard() {
   const [state, setState] = useState<'idle' | 'listening' | 'processing'>('idle');
   const [speaking, setSpeaking] = useState(false);
   const [prediction, setPrediction] = useState<Recognition | null>(null);
+  const [experimentMode, setExperimentMode] = useState(false);
+  const [comparisonModel, setComparisonModel] = useState<ComparisonModel>('all');
+  const [comparisonLanguage, setComparisonLanguage] = useState<ComparisonLanguage>('mixed');
+  const [comparisonConsent, setComparisonConsent] = useState(false);
+  const [comparisonExpected, setComparisonExpected] = useState<Intent>('SCROLL_DOWN');
+  const [comparisonReference, setComparisonReference] = useState('');
+  const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>([]);
   const [backendConfigured, setBackendConfigured] = useState<boolean | null>(null);
   const [status, setStatus] = useState('The microphone stays off until you press Start recording.');
   const sessionId = useRef('');
@@ -218,7 +237,7 @@ export function SautiDashboard() {
     const form = new FormData();
     form.append('audio', audio, 'utterance.wav');
     form.append('profile_id', profileId);
-    form.append('language', language);
+    form.append('language', mode === 'recognize' && experimentMode ? comparisonLanguage : language);
     if (clipUrl.current) URL.revokeObjectURL(clipUrl.current);
     clipUrl.current = URL.createObjectURL(audio); // stays in this browser tab. Never uploaded for playback.
     setHasClip(true);
@@ -232,7 +251,15 @@ export function SautiDashboard() {
       form.append('terms_version', TERMS_VERSION);
       form.append('improvement_consent', String(improvementConsent));
     }
-    const response = await fetch(mode === 'enroll' ? '/api/enroll' : '/api/recognize', {
+    if (mode === 'recognize' && experimentMode) {
+      form.append('model', comparisonModel);
+      form.append('compare_consent', String(comparisonConsent));
+      form.append('expected_intent', comparisonExpected);
+      form.append('reference', comparisonReference);
+    }
+    const endpoint = mode === 'enroll' ? '/api/enroll'
+      : experimentMode ? '/api/compare' : '/api/recognize';
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'x-sauti-user': userId.trim(), 'x-sauti-user-token': userToken },
       body: form,
@@ -244,6 +271,15 @@ export function SautiDashboard() {
       const key = sampleKey(sessionRole, language, intent);
       setCounts(current => ({ ...current, [key]: (current[key] || 0) + 1 }));
       setStatus('Voice sample saved privately for ' + labelFor(intent, language) + '. Record a fresh example when ready.');
+      return;
+    }
+    if (experimentMode) {
+      if (!Array.isArray(body.results) || body.executed_action !== false) {
+        throw new Error('Invalid comparison-only response from speech API.');
+      }
+      setComparisonRows(body.results as ComparisonRow[]);
+      setPrediction(null);
+      setStatus('Comparison completed for ' + body.results.length + ' model(s). No browser action was executed.');
       return;
     }
     if (!validRecognition(body)) throw new Error('Invalid recognition contract returned by API.');
@@ -287,6 +323,15 @@ export function SautiDashboard() {
       goTo(2);
       return;
     }
+    if (mode === 'recognize' && experimentMode && !permissionReady) {
+      setStatus('Finish onboarding consent before comparing your voice with cloud models.');
+      goTo(2);
+      return;
+    }
+    if (mode === 'recognize' && experimentMode && !comparisonConsent) {
+      setStatus('Agree to the one-time comparison before sending speech to the cloud models.');
+      return;
+    }
     recordMode.current = mode;
     speechBind.current = { href: window.location.href, userId: userId.trim(), token: userToken };
     silence();
@@ -294,6 +339,7 @@ export function SautiDashboard() {
     try {
       recording.current = await startRecording({ maxDurationMs, autoStop, onAutoStop: () => { void finishRecording(); } });
       setPrediction(null);
+      setComparisonRows([]);
       setState('listening');
       setStatus(autoStop
         ? 'Listening because you pressed the button. Recording stops after ' + maxDurationMs / 1000 + ' seconds or when you stop it.'
@@ -441,9 +487,37 @@ export function SautiDashboard() {
 
         <div hidden={step !== 4}>
           <div className="section-heading"><Icon tone="blue">✓</Icon><div><p className="step-kicker">Step 4 of 5</p><h2>Check recognition</h2></div></div>
-          <p className="lead-copy">Try a fresh command. Sauti acts only when the personal model accepts it. Uncertain speech does nothing.</p>
+          <p className="lead-copy">Test live commands using your validated personal model, or compare three cloud models on one fresh recording without executing any action.</p>
+          <section className="model-lab" aria-label="Cloud speech model comparison">
+            <label className="check-row"><input type="checkbox" checked={experimentMode} onChange={event => { setExperimentMode(event.target.checked); setComparisonRows([]); setPrediction(null); }}/><span><strong>Compare recognition models</strong><small>Research mode does not execute commands, even when a model accepts one.</small></span></label>
+            {experimentMode && <div className="lab-fields">
+              <div className="settings-grid">
+                <div className="field"><label htmlFor="comparisonModel">Model</label><select id="comparisonModel" value={comparisonModel} onChange={event => setComparisonModel(event.target.value as ComparisonModel)}><option value="all">Compare all three</option><option value="prototype">Personalized Wav2Vec2</option><option value="english">CDLI Kenyan English Whisper</option><option value="swahili">CDLI Kenyan Kiswahili Whisper</option></select></div>
+                <div className="field"><label htmlFor="comparisonLanguage">Spoken language</label><select id="comparisonLanguage" value={comparisonLanguage} onChange={event => setComparisonLanguage(event.target.value as ComparisonLanguage)}><option value="en-KE">English</option><option value="sw-KE">Kiswahili</option><option value="mixed">English and Kiswahili mixed</option></select></div>
+              </div>
+              <div className="settings-grid">
+                <div className="field"><label htmlFor="comparisonExpected">Intended command</label><select id="comparisonExpected" value={comparisonExpected} onChange={event => setComparisonExpected(event.target.value as Intent)}>{[...COMMANDS, 'UNKNOWN' as Intent].map(command => <option key={command} value={command}>{labelFor(command, language)}</option>)}</select></div>
+                <div className="field"><label htmlFor="comparisonReference">Correct transcript (optional)</label><input id="comparisonReference" maxLength={280} value={comparisonReference} onChange={event => setComparisonReference(event.target.value)} placeholder="e.g. move down kidogo"/></div>
+              </div>
+              <label className="permission-card"><input type="checkbox" checked={comparisonConsent} onChange={event => setComparisonConsent(event.target.checked)}/><span><strong>I consent to a one-time model comparison</strong><small>This clip is processed by the private comparison service without being stored or used to execute actions. Cloud deployment must be approved before using real participant recordings.</small></span></label>
+              <p className="inline-note">Whisper transcripts and Wav2Vec2 similarity are different measurement types. Do not select whichever model reports the highest raw number.</p>
+            </div>}
+          </section>
           <RecordingButtons mode="recognize"/>
-          {prediction && <div className={'prediction-card ' + prediction.status}><span className="prediction-icon">{prediction.status === 'accepted' ? '✓' : '!'}</span><div><strong>{prediction.status === 'accepted' ? labelFor(prediction.intent, language) : 'Command rejected safely'}</strong><small>{prediction.reason || 'Accepted by the active personal model.'}</small></div></div>}
+          {experimentMode && comparisonRows.length > 0 && <div className="model-results" aria-label="Comparison results">
+            <h3>Model comparison results</h3>
+            {comparisonRows.map((row, index) => <div className="model-result" key={row.model + index}>
+              <strong>{row.model === 'prototype' ? 'Personalized Wav2Vec2' : row.model === 'english' ? 'CDLI Kenyan English Whisper' : 'CDLI Kenyan Kiswahili Whisper'}</strong>
+              <p>Status: {row.status} · Intent: {row.intent || 'None'}</p>
+              {row.transcript && <p>Transcript: {row.transcript}</p>}
+              {row.error && <p>Unavailable: {row.error}</p>}
+              {typeof row.wer === 'number' && <p>Word error rate: {(row.wer * 100).toFixed(1)}%</p>}
+              {typeof row.correct_intent === 'boolean' && <p>Intended command: {row.correct_intent ? 'Matched' : 'Not matched'}</p>}
+              {typeof row.load_and_inference_seconds === 'number' && <p>Model load and inference: {row.load_and_inference_seconds.toFixed(1)} seconds</p>}
+            </div>)}
+            <p><strong>No browser action was executed by this comparison.</strong></p>
+          </div>}
+          {!experimentMode && prediction && <div className={'prediction-card ' + prediction.status}><span className="prediction-icon">{prediction.status === 'accepted' ? '✓' : '!'}</span><div><strong>{prediction.status === 'accepted' ? labelFor(prediction.intent, language) : 'Command rejected safely'}</strong><small>{prediction.reason || 'Accepted by the active personal model.'}</small></div></div>}
           <div className="toolkit-check">
             <div className="toolkit-heading"><Icon>AI</Icon><div><h3>AI4A11y Toolkit check</h3><p>Test the official Controller directly while the personal model is being prepared.</p></div></div>
             <div className="controls">{TEST_COMMANDS.map(command => <button type="button" className="soft-button" key={command.utterance} onClick={() => void runToolkit(command.utterance)}>{command.label}</button>)}</div>

@@ -28,7 +28,7 @@ export function userCredentials(request: NextRequest): { user: string; token: st
   return { user, token };
 }
 
-export async function proxyForm(request: NextRequest, endpoint: '/v1/recognize' | '/v1/enroll'): Promise<Response> {
+export async function proxyForm(request: NextRequest, endpoint: '/v1/recognize' | '/v1/enroll' | '/v1/compare'): Promise<Response> {
   if (!originAllowed(request)) return Response.json({ error: 'Origin is not allowed.' }, { status: 403 });
   const creds = userCredentials(request);
   if (!creds) return Response.json({ error: 'Personal access token required.' }, { status: 401 });
@@ -54,7 +54,7 @@ export async function proxyForm(request: NextRequest, endpoint: '/v1/recognize' 
       },
       body: form,
       cache: 'no-store',
-      signal: AbortSignal.timeout(45000)
+      signal: AbortSignal.timeout(endpoint === '/v1/compare' ? 180000 : 45000)
     });
     return new Response(await response.text(), {
       status: response.status,

@@ -145,6 +145,44 @@ async def enroll(
     return {'recording_id': recording_id, 'status': 'stored', 'profile_id': canonical_uuid(profile_id)}
 
 
+
+@app.post('/v1/compare', dependencies=[Depends(require_token)])
+async def compare_only(
+    audio: UploadFile = File(...), profile_id: str = Form(...),
+    language: str = Form('en-KE'), model: str = Form('all'),
+    expected_intent: Intent | None = Form(default=None),
+    reference: str = Form(''),
+    compare_consent: bool = Form(False),
+    user_id: str = Depends(require_user),
+):
+    """Experimental comparison: no audio persistence and NO Controller actions."""
+    if os.environ.get('SAUTI_COMPARE_ENABLED') != 'true':
+        raise HTTPException(status_code=403, detail='Cloud model comparison is not enabled.')
+    if not compare_consent:
+        raise HTTPException(status_code=403, detail='Explicit model comparison permission is required.')
+    if os.environ.get('SAUTI_REQUIRE_TERMS') == 'true' and not os.environ.get('SAUTI_PRIVACY_CONTACT', '').strip():
+        raise HTTPException(status_code=503, detail='Pilot privacy contact is not configured.')
+    if model not in ('prototype', 'english', 'swahili', 'all') or language not in ('en-KE', 'sw-KE', 'mixed'):
+        raise HTTPException(status_code=422, detail='Unknown model or language setting.')
+    if len(reference) > 280:
+        raise HTTPException(status_code=422, detail='Reference text too long.')
+    try:
+        canonical_uuid(profile_id)
+        assert_owner(profile_id, user_id)
+        samples = await read_audio(audio)
+        from fastapi.concurrency import run_in_threadpool
+        from .compare import compare_models
+        # Dedicated speech host needed. Vercel never loads model weights.
+        return await run_in_threadpool(compare_models, samples, profile_id, model,
+                                       language, expected_intent.value if expected_intent else None, reference)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail='Speech comparison service unavailable.') from exc
+
+
 @app.delete('/v1/profile/{profile_id}', dependencies=[Depends(require_token)])
 def remove_profile(profile_id: str, user_id: str = Depends(require_user)):
     """Withdrawal: delete every clip and model for this profile. Works even when enrollment is off."""

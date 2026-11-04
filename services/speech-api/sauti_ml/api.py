@@ -113,14 +113,14 @@ def create_participant(
     The age and consent are validated in both API layers, never stored here.
     A pilot still needs genuine age verification and guardian workflows for minors.
     """
-    from .auth import _consume
+    from .auth import _consume, _configured_limit
     if not consent or terms_version != os.environ.get('SAUTI_TERMS_VERSION', '2026-11-v1'):
         raise HTTPException(status_code=403, detail='Current voice terms and consent are required.')
     if os.environ.get('SAUTI_AUTO_PROVISION') != 'true':
         raise HTTPException(status_code=403, detail='Automatic enrollment is not enabled.')
     if os.environ.get('SAUTI_REQUIRE_TERMS') != 'true' or not os.environ.get('SAUTI_PRIVACY_CONTACT'):
         raise HTTPException(status_code=503, detail='Voice privacy safeguards are not configured.')
-    _consume('provision:' + trusted_client_ip(request), 3)
+    _consume('provision:' + trusted_client_ip(request), _configured_limit('SAUTI_PROVISION_RATE_LIMIT_PER_MINUTE', 3))
     try:
         user_id, token = create_participant_account()
     except RuntimeError as exc:

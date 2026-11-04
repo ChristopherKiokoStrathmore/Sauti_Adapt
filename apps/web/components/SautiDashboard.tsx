@@ -84,6 +84,7 @@ export function SautiDashboard() {
   const [retentionDays, setRetentionDays] = useState<number>(90);
   const [readSteps, setReadSteps] = useState(false);
   const [hasClip, setHasClip] = useState(false);
+  const [pendingClip, setPendingClip] = useState<Blob | null>(null);
   const [roleSessions, setRoleSessions] = useState<Record<SessionRole, string>>({ train: '', calibration: '', test: '' });
   const [improvementConsent, setImprovementConsent] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -343,9 +344,31 @@ export function SautiDashboard() {
     busy.current = true;
     recording.current = null;
     setState('processing');
-    try { await processAudio(await active.stop()); }
-    catch (error) { setStatus('Could not process audio: ' + (error instanceof Error ? error.message : 'unknown error')); }
+    try {
+      const audio = await active.stop();
+      if (recordMode.current === 'enroll') {
+        if (clipUrl.current) URL.revokeObjectURL(clipUrl.current);
+        clipUrl.current = URL.createObjectURL(audio);
+        setHasClip(true);
+        setPendingClip(audio);
+        setStatus('Recording complete. Listen to your voice, then choose Save or Record again. Nothing has been uploaded.');
+      } else {
+        await processAudio(audio);
+      }
+    } catch (error) { setStatus('Could not process audio: ' + (error instanceof Error ? error.message : 'unknown error')); }
     finally { busy.current = false; setState('idle'); }
+  }
+
+  async function savePendingClip() {
+    if (!pendingClip || busy.current) return;
+    busy.current = true;
+    setState('processing');
+    try {
+      await processAudio(pendingClip);
+      setPendingClip(null);
+    } catch (error) {
+      setStatus('The recording was not saved: ' + (error instanceof Error ? error.message : 'Try again.'));
+    } finally { busy.current = false; setState('idle'); }
   }
 
   async function beginRecording(mode: RecordMode) {
@@ -378,6 +401,11 @@ export function SautiDashboard() {
     const maxDurationMs = clampClipMs(Number(maxSeconds) * 1000);
     try {
       recording.current = await startRecording({ maxDurationMs, autoStop, onAutoStop: () => { void finishRecording(); } });
+      if (mode === 'enroll') {
+        setPendingClip(null);
+        if (clipUrl.current) { URL.revokeObjectURL(clipUrl.current); clipUrl.current = ''; }
+        setHasClip(false);
+      }
       setPrediction(null);
       setComparisonRows([]);
       setState('listening');
@@ -393,9 +421,9 @@ export function SautiDashboard() {
     if (listenMethod === 'toggle') {
       return <button type="button" className={'record-button ' + (state === 'listening' ? 'is-listening' : '')} aria-pressed={state === 'listening'} disabled={state === 'processing'} onClick={() => {
         if (state === 'listening') void finishRecording(); else void beginRecording(mode);
-      }}><span aria-hidden="true">{state === 'listening' ? '■' : '●'}</span>{state === 'listening' ? 'Stop and process voice' : state === 'processing' ? 'Processing…' : 'Start voice recording'}</button>;
+      }}><span aria-hidden="true">{state === 'listening' ? '■' : '●'}</span>{state === 'listening' ? (mode === 'enroll' ? 'Stop recording' : 'Stop and process voice') : state === 'processing' ? 'Processing…' : 'Start voice recording'}</button>;
     }
-    return <div className="record-actions"><button type="button" className="record-button" disabled={state !== 'idle'} onClick={() => void beginRecording(mode)}>● Start voice recording</button><button type="button" className="soft-button" disabled={state !== 'listening'} onClick={() => void finishRecording()}>■ Stop and process voice</button></div>;
+    return <div className="record-actions"><button type="button" className="record-button" disabled={state !== 'idle'} onClick={() => void beginRecording(mode)}>● Start voice recording</button><button type="button" className="soft-button" disabled={state !== 'listening'} onClick={() => void finishRecording()}>{mode === 'enroll' ? '■ Stop recording' : '■ Stop and process voice'}</button></div>;
   }
 
   function playClip() {
@@ -418,6 +446,7 @@ export function SautiDashboard() {
     setCounts({});
     window.localStorage.removeItem('sauti-counts');
     if (clipUrl.current) { URL.revokeObjectURL(clipUrl.current); clipUrl.current = ''; }
+    setPendingClip(null);
     setHasClip(false);
     setPrediction(null);
     setStatus(body.deleted ? 'Deleted ' + body.recordings_removed + ' recording(s) and the private model for this profile.' : 'No stored recordings were found.');
@@ -520,7 +549,7 @@ export function SautiDashboard() {
           <p className="comfort-copy">Use a phrase that feels comfortable to you.</p>
           <div className="sample-row"><strong>{target ? 'Example ' + Math.min(saved + 1, target) + ' of ' + target : 'Optional training example'}</strong><div className="sample-dots" aria-label={saved + ' of ' + target + ' saved'}>{Array.from({ length: Math.max(target, 1) }, (_, index) => <span className={index < saved ? 'done' : index === saved ? 'current' : ''} key={index}/>)}</div></div>
           <RecordingButtons mode="enroll"/>
-          <div className="record-secondary"><button className="soft-button" type="button" disabled={!hasClip} onClick={() => playClip()}>▶ Listen</button><button className="soft-button" type="button" onClick={() => setStatus('Record a fresh example. Existing samples remain stored in their session.')}>↻ Record again</button></div>
+          <div className="record-secondary"><button className="soft-button" type="button" disabled={!hasClip} onClick={() => playClip()}>▶ Listen</button><button className="soft-button" type="button" disabled={!pendingClip || state === 'processing'} onClick={() => void savePendingClip()}>✓ Save voice sample</button><button className="soft-button" type="button" disabled={state !== 'idle'} onClick={() => { setPendingClip(null); setHasClip(false); if (clipUrl.current) { URL.revokeObjectURL(clipUrl.current); clipUrl.current = ''; } setStatus('Ready to record again. Unsaved audio was discarded.'); }}>↻ Record again</button></div>
           <p className="break-copy">Take a break whenever you need.</p>
           <section className="calibration-card" aria-label="Calibration progress">
             <h3>Calibration progress</h3>

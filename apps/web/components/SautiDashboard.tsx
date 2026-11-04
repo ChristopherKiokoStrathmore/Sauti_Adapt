@@ -460,7 +460,7 @@ export function SautiDashboard() {
     }
   }
 
-  return <main className="app-shell">
+  return <main className="app-shell" data-journey={journeyVariant}>
     <style data-aa-upstream-css="">{CONTROLLER_CSS}</style>
     <header className="topbar">
       <a href="#main-onboarding" className="brand" aria-label="Sauti Adapt home"><span className="brand-mark" aria-hidden="true">✚</span><span>Sauti Adapt</span></a>
@@ -473,6 +473,7 @@ export function SautiDashboard() {
         <p className="eyebrow"><span className="eyebrow-indicator" aria-hidden="true"/> VOICE ACCESSIBILITY, REIMAGINED</p>
         <h1 id="page-title">Your voice.<br/><em>Your way.</em></h1>
         <p className="hero-description">Meet Sauti. A more personal way to navigate the digital world, designed to understand how you speak.</p>
+        <button type="button" className="hero-primary-action" onClick={beginJourney}>Get started <span aria-hidden="true">→</span></button>
         <div className="hero-assurances" aria-label="What to expect">
           <span><span aria-hidden="true">✳</span> At your own pace</span>
           <span><span aria-hidden="true">◉</span> Your voice stays yours</span>
@@ -487,9 +488,9 @@ export function SautiDashboard() {
       <span className="hero-watermark" aria-hidden="true">SAUTI</span>
     </section>
 
-    <div id="main-onboarding" className="onboarding-layout">
+    <div id="main-onboarding" className="onboarding-layout" tabIndex={-1} aria-label="Your voice onboarding">
       <nav className="stepper-card" aria-label="Onboarding steps">
-        <div className="stepper-intro"><p className="stepper-eyebrow">STEP {step} OF {STEPS.length}</p><h2>Make it yours</h2><p>One step at a time.</p></div>
+        <div className="stepper-intro"><p className="stepper-eyebrow">STEP {step} OF {STEPS.length}</p><h2>Make it yours</h2><p>One step at a time.</p>{journeyVariant !== 'c' && <small className="journey-experiment-label">{JOURNEY_DESCRIPTION[journeyVariant]}</small>}</div>
         <ol>{STEPS.map((item, index) => {
           const number = (index + 1) as Step;
           const complete = number < step;
@@ -504,13 +505,13 @@ export function SautiDashboard() {
           <div className="section-heading"><Icon>⚙</Icon><div><p className="step-kicker">Step 1 of 5</p><h2>Your preferences</h2></div></div>
           <p className="lead-copy">Choose how you would like to begin. You can adjust everything later.</p>
           <fieldset className="choice-group"><legend>Language</legend><div className="segmented"><button type="button" className={language === 'en-KE' ? 'selected' : ''} aria-pressed={language === 'en-KE'} onClick={() => setLanguage('en-KE')}>English</button><button type="button" className={language === 'sw-KE' ? 'selected' : ''} aria-pressed={language === 'sw-KE'} onClick={() => setLanguage('sw-KE')}>Kiswahili</button></div></fieldset>
-          <details className="preferences-advanced"><summary>Choose your commands (optional)</summary><fieldset className="choice-group command-grid"><legend>Commands to practise</legend>{COMMANDS.map(command => <label className={chosen.includes(command) ? 'command-choice selected' : 'command-choice'} key={command}><input type="checkbox" checked={chosen.includes(command)} onChange={event => {
+          <details className="preferences-advanced" open={journeyVariant === 'a' ? true : undefined}><summary>Choose your commands (optional)</summary><fieldset className="choice-group command-grid"><legend>Commands to practise</legend>{COMMANDS.map(command => <label className={chosen.includes(command) ? 'command-choice selected' : 'command-choice'} key={command}><input type="checkbox" checked={chosen.includes(command)} onChange={event => {
             setChosen(current => event.target.checked ? [...current, command] : current.filter(item => item !== command));
             if (!event.target.checked && intent === command) setIntent('UNKNOWN');
           }}/><span className="command-check">✓</span><span>{labelFor(command, language)}</span></label>)}</fieldset></details>
-          <div className="settings-grid"><div className="field"><label htmlFor="listen">Recording control</label><select id="listen" value={listenMethod} onChange={event => setListenMethod(event.target.value as 'toggle' | 'separate')}><option value="toggle">One start and stop button</option><option value="separate">Separate start and stop buttons</option></select></div><div className="field"><label htmlFor="maxsec">Clip length</label><select id="maxsec" value={maxSeconds} onChange={event => setMaxSeconds(event.target.value)}><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="8">8 seconds</option><option value="15">15 seconds</option></select></div></div>
+          <details className="preferences-advanced recording-preferences" open={journeyVariant === 'a' ? true : undefined}><summary>Recording accessibility options</summary><div className="settings-grid"><div className="field"><label htmlFor="listen">Recording control</label><select id="listen" value={listenMethod} onChange={event => setListenMethod(event.target.value as 'toggle' | 'separate')}><option value="toggle">One start and stop button</option><option value="separate">Separate start and stop buttons</option></select></div><div className="field"><label htmlFor="maxsec">Clip length</label><select id="maxsec" value={maxSeconds} onChange={event => setMaxSeconds(event.target.value)}><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="8">8 seconds</option><option value="15">15 seconds</option></select></div></div><p className="field-help">You can use a single large button or separate Start and Stop controls, and adjust how long a recording lasts.</p></details>
           <label className="check-row"><input type="checkbox" checked={readSteps} onChange={event => { setReadSteps(event.target.checked); if (!event.target.checked) silence(); }}/><span><strong>Read each step aloud</strong><small>Sauti speaks the instructions for every step. Nothing is recorded while it speaks.</small></span></label>
-          <label className="check-row"><input type="checkbox" checked={autoStop} onChange={event => setAutoStop(event.target.checked)}/><span><strong>Stop automatically</strong><small>Recording ends at the selected clip length.</small></span></label>
+          <label className="check-row" ><input type="checkbox" checked={autoStop} onChange={event => setAutoStop(event.target.checked)}/><span><strong>Stop automatically</strong><small>Recording ends at the selected clip length.</small></span></label>
           <div className="card-actions"><button type="button" onClick={() => goTo(2)}>Save and continue <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => setStatus('Your preferences remain on this screen until you continue.')}>Pause setup</button></div>
         </div>
 

@@ -13,7 +13,9 @@ test('new adult participant can enroll, review a clip, save and return securely'
 
   const participant = await page.request.get('/api/participant');
   expect(participant.ok()).toBeTruthy();
-  expect(await participant.json()).toEqual({ authenticated: true });
+  const participantDetails = await participant.json();
+  expect(participantDetails.authenticated).toBe(true);
+  expect(participantDetails.profile_id).toMatch(/^[0-9a-f-]{36}$/);
   const cookies = await page.context().cookies();
   const sessionCookie = cookies.find(cookie => cookie.name === 'sauti-voice-session');
   expect(sessionCookie?.httpOnly).toBe(true);
@@ -40,7 +42,7 @@ test('new adult participant can enroll, review a clip, save and return securely'
 
   await page.reload();
   const afterRefresh = await page.request.get('/api/participant');
-  expect(await afterRefresh.json()).toEqual({ authenticated: true });
+  expect(await afterRefresh.json()).toMatchObject({ authenticated: true, profile_id: profileId });
 
   const deletion = await page.request.delete('/api/profile?profile_id=' + encodeURIComponent(profileId));
   expect(deletion.status()).toBe(200);
@@ -53,5 +55,5 @@ test('a child cannot obtain a recording account using their stated age', async (
   });
   expect(response.status()).toBe(403);
   const session = await request.get('/api/participant');
-  expect(await session.json()).toEqual({ authenticated: false });
+  expect(await session.json()).toEqual({ authenticated: false, profile_id: null });
 });

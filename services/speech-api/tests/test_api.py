@@ -55,6 +55,25 @@ def test_readiness_requires_api_auth_and_reports_configuration(monkeypatch, tmp_
     assert response.json()['checks']['terms_enforced'] is False
 
 
+def test_automatic_account_creation_is_private_and_authenticated(monkeypatch, tmp_path):
+    from sauti_ml.auth import verify_user, reset_rate_limits
+    reset_rate_limits()
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('SAUTI_TOKEN_PEPPER', 'test-private-pepper')
+    monkeypatch.setenv('SAUTI_AUTO_PROVISION', 'true')
+    monkeypatch.setenv('SAUTI_REQUIRE_TERMS', 'true')
+    monkeypatch.setenv('SAUTI_PRIVACY_CONTACT', 'privacy@example.org')
+    assert client.post('/v1/participants').status_code == 401
+    response = client.post('/v1/participants', headers={'x-api-key': 'test-secret'})
+    assert response.status_code == 200
+    user_id, token = response.json()['user_id'], response.json()['token']
+    assert verify_user(user_id, token)
+    assert not verify_user(user_id, 'wrong-token')
+    assert token not in (tmp_path / 'participant_accounts.json').read_text()
+    assert response.headers['cache-control'] == 'no-store'
+
+
 def test_unset_speech_mode_and_enrollment_fail_closed(monkeypatch, tmp_path):
     monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
     monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))

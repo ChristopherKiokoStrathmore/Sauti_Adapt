@@ -22,6 +22,10 @@ test('saving the third command example advances to recognition automatically', a
   await page.locator('.permission-card input[type="checkbox"]').first().check();
   await page.getByRole('button', { name: /Continue to voice samples/ }).click();
   await expect(page.getByRole('heading', { name: 'Teach Sauti your voice' })).toBeVisible();
+  // Keep the Stop control mounted through React state transitions on every attempt.
+  await page.getByRole('button', { name: /Your preferences/ }).click();
+  await page.locator('#listen').selectOption('separate');
+  await page.getByRole('button', { name: /Voice samples/ }).click();
   await page.evaluate(async () => {
     const audio = new AudioContext();
     await audio.resume();
@@ -33,9 +37,9 @@ test('saving the third command example advances to recognition automatically', a
   });
   for (let i = 0; i < 3; i++) {
     await page.getByRole('button', { name: 'Start voice recording' }).click();
-    await expect(page.getByRole('button', { name: 'Stop recording' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: '■ Stop recording' })).toBeEnabled();
     await page.waitForTimeout(350);
-    await page.getByRole('button', { name: 'Stop recording' }).click();
+    await page.getByRole('button', { name: '■ Stop recording' }).click();
     await expect(page.getByRole('button', { name: /Save voice sample/ })).toBeEnabled();
     await page.getByRole('button', { name: /Save voice sample/ }).click();
     if (i < 2) {

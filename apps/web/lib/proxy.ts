@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import { readParticipantSession } from './participant-session';
 
 /** Browser requests that send Origin must match an allowed host.
  *  A missing Origin is allowed: the Next.js server and other non-browser
@@ -22,6 +23,9 @@ export function forwardedClientIp(forwardedFor: string | null, realIp: string | 
 }
 
 export function userCredentials(request: NextRequest): { user: string; token: string } | null {
+  const session = readParticipantSession(request);
+  if (session) return session;
+  // Existing provisioned pilot accounts can still authenticate manually.
   const user = (request.headers.get('x-sauti-user') || '').trim();
   const token = request.headers.get('x-sauti-user-token') || '';
   if (!user || !token) return null;

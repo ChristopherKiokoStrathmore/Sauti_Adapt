@@ -5,7 +5,7 @@ import os
 import threading
 from contextlib import asynccontextmanager
 from functools import lru_cache
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from .audio import AudioValidationError, decode_wav
 from .auth import audit, create_participant_account, fail_pair_locked, note_auth_failure, note_ip_attempt, origin_allowed, trusted_client_ip, verify_user
@@ -102,12 +102,20 @@ def health():
 
 
 @app.post('/v1/participants', dependencies=[Depends(require_token)])
-def create_participant(request: Request):
-    """Issue a private account only after a consented adult onboarding request.
+def create_participant(
+    request: Request,
+    age: int = Body(..., ge=18, le=120),
+    consent: bool = Body(False),
+    terms_version: str = Body(''),
+):
+    """Issue an account only after explicit adult self-attestation and consent.
 
-    No name, disability label, or recording is collected by this endpoint.
+    The age and consent are validated in both API layers, never stored here.
+    A pilot still needs genuine age verification and guardian workflows for minors.
     """
     from .auth import _consume
+    if not consent or terms_version != os.environ.get('SAUTI_TERMS_VERSION', '2026-11-v1'):
+        raise HTTPException(status_code=403, detail='Current voice terms and consent are required.')
     if os.environ.get('SAUTI_AUTO_PROVISION') != 'true':
         raise HTTPException(status_code=403, detail='Automatic enrollment is not enabled.')
     if os.environ.get('SAUTI_REQUIRE_TERMS') != 'true' or not os.environ.get('SAUTI_PRIVACY_CONTACT'):

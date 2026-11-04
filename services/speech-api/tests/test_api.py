@@ -65,7 +65,9 @@ def test_automatic_account_creation_is_private_and_authenticated(monkeypatch, tm
     monkeypatch.setenv('SAUTI_REQUIRE_TERMS', 'true')
     monkeypatch.setenv('SAUTI_PRIVACY_CONTACT', 'privacy@example.org')
     assert client.post('/v1/participants').status_code == 401
-    response = client.post('/v1/participants', headers={'x-api-key': 'test-secret'})
+    assert client.post('/v1/participants', json={'age': 23, 'consent': False, 'terms_version': '2026-11-v1'}, headers={'x-api-key': 'test-secret'}).status_code == 403
+    assert client.post('/v1/participants', json={'age': 13, 'consent': True, 'terms_version': '2026-11-v1'}, headers={'x-api-key': 'test-secret'}).status_code == 422
+    response = client.post('/v1/participants', json={'age': 23, 'consent': True, 'terms_version': '2026-11-v1'}, headers={'x-api-key': 'test-secret'})
     assert response.status_code == 200
     user_id, token = response.json()['user_id'], response.json()['token']
     assert verify_user(user_id, token)

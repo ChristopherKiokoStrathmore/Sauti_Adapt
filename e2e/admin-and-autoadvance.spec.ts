@@ -24,6 +24,7 @@ test('saving the third command example advances to recognition automatically', a
   await expect(page.getByRole('heading', { name: 'Teach Sauti your voice' })).toBeVisible();
   // Keep the Stop control mounted through React state transitions on every attempt.
   await page.getByRole('button', { name: /Your preferences/ }).click();
+  await page.getByText('Recording accessibility options').click();
   await page.locator('#listen').selectOption('separate');
   await page.getByRole('button', { name: /Voice samples/ }).click();
   await page.evaluate(async () => {

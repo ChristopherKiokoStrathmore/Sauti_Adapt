@@ -30,6 +30,12 @@ const TEST_COMMANDS = [
   { utterance: 'undo', label: 'Undo last setting' },
 ];
 type Step = 1 | 2 | 3 | 4 | 5;
+type JourneyVariant = 'a' | 'b' | 'c';
+const JOURNEY_DESCRIPTION: Record<JourneyVariant, string> = {
+  a: 'Original guided setup',
+  b: 'Progressive setup',
+  c: 'Guided accessible setup',
+};
 type SessionRole = 'train' | 'calibration' | 'test';
 type RecordMode = 'enroll' | 'recognize';
 type ToolkitController = ReturnType<typeof createController>;
@@ -53,6 +59,9 @@ function Icon({ children, tone = 'violet' }: { children: ReactNode; tone?: 'viol
 
 export function SautiDashboard() {
   const [step, setStep] = useState<Step>(1);
+  const [journeyVariant, setJourneyVariant] = useState<JourneyVariant>('c');
+  const [speechServiceMode, setSpeechServiceMode] = useState<'mock' | 'prototype' | 'unavailable' | 'checking'>('checking');
+  const [modelStatusChecked, setModelStatusChecked] = useState(false);
   const [profileId, setProfileId] = useState('');
   const [sessionShown, setSessionShown] = useState('');
   const [userId, setUserId] = useState('');
@@ -116,6 +125,9 @@ export function SautiDashboard() {
   const canContinue = Boolean(displayName.trim() && displayName.trim().length <= 100 && /^\d{1,3}$/.test(age) && ageNumber > 0 && ageNumber <= 120 && termsAccepted && consent);
 
   useEffect(() => {
+    const experiment = new URLSearchParams(window.location.search).get('journey');
+    // Opt-in deterministic engineering variants. No random assignment or tracking.
+    if (experiment === 'a' || experiment === 'b' || experiment === 'c') setJourneyVariant(experiment);
     const id = window.localStorage.getItem('sauti-demo-profile') || crypto.randomUUID();
     window.localStorage.setItem('sauti-demo-profile', id);
     setProfileId(id);
@@ -145,6 +157,13 @@ export function SautiDashboard() {
       .then(response => response.json())
       .then(body => setBackendConfigured(Boolean(body.speech_api_configured)))
       .catch(() => setBackendConfigured(false));
+    void fetch('/api/admin/status', { cache: 'no-store' })
+      .then(response => response.json())
+      .then(body => {
+        setSpeechServiceMode(body.online && body.mode === 'prototype' ? 'prototype' : body.online ? 'mock' : 'unavailable');
+        setModelStatusChecked(true);
+      })
+      .catch(() => { setSpeechServiceMode('unavailable'); setModelStatusChecked(true); });
     if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
     const root = document.getElementById('controlled-site');
     if (root) controller.current = createController({
@@ -166,8 +185,8 @@ export function SautiDashboard() {
         ? 'Step 3 of 5. Teach Sauti your voice. Example ' + Math.min(saved + 1, target) + ' of ' + target + ' for ' + labelFor(intent, language) + '. Press start, then say your phrase ' + tone.prompt + '.'
         : 'Step 3 of 5. Say something unrelated to any command, such as a name or a different sentence.';
     }
-    if (forStep === 4) return 'Step 4 of 5. Check recognition. Press start and say one of your commands. Sauti only acts when it is sure.';
-    return 'Step 5 of 5. Connect the browser extension, so your commands work on other websites you choose.';
+    if (forStep === 4) return 'Step 4 of 5. Check recognition. The voice model may not be ready yet. You can try accessible demo controls while training is being prepared.';
+    return 'Step 5 of 5. Next steps. The browser extension is experimental and needs setup by the research team.';
   }
 
   function hearStep() {
@@ -198,6 +217,13 @@ export function SautiDashboard() {
     busy.current = false;
     setState('idle');
     setStep(next);
+  }
+
+  function beginJourney() {
+    goTo(1);
+    document.getElementById('main-onboarding')?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    const preferences = document.getElementById('main-onboarding');
+    preferences?.focus({ preventScroll: true });
   }
 
   async function continueToVoiceSamples() {

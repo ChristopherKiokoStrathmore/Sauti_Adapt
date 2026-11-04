@@ -116,11 +116,15 @@ export function SautiAdmin() {
       <a className="admin-back-link" href="/">Participant experience</a>
     </header>
     <section className="admin-hero">
-      <p className="eyebrow">Research operations</p>
-      <h1>Speech model laboratory</h1>
-      <p>Service readiness and controlled model comparison, separate from participant onboarding.</p>
-      <p className="admin-public-note">This page is public. It does not show participant lists, stored recordings, credentials or private models. Comparisons use only your own browser's voice profile.</p>
+      <div className="admin-hero-copy">
+        <p className="eyebrow"><span className="eyebrow-indicator" aria-hidden="true"/> SAUTI RESEARCH STUDIO</p>
+        <h1>Speech model laboratory</h1>
+        <p className="admin-hero-lead">Understand the technology. Keep the human at the center.</p>
+        <p className="admin-hero-subcopy">An intentional space to monitor service readiness and evaluate speech recognition models.</p>
+      </div>
+      <div className="admin-hero-art" aria-hidden="true"><div className="admin-glow-disc"><div className="admin-spectrum"><i/><i/><i/><i/><i/><i/><i/><i/><i/></div></div><span className="admin-art-caption">RESEARCH ENVIRONMENT</span></div>
     </section>
+    <p className="admin-public-note">This page is public. It does not show participant lists, stored recordings, credentials or private models. Comparisons use only your own browser's voice profile.</p>
     <div className="admin-grid">
       <section className="main-card admin-panel" aria-label="Service overview">
         <div className="admin-panel-heading"><h2>Service overview</h2><button className="soft-button" type="button" onClick={() => void refresh().catch(() => setMessage('Unable to refresh status.'))}>Refresh</button></div>

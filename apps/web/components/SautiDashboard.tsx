@@ -32,6 +32,18 @@ const TEST_COMMANDS = [
 type Step = 1 | 2 | 3 | 4 | 5;
 type SessionRole = 'train' | 'calibration' | 'test';
 type RecordMode = 'enroll' | 'recognize';
+type ComparisonModel = 'prototype' | 'english' | 'swahili' | 'all';
+type ComparisonLanguage = Language | 'mixed';
+type ComparisonRow = {
+  model: string;
+  status: string;
+  intent?: string | null;
+  transcript?: string | null;
+  error?: string;
+  load_and_inference_seconds?: number | null;
+  correct_intent?: boolean;
+  wer?: number | null;
+};
 type ToolkitController = ReturnType<typeof createController>;
 
 function labelFor(intent: Intent, language: Language) {
@@ -77,6 +89,13 @@ export function SautiDashboard() {
   const [state, setState] = useState<'idle' | 'listening' | 'processing'>('idle');
   const [speaking, setSpeaking] = useState(false);
   const [prediction, setPrediction] = useState<Recognition | null>(null);
+  const [experimentMode, setExperimentMode] = useState(false);
+  const [comparisonModel, setComparisonModel] = useState<ComparisonModel>('all');
+  const [comparisonLanguage, setComparisonLanguage] = useState<ComparisonLanguage>('mixed');
+  const [comparisonConsent, setComparisonConsent] = useState(false);
+  const [comparisonExpected, setComparisonExpected] = useState<Intent>('SCROLL_DOWN');
+  const [comparisonReference, setComparisonReference] = useState('');
+  const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>([]);
   const [backendConfigured, setBackendConfigured] = useState<boolean | null>(null);
   const [status, setStatus] = useState('The microphone stays off until you press Start recording.');
   const sessionId = useRef('');
@@ -218,7 +237,7 @@ export function SautiDashboard() {
     const form = new FormData();
     form.append('audio', audio, 'utterance.wav');
     form.append('profile_id', profileId);
-    form.append('language', language);
+    form.append('language', mode === 'recognize' && experimentMode ? comparisonLanguage : language);
     if (clipUrl.current) URL.revokeObjectURL(clipUrl.current);
     clipUrl.current = URL.createObjectURL(audio); // stays in this browser tab. Never uploaded for playback.
     setHasClip(true);
@@ -232,7 +251,15 @@ export function SautiDashboard() {
       form.append('terms_version', TERMS_VERSION);
       form.append('improvement_consent', String(improvementConsent));
     }
-    const response = await fetch(mode === 'enroll' ? '/api/enroll' : '/api/recognize', {
+    if (mode === 'recognize' && experimentMode) {
+      form.append('model', comparisonModel);
+      form.append('compare_consent', String(comparisonConsent));
+      form.append('expected_intent', comparisonExpected);
+      form.append('reference', comparisonReference);
+    }
+    const endpoint = mode === 'enroll' ? '/api/enroll'
+      : experimentMode ? '/api/compare' : '/api/recognize';
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'x-sauti-user': userId.trim(), 'x-sauti-user-token': userToken },
       body: form,
@@ -244,6 +271,15 @@ export function SautiDashboard() {
       const key = sampleKey(sessionRole, language, intent);
       setCounts(current => ({ ...current, [key]: (current[key] || 0) + 1 }));
       setStatus('Voice sample saved privately for ' + labelFor(intent, language) + '. Record a fresh example when ready.');
+      return;
+    }
+    if (experimentMode) {
+      if (!Array.isArray(body.results) || body.executed_action !== false) {
+        throw new Error('Invalid comparison-only response from speech API.');
+      }
+      setComparisonRows(body.results as ComparisonRow[]);
+      setPrediction(null);
+      setStatus('Comparison completed for ' + body.results.length + ' model(s). No browser action was executed.');
       return;
     }
     if (!validRecognition(body)) throw new Error('Invalid recognition contract returned by API.');
@@ -287,6 +323,15 @@ export function SautiDashboard() {
       goTo(2);
       return;
     }
+    if (mode === 'recognize' && experimentMode && !permissionReady) {
+      setStatus('Finish onboarding consent before comparing your voice with cloud models.');
+      goTo(2);
+      return;
+    }
+    if (mode === 'recognize' && experimentMode && !comparisonConsent) {
+      setStatus('Agree to the one-time comparison before sending speech to the cloud models.');
+      return;
+    }
     recordMode.current = mode;
     speechBind.current = { href: window.location.href, userId: userId.trim(), token: userToken };
     silence();
@@ -294,6 +339,7 @@ export function SautiDashboard() {
     try {
       recording.current = await startRecording({ maxDurationMs, autoStop, onAutoStop: () => { void finishRecording(); } });
       setPrediction(null);
+      setComparisonRows([]);
       setState('listening');
       setStatus(autoStop
         ? 'Listening because you pressed the button. Recording stops after ' + maxDurationMs / 1000 + ' seconds or when you stop it.'

@@ -463,7 +463,7 @@ export function SautiDashboard() {
 
     <div id="main-onboarding" className="onboarding-layout">
       <nav className="stepper-card" aria-label="Onboarding steps">
-        <div className="stepper-intro"><p className="stepper-eyebrow">YOUR JOURNEY</p><h2>Make it yours</h2><p>Just five simple steps.</p></div>
+        <div className="stepper-intro"><p className="stepper-eyebrow">STEP {step} OF {STEPS.length}</p><h2>Make it yours</h2><p>One step at a time.</p></div>
         <ol>{STEPS.map((item, index) => {
           const number = (index + 1) as Step;
           const complete = number < step;
@@ -537,8 +537,9 @@ export function SautiDashboard() {
           <RecordingButtons mode="enroll"/>
           <div className="record-secondary"><button className="soft-button" type="button" disabled={!hasClip} onClick={() => playClip()}>▶ Listen</button><button className="soft-button" type="button" disabled={!pendingClip || state === 'processing'} onClick={() => void savePendingClip()}>✓ Save voice sample</button><button className="soft-button" type="button" disabled={state !== 'idle'} onClick={() => { setPendingClip(null); setHasClip(false); if (clipUrl.current) { URL.revokeObjectURL(clipUrl.current); clipUrl.current = ''; } setStatus('Ready to record again. Unsaved audio was discarded.'); }}>↻ Record again</button></div>
           <p className="break-copy">Take a break whenever you need.</p>
-          <section className="calibration-card" aria-label="Calibration progress">
-            <h3>Calibration progress</h3>
+          <details className="calibration-card" aria-label="Technical training progress">
+            <summary>More about training progress</summary>
+            <h3 className="visually-hidden">Calibration progress</h3>
             <p className="calibration-help">Record at least three examples per command for training, then two for calibration and two for the untouched test. Vary your speaking style naturally. These samples help evaluate your command recognizer; accuracy is not guaranteed.</p>
             {(['train', 'calibration', 'test'] as SessionRole[]).map(role => <div className="calibration-row" key={role}>
               <strong>{ROLE_LABEL[role]}</strong>
@@ -547,8 +548,8 @@ export function SautiDashboard() {
             </div>)}
             {readyToTrain
               ? <div className="train-box"><p><strong>All three sessions are complete.</strong> Open the Railway service, go to Console, and run this once to build your personal model:</p><code>{trainCommand}</code><button type="button" className="soft-button" onClick={() => void navigator.clipboard.writeText(trainCommand).then(() => setStatus('Training command copied.')).catch(() => setStatus('Copy was unavailable.'))}>Copy training command</button></div>
-              : <p className="inline-note">Keep recording until all three sessions show Complete.</p>}
-          </section>
+              : <p className="inline-note">Your voice examples are saved. Full model training requires additional sessions and evaluation.</p>}
+          </details>
           <details className="advanced-settings"><summary>Session settings</summary><div className="settings-grid"><div className="field"><label htmlFor="role">Recording session</label><select id="role" value={sessionRole} onChange={event => { const role = event.target.value as SessionRole; setSessionRole(role); selectRoleSession(role); }}><option value="train">Training</option><option value="calibration">Calibration</option><option value="test">Untouched test</option></select></div><div className="field"><label htmlFor="session">Session ID</label><input id="session" readOnly value={sessionShown}/></div></div><button type="button" className="soft-button" onClick={() => newSession()}>Start a new recording session</button><p>Use different sessions for training, calibration, and the untouched test. Include unrelated speech under Unknown speech.</p></details>
           <div className="card-actions"><button type="button" onClick={() => goTo(4)}>Check recognition <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => setStatus('Setup paused. Your saved samples remain in private storage.')}>Pause setup</button></div>
         </div>

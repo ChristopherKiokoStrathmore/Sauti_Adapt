@@ -1,0 +1,2 @@
+-r ../../services/speech-api/requirements-dev.txt
+streamlit>=1.50,<2

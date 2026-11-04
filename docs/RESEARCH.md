@@ -1,6 +1,8 @@
 # Optional research, not a released model
 
-Nothing in this document is implemented in the speech API, the PWA, or the extension. Do not describe it as the current recognizer. The running path remains a frozen `facebook/wav2vec2-base` encoder plus per-command, per-language prototypes. No model here is promoted.
+Nothing in this document is promoted to the speech API, the PWA, or the extension. The running application path remains a frozen `facebook/wav2vec2-base` encoder plus per-command, per-language prototypes.
+
+The independent [local model lab](../ml/lab/README.md) now implements an experimental comparison with the CDLI Kenyan English and Kiswahili Whisper checkpoints. It offers a model selector, the same recording across models, transcription and command metrics, and a local enrollment flow for the existing prototype. It never executes Controller actions. Real model downloads and participant performance remain unverified; the lab tests cover software behavior using artificial fixtures.
 
 ## Planned experiment
 
@@ -19,3 +21,4 @@ These datasets are research pointers only. They are gated and are not downloaded
 - https://huggingface.co/datasets/cdli/kenyan_swahili_nonstandard_speech_v1.0
 
 Do not fetch them until the access grant and the permitted uses are verified in writing. Participant recordings stay outside git. Real co-designer results remain **NOT VERIFIED**.
+

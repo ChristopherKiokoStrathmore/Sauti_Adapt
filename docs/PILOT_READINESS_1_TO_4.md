@@ -49,3 +49,18 @@ Use the deployed demo page and extension on a disposable test profile to check:
 5. Conduct a supervised participant pilot only after consent, retention, storage, threat model and accessibility review.
 
 Never paste API tokens, card details or identifiable voice recordings into GitHub issues or logs.
+
+## Cloud readiness audit endpoint
+
+The backend exposes an authenticated `GET /v1/readiness` route. Call it with the server-side `x-api-key` only from a trusted operator environment. Never paste that key into a browser console, chat, issue, or screenshot. The route returns only boolean configuration checks, not secret values or user records.
+
+Before any participant data is recorded, the following production settings must be configured and reviewed:
+
+* `SAUTI_REQUIRE_TERMS=true` and `SAUTI_TERMS_VERSION=2026-11-v1` on Railway.
+* `SAUTI_PRIVACY_CONTACT` on Railway and matching `NEXT_PUBLIC_SAUTI_PRIVACY_CONTACT` on Vercel. The contact must be a real, monitored project privacy contact approved by the project owner.
+* `SAUTI_PRIVATE_DIR` must be under the persistent Railway volume mount at `/data`.
+* `SAUTI_STORAGE_KEY` and `SAUTI_TOKEN_PEPPER` must be present as secrets.
+* The service can remain in `SPEECH_MODE=mock` while onboarding and deletion are tested; do not describe mock mode as speech recognition.
+
+**Important:** a configured result only checks environment metadata. It does not prove storage survives restarts, model accuracy, a completed deletion, or a participant's consent.
+

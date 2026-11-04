@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import threading
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -100,13 +101,22 @@ def assert_owner(profile_id: str, user_id: str) -> None:
         raise PermissionError('This profile belongs to another person.')
 
 
-def store_enrollment(profile_id: str, session_id: str, intent: Intent, language: Language, samples, session_role: str | None = None, user_id: str | None = None) -> str:
+TONES = ('neutral', 'happy', 'frustrated', 'tired', 'excited')
+
+
+def store_enrollment(profile_id: str, session_id: str, intent: Intent, language: Language, samples, session_role: str | None = None, user_id: str | None = None, *, tone: str | None = None, retention_days: int | None = None, terms_version: str | None = None, improvement_consent: bool = False) -> str:
     profile_id = canonical_uuid(profile_id)
     session_id = canonical_uuid(session_id)
     if session_role is not None and session_role not in SESSION_ROLES:
         raise ValueError('session_role must be train, calibration, or test.')
     if not user_id:
         raise ValueError('A user id is required to store a recording.')
+    if tone is not None and tone not in TONES:
+        raise ValueError('tone must be one of: ' + ', '.join(TONES) + '.')
+    if retention_days is not None and not (1 <= retention_days <= max_retention_days()):
+        raise ValueError(f'retention_days must be between 1 and {max_retention_days()}.')
+    if terms_version is not None and not (1 <= len(terms_version) <= 40):
+        raise ValueError('terms_version must be 1 to 40 characters.')
     claim_owner(profile_id, user_id)
     folder = profile_dir(profile_id)
     recording_id = str(uuid4())
@@ -122,6 +132,14 @@ def store_enrollment(profile_id: str, session_id: str, intent: Intent, language:
     }
     if session_role:
         record['session_role'] = session_role
+    if tone:
+        record['tone'] = tone
+    if retention_days:
+        record['retention_days'] = retention_days
+    if terms_version:
+        record['terms_version'] = terms_version
+        record['consented_at'] = datetime.now(timezone.utc).isoformat(timespec='seconds')
+        record['improvement_consent'] = improvement_consent
     buffer = BytesIO()
     encode_private_wav(samples, buffer)
     line = json.dumps(record, ensure_ascii=False) + '\n'
@@ -193,6 +211,22 @@ def delete_recording(profile_id: str, recording_id: str, user_id: str) -> dict:
     return {'deleted': removed > 0, 'recordings_removed': removed}
 
 
+def max_retention_days() -> int:
+    """Upper bound on a person's chosen retention. Default 365 days."""
+    try:
+        days = int(os.environ.get('SAUTI_MAX_RETENTION_DAYS', '365'))
+    except ValueError:
+        days = 365
+    return max(1, days)
+
+
+def _row_retention_days(row: dict) -> int:
+    chosen = row.get('retention_days')
+    if isinstance(chosen, int) and not isinstance(chosen, bool) and 1 <= chosen <= max_retention_days():
+        return chosen
+    return retention_days()
+
+
 def retention_days() -> int:
     try:
         days = int(os.environ.get('SAUTI_RETENTION_DAYS', '30'))
@@ -207,7 +241,7 @@ def purge_expired_folder(folder: Path) -> int:
     manifest = folder / 'manifest.jsonl'
     if not manifest.is_file():
         return 0
-    cutoff = time.time() - retention_days() * 86400
+    now = time.time()
     kept = []
     removed = 0
     with _lock:
@@ -217,7 +251,7 @@ def purge_expired_folder(folder: Path) -> int:
             row = json.loads(line)
             recording_id = row.get('recording_id', '')
             audio = folder / 'audio' / f'{recording_id}.wav'
-            if audio.is_file() and audio.stat().st_mtime < cutoff:
+            if audio.is_file() and audio.stat().st_mtime < now - _row_retention_days(row) * 86400:
                 try:
                     discard_clip_derivatives(folder, read_private_bytes(audio))
                 except Exception:

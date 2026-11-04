@@ -83,45 +83,48 @@ def personal_prediction(samples, profile_id: str) -> dict:
 
 
 def whisper_prediction(samples, key: str) -> dict:
-    import torch
-    from huggingface_hub import model_info
-    from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+    """Call the private Modal GPU inference service. The API never loads Whisper.
 
-    if os.environ.get('SAUTI_COMPARE_GPU_ONLY', 'true') == 'true' and not torch.cuda.is_available():
+    The Modal endpoint returns a transcript only. Mapping to allowed Sauti
+    commands stays within the authenticated Python speech API.
+    """
+    import urllib.error
+    import urllib.request
+    import numpy as np
+
+    address = os.environ.get('SAUTI_MODAL_URL', '').strip()
+    token = os.environ.get('SAUTI_MODAL_BEARER_TOKEN', '').strip()
+    if not address or not token:
         return {'status': 'unavailable', 'intent': None,
-                'error': 'Whisper comparison requires a configured GPU worker.'}
-    model_id = MODEL_IDS[key]
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    dtype = torch.float16 if device == 'cuda' else torch.float32
-    revision = model_info(model_id).sha
-    processor = AutoProcessor.from_pretrained(model_id, revision=revision, trust_remote_code=False)
-    model = AutoModelForSpeechSeq2Seq.from_pretrained(
-        model_id, revision=revision, torch_dtype=dtype,
-        low_cpu_mem_usage=True, use_safetensors=True, trust_remote_code=False,
-    ).to(device)
+                'error': 'Modal CDLI GPU endpoint is not configured.'}
+    if not address.startswith('https://'):
+        return {'status': 'unavailable', 'intent': None,
+                'error': 'Modal GPU endpoint must use HTTPS.'}
+    payload = np.asarray(samples, dtype='<f4').tobytes()
+    request = urllib.request.Request(
+        address, data=payload, method='POST',
+        headers={
+            'Authorization': 'Bearer ' + token,
+            'X-Sauti-Model': key,
+            'Content-Type': 'application/octet-stream',
+        },
+    )
+    # For small pilot clips, a cold GPU startup may be slow. No retry:
+    # an automatic repeat could inadvertently process audio twice.
     try:
-        model.eval()
-        inputs = processor(samples, sampling_rate=16000, return_tensors='pt',
-                           return_attention_mask=True)
-        features = inputs.input_features.to(device, dtype=dtype)
-        kwargs = {}
-        if 'attention_mask' in inputs:
-            kwargs['attention_mask'] = inputs.attention_mask.to(device)
-        with torch.inference_mode():
-            ids = model.generate(
-                features, language='en' if key == 'english' else 'sw',
-                task='transcribe', num_beams=1, do_sample=False, max_new_tokens=128, **kwargs)
-        transcript = processor.batch_decode(ids, skip_special_tokens=True)[0].strip()
-        intent = mapped_intent(transcript)
-        return {'status': 'rejected' if intent == 'UNKNOWN' else 'accepted',
-                'intent': intent, 'transcript': transcript, 'revision': revision,
-                'device': device}
-    finally:
-        del model
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
+        with urllib.request.urlopen(request, timeout=145) as result:
+            if result.status != 200:
+                raise RuntimeError('Model inference is unavailable.')
+            data = json.loads(result.read(100_000))
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError('GPU endpoint request failed.') from exc
+    if not isinstance(data, dict) or data.get('model') != key or not isinstance(data.get('transcript'), str):
+        raise ValueError('Invalid Modal GPU response.')
+    transcript = data['transcript'].strip()
+    intent = mapped_intent(transcript)
+    return {'status': 'rejected' if intent == 'UNKNOWN' else 'accepted',
+            'intent': intent, 'transcript': transcript,
+            'revision': data.get('revision'), 'device': data.get('device')}
 
 def infer_one(samples, profile_id: str, key: str) -> dict:
     if key == 'prototype':

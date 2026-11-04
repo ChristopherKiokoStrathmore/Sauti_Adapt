@@ -42,12 +42,12 @@ async function fontScale(page: Page): Promise<string> {
 }
 
 async function openRecognitionCheck(page: Page): Promise<void> {
-  await page.getByRole('navigation', { name: 'Onboarding steps' }).getByRole('button', { name: /Check recognition/i }).click();
+  await page.getByRole('button', { name: /Check recognition/ }).click();
 }
 
 async function prepareRecognition(page: Page): Promise<void> {
   await page.locator('#listen').selectOption('separate');
-  await page.getByRole('navigation', { name: 'Onboarding steps' }).getByRole('button', { name: /Your permission/i }).click();
+  await page.getByRole('button', { name: /Your permission/ }).click();
   await page.locator('#user').fill(USER_ID);
   await page.locator('#code').fill(USER_TOKEN);
   await openRecognitionCheck(page);
@@ -219,6 +219,7 @@ test('a route change or cleared token during recognition runs no command', async
   await page.waitForTimeout(400);
   await page.getByRole('button', { name: 'Stop and process voice' }).click();
   await expect.poll(() => page.evaluate(() => Boolean((window as Window & { __release?: () => void }).__release))).toBeTruthy();
+  await page.getByRole('button', { name: /Your permission/ }).click();
   await page.locator('#code').fill('');
   await page.evaluate(() => (window as Window & { __release?: () => void }).__release?.());
   await expect(page.getByRole('status')).toContainText('Sign-in changed');

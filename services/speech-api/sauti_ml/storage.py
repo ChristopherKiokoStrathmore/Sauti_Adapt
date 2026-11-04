@@ -16,7 +16,17 @@ SESSION_ROLES = frozenset({'train', 'calibration', 'test'})
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+    """Locate the source root in development and the app root in Railway.
+
+    Railway deploys services/speech-api as /app/sauti_ml, so indexing
+    parents[3] is not valid in that shallower production layout.
+    """
+    module_path = Path(__file__).resolve()
+    for parent in module_path.parents:
+        if (parent / 'services' / 'speech-api' / 'sauti_ml').is_dir():
+            return parent
+    # Isolated service deployment: /app/sauti_ml/storage.py -> /app.
+    return module_path.parent.parent
 
 
 def private_root() -> Path:

@@ -71,6 +71,7 @@ export function SautiDashboard() {
   const [userId, setUserId] = useState('');
   const [userToken, setUserToken] = useState('');
   const [accountBusy, setAccountBusy] = useState(false);
+  const [accountReady, setAccountReady] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [age, setAge] = useState('');
   const [speechCondition, setSpeechCondition] = useState('prefer-not-to-say');
@@ -130,14 +131,18 @@ export function SautiDashboard() {
   const nextTone = TONES[saved % TONES.length];
   const ageNumber = Number(age);
   const eligibleAge = /^\d{1,3}$/.test(age) && ageNumber >= 18 && ageNumber <= 120;
-  const permissionReady = Boolean(displayName.trim() && displayName.trim().length <= 100 && eligibleAge && userId.trim() && userToken.trim() && consent && termsAccepted && TERMS_CONTACT);
+  const permissionReady = Boolean(displayName.trim() && displayName.trim().length <= 100 && eligibleAge && (accountReady || (userId.trim() && userToken.trim())) && consent && termsAccepted && TERMS_CONTACT);
   const canContinue = Boolean(displayName.trim() && displayName.trim().length <= 100 && /^\d{1,3}$/.test(age) && ageNumber > 0 && ageNumber <= 120 && termsAccepted && consent);
 
   useEffect(() => {
     const id = window.localStorage.getItem('sauti-demo-profile') || crypto.randomUUID();
     window.localStorage.setItem('sauti-demo-profile', id);
     setProfileId(id);
-    try { const account = JSON.parse(window.sessionStorage.getItem('sauti-pilot-account') || 'null'); if (account && typeof account.userId === 'string' && typeof account.token === 'string') { setUserId(account.userId); setUserToken(account.token); } } catch { /* private session not restored */ }
+    window.sessionStorage.removeItem('sauti-pilot-account');
+    void fetch('/api/participant', { cache: 'no-store' })
+      .then(response => response.json())
+      .then(body => setAccountReady(body.authenticated === true))
+      .catch(() => setAccountReady(false));
     let saved: Record<SessionRole, string> | null = null;
     try { saved = JSON.parse(window.localStorage.getItem('sauti-role-sessions') || 'null'); } catch { saved = null; }
     const fresh = (value: unknown) => (typeof value === 'string' && /^[0-9a-f-]{36}$/i.test(value) ? value : crypto.randomUUID());
@@ -209,7 +214,7 @@ export function SautiDashboard() {
   async function continueToVoiceSamples() {
     if (!canContinue || accountBusy) return;
     if (!eligibleAge) { goTo(3); return; }
-    if (userId.trim() && userToken.trim()) { goTo(3); return; }
+    if (accountReady || (userId.trim() && userToken.trim())) { goTo(3); return; }
     setAccountBusy(true);
     setStatus('Creating your private voice profile securely…');
     try {
@@ -220,10 +225,8 @@ export function SautiDashboard() {
         cache: 'no-store',
       });
       const result = await response.json();
-      if (!response.ok || !result.user_id || !result.token) throw new Error(result.detail || result.error || 'Could not create account.');
-      window.sessionStorage.setItem('sauti-pilot-account', JSON.stringify({ userId: result.user_id, token: result.token }));
-      setUserId(result.user_id);
-      setUserToken(result.token);
+      if (!response.ok || result.status !== 'ready') throw new Error(result.detail || result.error || 'Could not create account.');
+      setAccountReady(true);
       setStatus('Your private voice profile is ready. You can start recording.');
       goTo(3);
     } catch (error) {
@@ -347,8 +350,8 @@ export function SautiDashboard() {
 
   async function beginRecording(mode: RecordMode) {
     if (busy.current || recording.current) return;
-    if (!profileId || !userId.trim() || !userToken.trim()) {
-      setStatus('Your secure pilot credentials have not been configured. Ask the research team for access.');
+    if (!profileId || (!accountReady && (!userId.trim() || !userToken.trim()))) {
+      setStatus('Finish the previous step to set up your private account before recording.');
       return;
     }
     if (mode === 'enroll' && !eligibleAge) {
@@ -356,7 +359,7 @@ export function SautiDashboard() {
       return;
     }
     if (mode === 'enroll' && !permissionReady) {
-      setStatus('Your consent is saved for this session. Recording still requires secure pilot access from the research team.');
+      setStatus('Complete your name, consent, and private account setup to enable recording.');
       goTo(2);
       return;
     }
@@ -508,7 +511,7 @@ export function SautiDashboard() {
 
         <div hidden={step !== 3}>
           <div className="section-heading"><Icon>●</Icon><div><p className="step-kicker">Step 3 of 5</p><h2>Teach Sauti your voice</h2></div></div>
-          {!permissionReady && <p className="inline-note" role="status">{!eligibleAge ? 'Voice recording is not available for participants under 18 until a verified guardian consent process is in place.' : !userId.trim() || !userToken.trim() ? 'Finish the previous step to create your secure voice profile automatically. No recording is uploaded until you press Record.' : 'Review your consent and privacy contact before recording.'}</p>}
+          {!permissionReady && <p className="inline-note" role="status">{!eligibleAge ? 'Voice recording is not available for participants under 18 until a verified guardian consent process is in place.' : !accountReady && (!userId.trim() || !userToken.trim()) ? 'Finish the previous step to create your secure voice profile automatically. No recording is uploaded until you press Record.' : 'Review your consent and privacy contact before recording.'}</p>}
           <div className="segmented language-switch"><button type="button" className={language === 'en-KE' ? 'selected' : ''} aria-pressed={language === 'en-KE'} onClick={() => setLanguage('en-KE')}>English</button><button type="button" className={language === 'sw-KE' ? 'selected' : ''} aria-pressed={language === 'sw-KE'} onClick={() => setLanguage('sw-KE')}>Kiswahili</button></div>
           <div className="field"><label htmlFor="intent">Command to practise</label><select id="intent" value={intent} onChange={event => setIntent(event.target.value as Intent)}>{intentOptions.map(command => <option key={command} value={command}>{labelFor(command, language)}</option>)}</select></div>
           <div className="phrase-card"><span aria-hidden="true">◖))</span><strong>{labelFor(intent, language)}</strong></div>
@@ -584,7 +587,7 @@ export function SautiDashboard() {
           <div className="connection-box"><div className="extension-window" aria-hidden="true"><span/><span/><span/><strong>✚</strong></div><div><strong>Profile ready to share with the extension</strong><p>Copy the profile ID and this website address, then paste them into the Sauti Adapt extension.</p></div></div>
           <ol className="extension-steps"><li>Build and load the extension from <code>apps/extension/dist</code>.</li><li>Open its side panel and paste this PWA origin and profile ID.</li><li>Enter the pilot user ID and token supplied by the research team.</li><li>Enable only the website you want Sauti to control.</li></ol>
           <button type="button" onClick={() => void copyExtensionSetup()}>Copy extension setup</button>
-          <p className="inline-note">The website cannot confirm an unpacked extension is installed. Connection is completed in the extension side panel.</p>
+          <p className="inline-note">The extension currently requires separate credentials supplied by the research team. Automatic browser account pairing is not yet available. Do not share your private voice session to connect an extension.</p>
           <div className="card-actions"><button type="button" className="soft-button" onClick={() => goTo(4)}>Run another recognition check</button><button className="text-button" type="button" onClick={() => goTo(1)}>Review setup</button></div>
         </div>
       </section>
@@ -597,7 +600,7 @@ export function SautiDashboard() {
           <p className="privacy-note">{improvementConsent ? 'Approved recordings may support the next validated profile.' : 'Future model improvement is off until you choose it.'}</p>
           <p className="validation-note">New model versions must be tested before activation.</p>
           <label className="delete-check"><input type="checkbox" checked={deleteArmed} onChange={event => setDeleteArmed(event.target.checked)}/> Confirm profile deletion</label>
-          <button type="button" className="delete-button" disabled={!deleteArmed || !userId.trim() || !userToken.trim()} onClick={() => void deleteProfile()}>Delete my voice data</button>
+          <button type="button" className="delete-button" disabled={!deleteArmed || (!accountReady && (!userId.trim() || !userToken.trim()))} onClick={() => void deleteProfile()}>Delete my voice data</button>
         </section>
         <section className="side-card status-card">
           <h2>Connection status</h2>

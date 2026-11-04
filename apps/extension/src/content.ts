@@ -16,6 +16,8 @@ if (!win.__SAUTI_CONTENT_READY__) {
     operator: { abilityModel: { supportAreas: ['motor'] } },
   });
   const documentNonce = crypto.randomUUID();
+  let approvedCommandInFlight = false;
+  let lastApprovedCommandAt = 0;
 
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (sender.id !== chrome.runtime.id) { respond({ ok: false, reason: 'Unauthorized sender' }); return false; }
@@ -35,18 +37,32 @@ if (!win.__SAUTI_CONTENT_READY__) {
       respond({ ok: false, reason: 'Command is outside the allowlist' });
       return false;
     }
+    // A second recognition response must not cause a duplicate action while
+    // the first is running or immediately after it completes.
+    if (!manual) {
+      const now = Date.now();
+      if (approvedCommandInFlight || now - lastApprovedCommandAt < 900) {
+        respond({ ok: false, reason: 'Duplicate voice command suppressed.' });
+        return false;
+      }
+      approvedCommandInFlight = true;
+      lastApprovedCommandAt = now;
+    }
+    const finishApproved = () => { if (!manual) approvedCommandInFlight = false; };
     const origin = httpOrigin(location.href);
     chrome.storage.local.get(ENABLED_ORIGINS_KEY).then(stored => {
       const enabled = readEnabledOrigins(stored[ENABLED_ORIGINS_KEY]);
       if (!origin || !enabled.includes(origin)) {
+        finishApproved();
         respond({ ok: false, reason: 'This website is not enabled.' });
         return;
       }
       controller.handle(message.utterance).then(result => {
         const pending = Boolean(result && typeof result === 'object' && 'pending' in result && result.pending);
+        finishApproved();
         respond({ ok: Boolean(result.ok), pending, feedback: String(result.say || '') });
-      }).catch(() => respond({ ok: false, reason: 'Controller did not complete.' }));
-    }).catch(() => respond({ ok: false, reason: 'This website is not enabled.' }));
+      }).catch(() => { finishApproved(); respond({ ok: false, reason: 'Controller did not complete.' }); });
+    }).catch(() => { finishApproved(); respond({ ok: false, reason: 'This website is not enabled.' }); });
     return true;
   });
 }

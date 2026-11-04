@@ -7,7 +7,7 @@ import soundfile as sf
 from fastapi.testclient import TestClient
 
 from sauti_ml.api import app
-from sauti_ml.compare import compare_models, mapped_intent, normalize, word_errors
+from sauti_ml.compare import character_errors, compare_models, mapped_intent, normalize, word_errors
 
 CLIENT = TestClient(app)
 USER_ID = '11111111-1111-4111-8111-111111111111'
@@ -34,6 +34,7 @@ def test_exact_whitelisted_commands_and_mixed_language_are_safe():
     assert mapped_intent('scroll up and go back') == 'UNKNOWN'
     assert normalize('  Move,  DOWN!  ') == 'move down'
     assert word_errors('move down', 'move up') == (1, 2)
+    assert character_errors('move down', 'move up') == (4, 9)
 
 
 def test_comparison_runs_three_models_and_never_executes(monkeypatch):
@@ -50,7 +51,7 @@ def test_comparison_runs_three_models_and_never_executes(monkeypatch):
     assert [row['model'] for row in result['results']] == ['prototype', 'english', 'swahili']
     assert len(calls) == 3
     assert all(row['correct_intent'] and not row['false_activation'] for row in result['results'])
-    assert all(row['wer'] == 0 for row in result['results'])
+    assert all(row['wer'] == 0 and row['cer'] == 0 for row in result['results'])
     assert result['executed_action'] is False
     assert calls[0][2] is not calls[1][2]
 

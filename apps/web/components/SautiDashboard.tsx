@@ -43,6 +43,7 @@ type ComparisonRow = {
   load_and_inference_seconds?: number | null;
   correct_intent?: boolean;
   wer?: number | null;
+  cer?: number | null;
 };
 type ToolkitController = ReturnType<typeof createController>;
 
@@ -512,6 +513,7 @@ export function SautiDashboard() {
               {row.transcript && <p>Transcript: {row.transcript}</p>}
               {row.error && <p>Unavailable: {row.error}</p>}
               {typeof row.wer === 'number' && <p>Word error rate: {(row.wer * 100).toFixed(1)}%</p>}
+               {typeof row.cer === 'number' && <p>Character error rate: {(row.cer * 100).toFixed(1)}%</p>}
               {typeof row.correct_intent === 'boolean' && <p>Intended command: {row.correct_intent ? 'Matched' : 'Not matched'}</p>}
               {typeof row.load_and_inference_seconds === 'number' && <p>Model load and inference: {row.load_and_inference_seconds.toFixed(1)} seconds</p>}
             </div>)}

@@ -62,6 +62,18 @@ def word_errors(reference: str, hypothesis: str) -> tuple[int, int]:
     return previous[-1], len(a)
 
 
+def character_errors(reference: str, hypothesis: str) -> tuple[int, int]:
+    """Levenshtein character errors on the same normalized text as WER."""
+    a, b = normalize(reference), normalize(hypothesis)
+    previous = list(range(len(b) + 1))
+    for i, char in enumerate(a, 1):
+        row = [i]
+        for j, other in enumerate(b, 1):
+            row.append(min(row[-1] + 1, previous[j] + 1, previous[j - 1] + (char != other)))
+        previous = row
+    return previous[-1], len(a)
+
+
 def personal_prediction(samples, profile_id: str) -> dict:
     folder = profile_dir(profile_id)
     if not (folder / 'model.json').is_file() or not (folder / 'evaluation.json').is_file():
@@ -169,6 +181,8 @@ def compare_models(samples, profile_id: str, selection: str, language: str,
             if reference.strip() and row.get('transcript') is not None:
                 errors, words = word_errors(reference, row['transcript'])
                 row['wer'] = round(errors / words, 4) if words else None
+                character_count_errors, characters = character_errors(reference, row['transcript'])
+                row['cer'] = round(character_count_errors / characters, 4) if characters else None
             rows.append(row)
     return {'results': rows, 'selection': selection, 'language': language,
             'executed_action': False,

@@ -37,9 +37,9 @@ test('saving the third command example advances to recognition automatically', a
   });
   for (let i = 0; i < 3; i++) {
     await page.getByRole('button', { name: 'Start voice recording' }).click();
-    await expect(page.getByRole('button', { name: '■ Stop recording' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /Stop recording/ })).toBeEnabled();
     await page.waitForTimeout(350);
-    await page.getByRole('button', { name: '■ Stop recording' }).click();
+    await page.getByRole('button', { name: /Stop recording/ }).click();
     await expect(page.getByRole('button', { name: /Save voice sample/ })).toBeEnabled();
     await page.getByRole('button', { name: /Save voice sample/ }).click();
     if (i < 2) {

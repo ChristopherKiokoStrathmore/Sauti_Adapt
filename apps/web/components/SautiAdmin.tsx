@@ -100,7 +100,7 @@ export function SautiAdmin() {
       return;
     }
     try {
-      recording.current = await startRecording({ maxDurationMs: 5000, autoStop: false });
+      recording.current = await startRecording({ maxDurationMs: 5000, autoStop: true, onAutoStop: () => { void toggleRecording(); } });
       setResults([]);
       setStage('listening');
       setMessage('Listening. Say the selected command, then press Stop and compare.');

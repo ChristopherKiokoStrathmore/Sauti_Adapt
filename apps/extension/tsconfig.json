@@ -1,15 +1,17 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["DOM", "ES2022"],
+    "lib": ["DOM", "DOM.Iterable", "ES2023", "WebWorker.ImportScripts"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
-    "allowJs": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
-    "types": ["chrome"],
-    "paths": { "@toolkit/*": ["../../vendor/ai4a11y-toolkit/*"], "@sauti/shared": ["../../packages/shared/src/index.ts"], "@sauti/shared/*": ["../../packages/shared/src/*"] }
+    "isolatedModules": true,
+    "noFallthroughCasesInSwitch": true,
+    "useUnknownInCatchVariables": true,
+    "types": ["chrome"]
   },
-  "include": ["src/**/*.ts", "types/**/*.d.ts"]
+  "include": ["src/**/*.ts"]
 }

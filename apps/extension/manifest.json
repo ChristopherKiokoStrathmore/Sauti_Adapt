@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "Headway",
+  "version": "0.1.0",
+  "description": "Browse hands-free with head tracking, and preview links with on-device AI summaries.",
+  "minimum_chrome_version": "128",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["sidePanel", "storage", "tabs", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "dist/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["dist/youtube-bridge.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/gaze.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "side_panel": {
+    "default_path": "dist/sidepanel.html"
+  },
+  "action": {
+    "default_title": "Open Headway",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "dist/youtube-caption-handler.js",
+        "dist/twitter-interceptor.js",
+        "dist/gaze-overlay.css",
+        "dist/human/human.esm.js",
+        "dist/human/models/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

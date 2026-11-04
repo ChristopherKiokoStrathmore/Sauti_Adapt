@@ -32,6 +32,7 @@ export default defineConfig({
         SAUTI_ACCOUNTS: accounts,
         ALLOW_ENROLLMENT: 'true',
         SAUTI_AUTO_PROVISION: 'true',
+        SAUTI_PROVISION_RATE_LIMIT_PER_MINUTE: '60',
         SAUTI_REQUIRE_TERMS: 'true',
         SAUTI_TERMS_VERSION: '2026-11-v1',
         SAUTI_PRIVACY_CONTACT: 'privacy@example.test',

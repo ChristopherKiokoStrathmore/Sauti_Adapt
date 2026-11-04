@@ -4,7 +4,8 @@ import { tooltipCss, tooltipHead, waitHtml, INK, PAPER, LIME, MONO } from '../sh
 import type { RuntimeMessage, SummaryResult } from '../shared/types';
 import { errorMessage } from '../shared/types';
 import { SUMMARIES_ENABLED } from '../shared/features';
-import { clickablesNear, closestClickable, edgeDistance, invalidateTargets } from './targets';
+import { clickablesNear, closestClickable, edgeDistance, isAmbiguous, invalidateTargets } from './targets';
+import { openPicker, isPickerOpen, isInPicker, closePicker } from './picker';
 
 type DwellTarget = { element: HTMLElement; type: 'link' | 'close-button'; distance: number };
 type EdgeKey = 'top' | 'bottom' | 'left' | 'right';
@@ -33,6 +34,8 @@ interface GazeJob {
   const DEADZONE_PX = 12;
   const SNAP_REACH_PX = 42;     // pull onto a clickable whose edge is this close
   const STICKY_EDGE_PX = 24;    // keep a snapped target while within this of its edge
+  const PICKER_REACH_PX = 40;   // targets this close to a click are candidates for the picker
+  const PICKER_MARGIN_PX = 12;  // ...and are ambiguous unless one is this much closer
   const SCROLL_ZONE_ID = 'gaze-scroll-zones';
   const NAV_ZONE_WIDTH = 80; // Width of left/right navigation zones in pixels
   const DWELL_INDICATOR_ID = 'gaze-dwell-indicator';
@@ -979,7 +982,7 @@ interface GazeJob {
     }
   }
 
-  // ---------- clicking (Research/001, solution B) ----------
+  // ---------- clicking (Research/001, solutions B and C) ----------
 
   /** Set when the mouth starts to open: the click goes to this target, wherever the head drifts. */
   let clickLock: { target: Element | null; x: number; y: number } | null = null;
@@ -1002,6 +1005,24 @@ interface GazeJob {
     const y = clickLock?.y ?? lastPointerY;
     const target = clickLock?.target ?? targetUnderPointer(x, y);
 
+    // In the picker, a click on a tile is final.
+    if (isPickerOpen() && !isInPicker(target)) {
+      closePicker();
+    }
+    if (!isInPicker(target) && button === 0) {
+      const near = clickablesNear(x, y, PICKER_REACH_PX, 6);
+      if (isAmbiguous(near, PICKER_REACH_PX, PICKER_MARGIN_PX)) {
+        beep(480, 90);
+        openPicker(near.map((c) => c.element), x, y, (chosen) => {
+          synthClick(chosen, 0);
+          beep(660, 150);
+          invalidateTargets();
+        });
+        invalidateTargets();
+        return;
+      }
+    }
+
     if (!target) {
       beep(280, 140);
       return;
@@ -1018,7 +1039,7 @@ interface GazeJob {
 
   // Mouth click: navigate in the edge zones, otherwise click the locked or snapped target.
   window.addEventListener('smile:click', () => {
-    if (navZoneDwelling) {
+    if (navZoneDwelling && !isPickerOpen()) {
       const dwellDuration = performance.now() - navDwellStart;
       // Require at least 300ms in the zone before confirming navigation
       if (dwellDuration >= 300) {

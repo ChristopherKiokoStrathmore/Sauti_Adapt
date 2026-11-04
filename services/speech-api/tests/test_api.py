@@ -576,6 +576,7 @@ def test_required_terms_are_enforced_for_pilot(monkeypatch, tmp_path):
     monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
     monkeypatch.setenv('ALLOW_ENROLLMENT', 'true')
     monkeypatch.setenv('SAUTI_REQUIRE_TERMS', 'true')
+    monkeypatch.setenv('SAUTI_PRIVACY_CONTACT', 'privacy@example.org')
     monkeypatch.setenv('SAUTI_TERMS_VERSION', '2026-11-v1')
     base = payload() | {'session_id': str(uuid4()), 'intent': 'SCROLL_DOWN', 'consent': 'true'}
     for terms_version in (None, '2026-01-old'):
@@ -587,3 +588,15 @@ def test_required_terms_are_enforced_for_pilot(monkeypatch, tmp_path):
     assert accepted.status_code == 200, accepted.text
     from sauti_ml.storage import load_manifest
     assert load_manifest(base['profile_id'])[0]['improvement_consent'] is True
+
+
+def test_pilot_rejects_enrollment_without_privacy_contact(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('ALLOW_ENROLLMENT', 'true')
+    monkeypatch.setenv('SAUTI_REQUIRE_TERMS', 'true')
+    monkeypatch.delenv('SAUTI_PRIVACY_CONTACT', raising=False)
+    data = payload() | {'session_id': str(uuid4()), 'intent': 'SCROLL_UP', 'consent': 'true', 'terms_version': '2026-11-v1'}
+    response = client.post('/v1/enroll', data=data, files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert response.status_code == 503
+    assert not list(tmp_path.rglob('*.wav'))

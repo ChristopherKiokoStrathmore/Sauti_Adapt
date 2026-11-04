@@ -41,6 +41,20 @@ def test_health_does_not_expose_secrets(monkeypatch):
     assert 'pepper-in-health-test' not in resp.text
 
 
+def test_readiness_requires_api_auth_and_reports_configuration(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path / 'profiles'))
+    monkeypatch.setenv('RAILWAY_VOLUME_MOUNT_PATH', str(tmp_path))
+    monkeypatch.delenv('SAUTI_REQUIRE_TERMS', raising=False)
+    monkeypatch.delenv('SAUTI_PRIVACY_CONTACT', raising=False)
+    assert client.get('/v1/readiness').status_code == 401
+    response = client.get('/v1/readiness', headers={'x-api-key': 'test-secret'})
+    assert response.status_code == 200
+    assert response.json()['status'] == 'configuration_incomplete'
+    assert response.json()['checks']['railway_volume_path_configured'] is True
+    assert response.json()['checks']['terms_enforced'] is False
+
+
 def test_unset_speech_mode_and_enrollment_fail_closed(monkeypatch, tmp_path):
     monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
     monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))

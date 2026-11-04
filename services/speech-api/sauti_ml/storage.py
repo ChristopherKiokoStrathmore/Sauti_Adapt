@@ -248,7 +248,7 @@ def retention_days() -> int:
 
 
 def purge_expired_folder(folder: Path) -> int:
-    """Delete expired clips and their cached embeddings. Does not remove a released model."""
+    """Delete expired clips, cached embeddings and the model release record."""
     import time
     manifest = folder / 'manifest.jsonl'
     if not manifest.is_file():

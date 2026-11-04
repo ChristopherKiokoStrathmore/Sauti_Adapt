@@ -38,7 +38,7 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: `npm run dev -- --port ${WEB_PORT}`,
+      command: `npm run dev -- --hostname 127.0.0.1 --port ${WEB_PORT}`,
       cwd: 'apps/web',
       env: {
         SPEECH_API_URL: API_URL,
@@ -51,3 +51,4 @@ export default defineConfig({
     },
   ],
 });
+

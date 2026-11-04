@@ -4,6 +4,7 @@ import { tooltipCss, tooltipHead, waitHtml, INK, PAPER, LIME, MONO } from '../sh
 import type { RuntimeMessage, SummaryResult } from '../shared/types';
 import { errorMessage } from '../shared/types';
 import { SUMMARIES_ENABLED } from '../shared/features';
+import { clickablesNear, closestClickable, edgeDistance } from './targets';
 
 type DwellTarget = { element: HTMLElement; type: 'link' | 'close-button'; distance: number };
 type EdgeKey = 'top' | 'bottom' | 'left' | 'right';
@@ -29,9 +30,9 @@ interface GazeJob {
   const MAX_RECENT_ENTRIES = 32;
   const EDGE_PAD_PX = 180;
   const EDGE_HOLD_MS = 400;
-  const MAX_LINK_SCAN = 500;
   const DEADZONE_PX = 12;
-  const STICKY_RADIUS_PX = 45;
+  const SNAP_REACH_PX = 42;     // pull onto a clickable whose edge is this close
+  const STICKY_EDGE_PX = 24;    // keep a snapped target while within this of its edge
   const SCROLL_ZONE_ID = 'gaze-scroll-zones';
   const NAV_ZONE_WIDTH = 80; // Width of left/right navigation zones in pixels
   const DWELL_INDICATOR_ID = 'gaze-dwell-indicator';
@@ -53,7 +54,6 @@ interface GazeJob {
   let lastPointerY = 0;
   let effectiveX: number | null = null;
   let effectiveY: number | null = null;
-  let snappedLink: HTMLElement | null = null;
   let snappedTarget: DwellTarget | null = null; // Can be link or close button
   let lastSnapLink: HTMLElement | null = null;
   let scrollZones: HTMLDivElement | null = null;
@@ -199,6 +199,22 @@ interface GazeJob {
     sendDwellProgress(progress);
   }
 
+  /** Frame the snapped target without dwell progress, so the person sees what a click will hit. */
+  function showSnapFrame(el: HTMLElement | null) {
+    const frame = ensureDwellIndicator();
+    if (!el) {
+      frame.style.display = 'none';
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    const pad = 4;
+    frame.style.display = 'block';
+    frame.style.left = `${rect.left - pad}px`;
+    frame.style.top = `${rect.top - pad}px`;
+    frame.style.width = `${rect.width + pad * 2}px`;
+    frame.style.height = `${rect.height + pad * 2}px`;
+  }
+
   function hideDwellIndicator() {
     if (dwellIndicator) {
       dwellIndicator.style.display = 'none';
@@ -273,7 +289,6 @@ interface GazeJob {
 
   function showTooltipForLink(link: HTMLElement | null, html: string) {
     if (!link) {
-      snappedLink = null;
       return;
     }
     const { tip, content } = ensureTooltip();
@@ -364,31 +379,13 @@ interface GazeJob {
     }
   }
 
-  function nearestLink(x: number, y: number, maxDistance = 42): HTMLElement | null {
-    const baseElement = document.elementFromPoint(x, y);
-    const immediate = baseElement ? baseElement.closest<HTMLElement>('a,[role="link"]') : null;
-    if (immediate) {
-      return immediate;
+  /** Nearest clickable to (x, y): the one under the pointer, else the closest edge within reach. */
+  function nearestLink(x: number, y: number, maxDistance = SNAP_REACH_PX): HTMLElement | null {
+    const under = closestClickable(document.elementFromPoint(x, y));
+    if (under) {
+      return under;
     }
-    const anchors = document.querySelectorAll<HTMLElement>('a,[role="link"]');
-    let best: HTMLElement | null = null;
-    let bestDistance = maxDistance;
-    let count = 0;
-    for (const candidate of anchors) {
-      if (count++ > MAX_LINK_SCAN) break;
-      const rect = candidate.getBoundingClientRect();
-      if (!rect || rect.width === 0 || rect.height === 0) {
-        continue;
-      }
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      const dist = Math.hypot(cx - x, cy - y);
-      if (dist < bestDistance) {
-        bestDistance = dist;
-        best = candidate;
-      }
-    }
-    return best;
+    return clickablesNear(x, y, maxDistance, 1)[0]?.element ?? null;
   }
 
   function nearestTarget(x: number, y: number, maxDistance = 42): DwellTarget | null {
@@ -406,14 +403,10 @@ interface GazeJob {
       }
     }
 
-    // Find nearest link
+    // Find the nearest clickable (type 'link' means any clickable target here)
     const link = nearestLink(x, y, maxDistance);
     if (link) {
-      const rect = link.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      const dist = Math.hypot(cx - x, cy - y);
-      return { element: link, type: 'link', distance: dist };
+      return { element: link, type: 'link', distance: edgeDistance(x, y, link.getBoundingClientRect()) };
     }
 
     return null;
@@ -437,50 +430,27 @@ interface GazeJob {
     return { x, y };
   }
 
-  function snapLink(x: number, y: number): HTMLElement | null {
-    if (snappedLink && (!document.contains(snappedLink))) {
-      snappedLink = null;
-    }
-    if (snappedLink) {
-      const rect = snappedLink.getBoundingClientRect();
-      if (rect && rect.width && rect.height) {
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        if (Math.hypot(cx - x, cy - y) < STICKY_RADIUS_PX) {
-          return snappedLink;
-        }
-      }
-      snappedLink = null;
-    }
-    const next = nearestLink(x, y, 42);
-    if (next) {
-      snappedLink = next;
-      lastSnapLink = next;
-    }
-    return snappedLink;
-  }
-
   function snapTarget(x: number, y: number): DwellTarget | null {
     // Check if current snapped target is still valid
     if (snappedTarget && snappedTarget.element && (!document.contains(snappedTarget.element))) {
       snappedTarget = null;
     }
 
-    // If we have a snapped target, check if we're still within sticky radius
+    // Stay on the snapped target while the pointer is near its edge, unless the pointer
+    // is now directly over a different clickable (then that one wins).
     if (snappedTarget && snappedTarget.element) {
       const rect = snappedTarget.element.getBoundingClientRect();
-      if (rect && rect.width && rect.height) {
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        if (Math.hypot(cx - x, cy - y) < STICKY_RADIUS_PX) {
+      if (rect && rect.width && rect.height && edgeDistance(x, y, rect) < STICKY_EDGE_PX) {
+        const under = closestClickable(document.elementFromPoint(x, y));
+        if (!under || under === snappedTarget.element || snappedTarget.element.contains(under)) {
           return snappedTarget;
         }
       }
       snappedTarget = null;
     }
 
-    // Find nearest target (link or close button)
-    const next = nearestTarget(x, y, 42);
+    // Find nearest target (clickable or close button)
+    const next = nearestTarget(x, y, SNAP_REACH_PX);
     if (next) {
       snappedTarget = next;
       // Also update lastSnapLink if it's a link
@@ -639,12 +609,12 @@ interface GazeJob {
       }
     }
 
-    // Dwell exists to open a summary. With summaries off it does nothing, and shows
-    // no ring or frame; the snap above still feeds mouth click (lastSnapLink).
+    // Dwell exists to open a summary. With summaries off it does nothing; the frame
+    // still shows which target a mouth click will hit.
     if (!SUMMARIES_ENABLED) {
       dwellTarget = null;
       dwellAccum = 0;
-      hideDwellIndicator();
+      showSnapFrame(targetElement);
       return;
     }
 

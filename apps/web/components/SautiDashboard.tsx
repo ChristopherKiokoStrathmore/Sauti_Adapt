@@ -647,7 +647,7 @@ export function SautiDashboard() {
       <div className="after-title"><span className="after-icon" aria-hidden="true">▣</span><h2 id="after-title">After onboarding</h2></div>
       <div className="flow-card"><Icon tone="blue">▰</Icon><div><strong>Personal voice profile</strong><span>Recognizes your chosen commands</span></div></div><span className="flow-arrow" aria-hidden="true">→</span>
       <div className="flow-card"><Icon>AI</Icon><div><strong>AI4A11y Toolkit</strong><span>Handles accepted commands</span></div></div><span className="flow-arrow" aria-hidden="true">→</span>
-      <div className="flow-card"><Icon>✚</Icon><div><strong>Browser extension</strong><span>Works on websites you permit</span></div></div>
+      <div className="flow-card"><Icon>✚</Icon><div><strong>Browser extension</strong><span>Works on websites you permit</span><button type="button" className="soft-button" onClick={() => { goTo(5); setStatus("The browser extension is not published yet. See the setup instructions and current availability above."); document.getElementById("main-onboarding")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Install browser extension</button></div></div>
       <p className="feedback-banner">Feedback you approve can support the next validated voice profile.</p>
     </section>
     <footer><p>Sauti Adapt supports access and communication. It does not diagnose or treat cerebral palsy or another medical condition.</p></footer>

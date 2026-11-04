@@ -101,6 +101,41 @@ def health():
     return {'status': 'ok', 'mode': os.environ.get('SPEECH_MODE', 'mock'), 'enrollment_enabled': os.environ.get('ALLOW_ENROLLMENT') == 'true'}
 
 
+@app.get('/v1/readiness', dependencies=[Depends(require_token)])
+def readiness():
+    """Authenticated configuration audit; never return secrets or participant data.
+
+    This is a preflight, not proof that audio uploads, model inference, or
+    retention work. A mounted path alone does not prove durable storage.
+    """
+    private_dir = os.environ.get('SAUTI_PRIVATE_DIR', '').strip()
+    storage_root = os.environ.get('RAILWAY_VOLUME_MOUNT_PATH', '').strip()
+    storage_mounted = bool(
+        private_dir and storage_root and
+        os.path.commonpath((os.path.abspath(private_dir), os.path.abspath(storage_root)))
+        == os.path.abspath(storage_root)
+    )
+    checks = {
+        'api_auth_configured': bool(os.environ.get('SAUTI_API_TOKEN', '').strip()),
+        'user_token_pepper_configured': bool(os.environ.get('SAUTI_TOKEN_PEPPER', '').strip()),
+        'encrypted_storage_key_configured': bool(os.environ.get('SAUTI_STORAGE_KEY', '').strip()),
+        'private_storage_configured': bool(private_dir),
+        'railway_volume_path_configured': storage_mounted,
+        'terms_enforced': os.environ.get('SAUTI_REQUIRE_TERMS') == 'true',
+        'privacy_contact_configured': bool(os.environ.get('SAUTI_PRIVACY_CONTACT', '').strip()),
+        'terms_version_configured': bool(os.environ.get('SAUTI_TERMS_VERSION', '').strip()),
+    }
+    ready = all(checks.values())
+    return {
+        'status': 'configured' if ready else 'configuration_incomplete',
+        'checks': checks,
+        'speech_mode': os.environ.get('SPEECH_MODE', 'mock'),
+        'enrollment_enabled': os.environ.get('ALLOW_ENROLLMENT') == 'true',
+        'comparison_enabled': os.environ.get('SAUTI_COMPARE_ENABLED') == 'true',
+        'note': 'Configuration only; run a consented test recording to verify durable storage.',
+    }
+
+
 @app.post('/v1/enroll', dependencies=[Depends(require_token)])
 async def enroll(
     audio: UploadFile = File(...), profile_id: str = Form(...),

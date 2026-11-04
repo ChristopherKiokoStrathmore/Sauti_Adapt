@@ -4,6 +4,8 @@ Headway is a Chrome extension for hands-free browsing. Turn your head to move a 
 
 It builds on [Nutshell](https://github.com/tanhanwei/Nutshell) by Tan Han Wei, rebuilt in TypeScript with a new identity and interface. Headway is MIT licensed; see `LICENSE`.
 
+> **Summaries are switched off for now.** `SUMMARIES_ENABLED` in `src/shared/features.ts` is `false`, so hovering or dwelling on a link opens nothing and the side panel shows only Pointer and Click. Mouth click and scroll/back/forward zones still work. Set it to `true` and rebuild to bring summaries back.
+
 ## Run it
 
 ```bash

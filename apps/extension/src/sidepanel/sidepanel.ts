@@ -1,6 +1,12 @@
 // Headway side panel: settings and summary display only. No AI logic lives here;
 // the worker writes summaries and this view renders what it is sent.
 import type { ApiChoice, ApiStatus, ApiStatusResponse, DisplayMode, RuntimeMessage } from '../shared/types';
+import { SUMMARIES_ENABLED } from '../shared/features';
+
+// Summaries are switched off for now (shared/features.ts): hide everything that belongs to them.
+if (!SUMMARIES_ENABLED) {
+  for (const el of document.querySelectorAll<HTMLElement>('[data-feature="summaries"]')) el.hidden = true;
+}
 
 interface PanelSettings {
   apiChoice: ApiChoice;
@@ -315,7 +321,7 @@ void (async () => {
   await loadSettings();
   bindEvents();
   showOutput('empty');
-  await refreshApiStatus();
+  if (SUMMARIES_ENABLED) await refreshApiStatus();
 })();
 
 export {};

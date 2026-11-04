@@ -3,6 +3,7 @@ import { formatAISummary, escapeHtml } from '../shared/format';
 import { tooltipCss, tooltipHead, waitHtml, INK, PAPER, LIME, MONO } from '../shared/page-theme';
 import type { RuntimeMessage, SummaryResult } from '../shared/types';
 import { errorMessage } from '../shared/types';
+import { SUMMARIES_ENABLED } from '../shared/features';
 
 type DwellTarget = { element: HTMLElement; type: 'link' | 'close-button'; distance: number };
 type EdgeKey = 'top' | 'bottom' | 'left' | 'right';
@@ -636,6 +637,15 @@ interface GazeJob {
         console.debug('[GazeDwell] target:', label);
         debugLastHref = label;
       }
+    }
+
+    // Dwell exists to open a summary. With summaries off it does nothing, and shows
+    // no ring or frame; the snap above still feeds mouth click (lastSnapLink).
+    if (!SUMMARIES_ENABLED) {
+      dwellTarget = null;
+      dwellAccum = 0;
+      hideDwellIndicator();
+      return;
     }
 
     if (targetElement !== dwellTarget) {

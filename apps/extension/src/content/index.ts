@@ -3,6 +3,7 @@ import { formatAISummary, escapeHtml } from '../shared/format';
 import { tooltipCss, tooltipHead, waitHtml } from '../shared/page-theme';
 import type { DisplayMode, RuntimeMessage, SummaryResult, ThreadPayload, ThreadResponse, TweetMedia, TweetNode } from '../shared/types';
 import { errorMessage } from '../shared/types';
+import { SUMMARIES_ENABLED } from '../shared/features';
 
 /** X/Twitter GraphQL responses are large, undocumented and change often; walk them as plain JSON. */
 type Json = Record<string, any>;
@@ -1913,12 +1914,15 @@ type TooltipPlacement = 'auto' | 'left' | 'right';
     }
   });
   
-  // Initialize hover detection
-  if (IS_TWITTER) {
-    ensureTwitterInterceptor();
+  // Initialize hover detection (only while summaries are switched on; see shared/features.ts).
+  // The message listener above stays: the side panel uses it for PING and calibration.
+  if (SUMMARIES_ENABLED) {
+    if (IS_TWITTER) {
+      ensureTwitterInterceptor();
+    }
+    document.body.addEventListener('mouseover', handleMouseOver, true);
+    document.body.addEventListener('mouseout', handleMouseOut, true);
   }
-  document.body.addEventListener('mouseover', handleMouseOver, true);
-  document.body.addEventListener('mouseout', handleMouseOut, true);
   
   debugLog('[Content] Hover link extension initialized');
   

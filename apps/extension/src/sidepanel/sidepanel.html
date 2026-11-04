@@ -44,7 +44,7 @@
         <button type="button" id="calibrate-btn" class="btn btn-primary" disabled>Calibrate head position</button>
         <p class="hint" id="calibrate-hint">Turn the head pointer on to calibrate.</p>
 
-        <div class="field">
+        <div class="field" data-feature="summaries">
           <div class="field-top">
             <label for="dwell-time" class="field-label">Dwell to click</label>
             <output id="dwell-value" for="dwell-time" class="readout"><span id="dwell-number">600</span><span class="unit">ms</span></output>
@@ -74,7 +74,7 @@
     </section>
 
     <!-- 03 Summaries -->
-    <section class="panel" aria-labelledby="summary-title">
+    <section class="panel" aria-labelledby="summary-title" data-feature="summaries">
       <header class="panel-head"><span class="panel-index">03</span><h2 id="summary-title">Summaries</h2></header>
       <div class="panel-body">
         <fieldset class="field">
@@ -107,7 +107,7 @@
     </section>
 
     <!-- Output -->
-    <section class="output" aria-labelledby="output-title" aria-live="polite">
+    <section class="output" aria-labelledby="output-title" aria-live="polite" data-feature="summaries">
       <span class="crop tl" aria-hidden="true"></span><span class="crop tr" aria-hidden="true"></span>
       <span class="crop bl" aria-hidden="true"></span><span class="crop br" aria-hidden="true"></span>
       <h2 id="output-title" class="output-label">Latest summary</h2>
@@ -134,11 +134,11 @@
         <div><dt><kbd>Alt</kbd><kbd>P</kbd></dt><dd>Show or hide the pointer</dd></div>
         <div><dt><kbd>Alt</kbd><kbd>V</kbd></dt><dd>Show or hide the camera preview</dd></div>
         <div><dt><kbd>Shift</kbd><kbd>H</kbd></dt><dd>Show or hide the status readout</dd></div>
-        <div><dt><kbd>Esc</kbd></dt><dd>Cancel the summary in progress</dd></div>
+        <div data-feature="summaries"><dt><kbd>Esc</kbd></dt><dd>Cancel the summary in progress</dd></div>
       </dl>
     </details>
 
-    <p class="footnote">Head tracking runs in your browser with Human.js. Summaries are written on this device by Chrome’s built-in Gemini Nano; no page text is sent to an AI service.</p>
+    <p class="footnote">Head tracking runs in your browser with Human.js.<span data-feature="summaries"> Summaries are written on this device by Chrome’s built-in Gemini Nano; no page text is sent to an AI service.</span></p>
   </main>
 
   <script src="sidepanel.js"></script>

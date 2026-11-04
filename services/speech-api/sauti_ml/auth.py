@@ -175,7 +175,10 @@ def audit(event: str, outcome: str, user_id: str | None = None, profile_id: str 
 def provisioned_accounts() -> dict[str, str]:
     """Read durable token digests only. Never store plaintext participant tokens."""
     from .storage import private_root
-    path = private_root() / 'participant_accounts.json'
+    try:
+        path = private_root() / 'participant_accounts.json'
+    except RuntimeError:
+        return {}
     if not path.is_file():
         return {}
     try:

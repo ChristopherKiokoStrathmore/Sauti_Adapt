@@ -484,3 +484,33 @@ box-shadow:inset -18px -24px 44px rgba(13,8,60,.74),0 0 70px rgba(173,76,244,.28
 .preferences-advanced summary::before{content:"＋";font-weight:800;font-size:1.2rem}
 .preferences-advanced[open] summary::before{content:"−"}
 .preferences-advanced .command-grid{margin:12px 0 20px}
+
+
+/* Board iteration: guided, motor aware journey without tracking participant behaviour. */
+.hero-primary-action{margin-top:26px;min-width:198px;min-height:64px;padding:16px 25px;border:1px solid rgba(237,208,255,.6);border-radius:18px;box-shadow:0 13px 28px rgba(5,1,17,.28);background:linear-gradient(135deg,#a15afd,#7541dd);font-size:1.08rem;color:#fff;display:inline-flex;align-items:center;justify-content:space-between;gap:25px}
+.hero-primary-action:hover:not(:disabled){background:linear-gradient(135deg,#b36bff,#844cfa)}
+.hero-primary-action:focus-visible{outline:4px solid #ffd18a}
+#main-onboarding:focus{outline:none}
+.journey-experiment-label{display:block;color:#6a5884;margin-top:11px;font-size:.72rem}
+.recording-preferences{margin:8px 0 20px}
+.recording-preferences .settings-grid{margin-top:8px}
+.recording-preferences .field-help{margin:0 0 18px;color:#59516d;font-size:.91rem}
+.inline-recording-options{margin:16px 0 19px}
+.inline-recording-options>p{line-height:1.6;color:#59516d}
+.model-readiness{margin:17px 0 23px;padding:21px;border-radius:18px;border:1.5px solid #d2c1ef;background:linear-gradient(145deg,#f5f0ff,#fff);color:#281a52}
+.model-readiness strong{font-size:1.04rem;display:block;line-height:1.45}
+.model-readiness p{margin:8px 0 0;color:#4f4765;line-height:1.6}
+.journey-success{display:flex;gap:16px;align-items:flex-start;padding:22px;border:1.5px solid #8dceaa;background:linear-gradient(145deg,#e8f9ef,#f8fffa);border-radius:20px;margin:20px 0 18px;color:#194b34}
+.journey-success>span{display:grid;place-items:center;width:49px;height:49px;flex:0 0 49px;border-radius:16px;background:#bfe7cc;color:#195b33;font-size:1.4rem;font-weight:900}
+.journey-success strong{font-size:1.1rem}
+.journey-success p{margin:8px 0 0;line-height:1.58;color:#31563e}
+.journey-experiment-note{color:#5b536b;font-size:.81rem}
+.app-shell[data-journey="c"] .section-heading{scroll-margin-top:105px}
+.app-shell[data-journey="c"] .card-actions>button:first-child{min-width:220px}
+@media(max-width:650px){
+ .hero-primary-action{width:100%;min-height:64px}
+ .model-readiness{padding:19px}
+ .journey-success{padding:18px;gap:12px}
+ .journey-success>span{width:43px;height:43px;flex-basis:43px}
+}
+@media(prefers-reduced-motion:reduce){.hero-primary-action{transition:none!important}}

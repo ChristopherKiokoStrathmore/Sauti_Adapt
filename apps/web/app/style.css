@@ -198,3 +198,30 @@ footer{text-align:center;padding:28px 18px;color:#716a7d;font-size:.85rem}
 .calibration-row{display:grid;grid-template-columns:150px auto 1fr;gap:6px 10px;align-items:center;padding:8px 0;border-top:1px solid #ece8f6}
 .calibration-row small{grid-column:1/-1;color:#6d677b;line-height:1.5}
 .train-box{margin-top:10px;display:grid;gap:8px}.train-box code{display:block;padding:10px 12px;border-radius:10px;background:#1e1b2e;color:#e8e4ff;font-size:.82rem;overflow-x:auto;white-space:nowrap}
+
+
+/* Public, non-sensitive research dashboard */
+.admin-shell{min-height:100vh}
+.admin-back-link{margin-left:auto;color:#5930c8;font-weight:750;text-decoration:none;padding:10px 13px;border-radius:12px;background:#f1eaff}
+.admin-back-link:hover{text-decoration:underline}
+.admin-hero{width:min(1080px,calc(100% - 36px));margin:38px auto 24px}
+.admin-hero .eyebrow{text-transform:uppercase;letter-spacing:.12em;color:#6137be;font-weight:850;font-size:.79rem}
+.admin-hero h1{font-size:clamp(2rem,4vw,3.4rem);letter-spacing:-.035em;margin:6px 0 12px}
+.admin-hero p{max-width:760px;line-height:1.55;color:#625b75}
+.admin-hero .admin-public-note{max-width:none;padding:12px 16px;border:1px solid #dcd4eb;border-radius:14px;background:#f8f5ff;color:#4e4767}
+.admin-grid{display:grid;grid-template-columns:minmax(280px, .85fr) minmax(400px,1.15fr);gap:20px;width:min(1080px,calc(100% - 36px));margin:0 auto 52px;align-items:start}
+.admin-panel{min-height:0;padding:26px}
+.admin-panel h2{font-size:1.45rem;margin:0 0 16px}
+.admin-panel-heading{display:flex;align-items:center;gap:14px;justify-content:space-between}
+.admin-panel-heading button{padding:9px 15px}
+.admin-stats{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.admin-stat{border:1px solid #e1dbee;background:#faf9ff;border-radius:14px;padding:16px;min-height:93px;display:flex;flex-direction:column;justify-content:space-between;gap:12px}
+.admin-stat span{color:#655c7e;font-size:.86rem}
+.admin-stat strong{color:#30205d;font-size:1.15rem;overflow-wrap:anywhere}
+.admin-muted{font-size:.88rem;color:#6c6380;line-height:1.6}
+.admin-feedback{padding:12px 15px;border-radius:13px;background:#f1edff;border:1px solid #dfd6f2;line-height:1.55}
+.admin-results{margin-top:20px}
+.admin-results .model-result{margin:12px 0;padding:15px;border:1px solid #ddd5f3;border-radius:13px}
+.admin-results .model-result p{line-height:1.5;overflow-wrap:anywhere}
+@media(max-width:850px){.admin-grid{grid-template-columns:1fr}.admin-panel{padding:22px}.admin-shell .topbar{gap:9px}.admin-shell .concept-badge{display:none}}
+@media(max-width:520px){.admin-stats{grid-template-columns:1fr 1fr}.admin-stat{padding:12px}.admin-back-link{font-size:.8rem;padding:9px}.admin-shell .brand{font-size:1rem}}

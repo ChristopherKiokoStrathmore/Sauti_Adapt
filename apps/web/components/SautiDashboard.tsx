@@ -79,7 +79,6 @@ export function SautiDashboard() {
   const [chosen, setChosen] = useState<Intent[]>(COMMANDS);
   const [consent, setConsent] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [ageOk, setAgeOk] = useState(false);
   const [retentionDays, setRetentionDays] = useState<number>(90);
   const [readSteps, setReadSteps] = useState(false);
   const [hasClip, setHasClip] = useState(false);
@@ -130,7 +129,8 @@ export function SautiDashboard() {
   const nextTone = TONES[saved % TONES.length];
   const ageNumber = Number(age);
   const eligibleAge = /^\d{1,3}$/.test(age) && ageNumber >= 18 && ageNumber <= 120;
-  const permissionReady = Boolean(displayName.trim() && displayName.trim().length <= 100 && eligibleAge && userId.trim() && userToken.trim() && consent && termsAccepted && ageOk && TERMS_CONTACT);
+  const permissionReady = Boolean(displayName.trim() && displayName.trim().length <= 100 && eligibleAge && userId.trim() && userToken.trim() && consent && termsAccepted && TERMS_CONTACT);
+  const canContinue = Boolean(displayName.trim() && displayName.trim().length <= 100 && /^\d{1,3}$/.test(age) && ageNumber > 0 && ageNumber <= 120 && termsAccepted && consent);
 
   useEffect(() => {
     const id = window.localStorage.getItem('sauti-demo-profile') || crypto.randomUUID();
@@ -251,7 +251,7 @@ export function SautiDashboard() {
       form.append('intent', intent);
       form.append('session_id', sessionId.current);
       form.append('session_role', sessionRole);
-      form.append('consent', String(consent && termsAccepted && ageOk));
+      form.append('consent', String(consent && termsAccepted && eligibleAge));
       form.append('tone', TONES[saved % TONES.length].id satisfies ToneId);
       form.append('retention_days', String(retentionDays));
       form.append('terms_version', TERMS_VERSION);
@@ -324,8 +324,12 @@ export function SautiDashboard() {
       setStatus('Your secure pilot credentials have not been configured. Ask the research team for access.');
       return;
     }
+    if (mode === 'enroll' && !eligibleAge) {
+      setStatus('Recording for under 18 participants requires verified guardian consent. The research team must enable that flow first.');
+      return;
+    }
     if (mode === 'enroll' && !permissionReady) {
-      setStatus('Complete your name, adult age confirmation, voice data terms, and secure pilot access before recording.');
+      setStatus('Your consent is saved for this session. Recording still requires secure pilot access from the research team.');
       goTo(2);
       return;
     }
@@ -443,7 +447,7 @@ export function SautiDashboard() {
           <div className="section-heading"><Icon tone="green">✓</Icon><div><p className="step-kicker">Step 2 of 5</p><h2>About you and your permission</h2></div></div>
           <p className="lead-copy">Your voice is personal data. Sauti stores a clip only after you deliberately start recording and give permission.</p>
           <div className="field"><label htmlFor="participant-name">Your name</label><input id="participant-name" autoComplete="name" maxLength={100} value={displayName} onChange={event => setDisplayName(event.target.value)} placeholder="How should we address you?"/></div>
-          <div className="field"><label htmlFor="participant-age">Your age (18 or older)</label><input id="participant-age" type="number" min="18" max="120" inputMode="numeric" value={age} onChange={event => setAge(event.target.value)} placeholder="Age in years"/></div>
+          <div className="field"><label htmlFor="participant-age">Your age</label><input id="participant-age" type="number" min="1" max="120" inputMode="numeric" value={age} onChange={event => setAge(event.target.value)} placeholder="Age in years"/></div>
           <div className="field"><label htmlFor="speech-condition">Speech or accessibility needs (optional)</label><select id="speech-condition" value={speechCondition} onChange={event => setSpeechCondition(event.target.value)}>
             <option value="prefer-not-to-say">Prefer not to say</option>
             <option value="cerebral-palsy">Cerebral palsy</option>
@@ -468,16 +472,16 @@ export function SautiDashboard() {
             <p><strong>Important.</strong> Consent does not replace legal registration or other data protection obligations. Contact the project team to exercise access, correction and withdrawal rights.</p>
           </section>
           <div className="field"><label htmlFor="retention">Keep my voice clips for</label><select id="retention" value={retentionDays} onChange={event => setRetentionDays(Number(event.target.value))}>{RETENTION_OPTIONS.map(days => <option key={days} value={days}>{days} days</option>)}</select></div>
-          <label className="permission-card"><input type="checkbox" checked={termsAccepted} onChange={event => setTermsAccepted(event.target.checked)}/><span><strong>I have read and agree to the voice data terms</strong><small>This is my clear and informed permission to keep my voice clips for the period I chose.</small></span></label>
-          <label className="permission-card"><input type="checkbox" checked={ageOk} onChange={event => setAgeOk(event.target.checked)}/><span><strong>I confirm I am 18 or older</strong><small>Participation by children needs a separate verified guardian consent flow, which is not enabled in this pilot.</small></span></label>
-          <label className="permission-card"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)}/><span><strong>Store the voice samples I deliberately record</strong><small>Samples are sent to the private speech service and linked to this profile. You can delete the profile later.</small></span></label>
-          <label className="permission-card secondary-permission"><input type="checkbox" checked={improvementConsent} onChange={event => setImprovementConsent(event.target.checked)}/><span><strong>Consider recordings I approve for a future model update</strong><small>This does not switch models automatically. A new version must pass separate checks before activation.</small></span></label>
-          {!permissionReady && <p className="inline-note">Enter your name and adult age, review the terms, and obtain secure pilot access from the research team before recording.</p>}
-          <div className="card-actions"><button type="button" disabled={!permissionReady} onClick={() => goTo(3)}>Continue to voice samples <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => goTo(1)}>Back</button></div>
+          <label className="permission-card"><input type="checkbox" checked={termsAccepted && consent} onChange={event => { setTermsAccepted(event.target.checked); setConsent(event.target.checked); }}/><span><strong>I agree to record and privately store the voice clips I choose to make</strong><small>I have reviewed the voice data terms above. I can withdraw consent and delete my recordings.</small></span></label>
+          <details className="advanced-settings"><summary>Optional research permission</summary><label className="check-row"><input type="checkbox" checked={improvementConsent} onChange={event => setImprovementConsent(event.target.checked)}/><span><strong>Consider my approved recordings for a future model update</strong><small>Optional. No model changes automatically.</small></span></label></details>
+          {age && !eligibleAge && <p className="inline-note">Under 18? You can explore the next step, but recording requires verified parent or guardian consent. This is not yet available in the pilot.</p>}
+          {!canContinue && <p className="inline-note">Enter your name and age, then agree to the voice data terms to continue.</p>}
+          <div className="card-actions"><button type="button" disabled={!canContinue} onClick={() => goTo(3)}>Continue to voice samples <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => goTo(1)}>Back</button></div>
         </div>
 
         <div hidden={step !== 3}>
           <div className="section-heading"><Icon>●</Icon><div><p className="step-kicker">Step 3 of 5</p><h2>Teach Sauti your voice</h2></div></div>
+          {!permissionReady && <p className="inline-note" role="status">{!eligibleAge ? 'Voice recording is not available for participants under 18 until a verified guardian consent process is in place.' : !userId.trim() || !userToken.trim() ? 'You can explore this step. To record, ask the research team to activate your secure pilot account. No recording will be uploaded until then.' : 'Review your consent and privacy contact before recording.'}</p>}
           <div className="segmented language-switch"><button type="button" className={language === 'en-KE' ? 'selected' : ''} aria-pressed={language === 'en-KE'} onClick={() => setLanguage('en-KE')}>English</button><button type="button" className={language === 'sw-KE' ? 'selected' : ''} aria-pressed={language === 'sw-KE'} onClick={() => setLanguage('sw-KE')}>Kiswahili</button></div>
           <div className="field"><label htmlFor="intent">Command to practise</label><select id="intent" value={intent} onChange={event => setIntent(event.target.value as Intent)}>{intentOptions.map(command => <option key={command} value={command}>{labelFor(command, language)}</option>)}</select></div>
           <div className="phrase-card"><span aria-hidden="true">◖))</span><strong>{labelFor(intent, language)}</strong></div>

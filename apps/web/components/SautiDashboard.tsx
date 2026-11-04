@@ -77,7 +77,7 @@ export function SautiDashboard() {
   const [chosen, setChosen] = useState<Intent[]>(COMMANDS);
   const [consent, setConsent] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [retentionDays, setRetentionDays] = useState<number>(90);
+  const retentionDays = 365;
   const [readSteps, setReadSteps] = useState(false);
   const [hasClip, setHasClip] = useState(false);
   const [pendingClip, setPendingClip] = useState<Blob | null>(null);
@@ -360,7 +360,12 @@ export function SautiDashboard() {
         clipUrl.current = URL.createObjectURL(audio);
         setHasClip(true);
         setPendingClip(audio);
-        setStatus('Recording complete. Listen to your voice, then choose Save or Record again. Nothing has been uploaded.');
+        if (journeyVariant === 'c') {
+          await processAudio(audio);
+          setPendingClip(null);
+        } else {
+          setStatus('Recording complete. Listen to your voice, then choose Save or Record again. Nothing has been uploaded.');
+        }
       } else {
         await processAudio(audio);
       }
@@ -533,19 +538,19 @@ export function SautiDashboard() {
             <div className="field"><label htmlFor="user">Pilot user ID</label><input id="user" autoComplete="off" value={userId} onChange={event => setUserId(event.target.value)} placeholder="Provided by the research team"/></div>
             <div className="field"><label htmlFor="code">Pilot access token</label><input id="code" type="password" autoComplete="off" value={userToken} onChange={event => setUserToken(event.target.value)} placeholder="Not saved in this browser"/></div>
           </details>
-          <section className="terms-box" tabIndex={0} role="region" aria-label={'Voice data terms, version ' + TERMS_VERSION}>
+          <details className="terms-disclosure"><summary>Read full privacy terms</summary><section className="terms-box" tabIndex={0} role="region" aria-label={'Voice data terms, version ' + TERMS_VERSION}>
             <h3>Voice data terms <small>(version {TERMS_VERSION})</small></h3>
             <p><strong>What we keep.</strong> The short voice clips you choose to record, the command each clip is for, its language and tone (calm, happy or frustrated), and your profile ID.</p>
             <p><strong>Why.</strong> To build and evaluate your personal command recognizer and run your approved commands. Separate optional permission covers future improvements; we do not use clips for advertising or sell voice recordings.</p>
-            <p><strong>How long.</strong> Each clip is scheduled for deletion after the selected period, subject to the retention sweep. Your personal model remains until you delete your profile. You may withdraw consent and request deletion sooner.</p>
+            <p><strong>How long.</strong> Each clip is scheduled for deletion after 365 days, subject to the retention sweep. Your personal model remains until you delete your profile. You may withdraw consent and request deletion sooner.</p>
             <p><strong>Where.</strong> Clips are encrypted in private storage. Ask the project team where its current server is hosted and whether cross border transfers apply before giving consent.</p>
             <p><strong>Your rights.</strong> You can see, correct or delete your data, and withdraw this permission at any time using Delete my voice data. You may also complain to the Office of the Data Protection Commissioner.</p>
             <p><strong>Contact.</strong> {TERMS_CONTACT || 'No privacy contact configured yet. Enrollment is unavailable.'}</p>
             <p><strong>Important.</strong> Consent does not replace legal registration or other data protection obligations. Contact the project team to exercise access, correction and withdrawal rights.</p>
-          </section>
-          <div className="field"><label htmlFor="retention">Keep my voice clips for</label><select id="retention" value={retentionDays} onChange={event => setRetentionDays(Number(event.target.value))}>{RETENTION_OPTIONS.map(days => <option key={days} value={days}>{days} days</option>)}</select></div>
+          </section></details>
+          <p className="inline-note">Your recordings are scheduled for deletion after one year, or sooner if you delete your voice profile. Review the full privacy terms above.</p>
           <label className="permission-card"><input type="checkbox" checked={termsAccepted && consent} onChange={event => { setTermsAccepted(event.target.checked); setConsent(event.target.checked); }}/><span><strong>I agree to record and privately store the voice clips I choose to make</strong><small>I have reviewed the voice data terms above. I can withdraw consent and delete my recordings.</small></span></label>
-          <details className="advanced-settings"><summary>Optional research permission</summary><label className="check-row"><input type="checkbox" checked={improvementConsent} onChange={event => setImprovementConsent(event.target.checked)}/><span><strong>Consider my approved recordings for a future model update</strong><small>Optional. No model changes automatically.</small></span></label></details>
+          <details className="advanced-settings"><summary>Optional future model improvement consent</summary><label className="check-row"><input type="checkbox" checked={improvementConsent} onChange={event => setImprovementConsent(event.target.checked)}/><span><strong>Consider my approved recordings for a future model update</strong><small>Optional. No model changes automatically.</small></span></label></details>
           {age && !eligibleAge && <p className="inline-note">Under 18? You can explore the next step, but recording requires verified parent or guardian consent. This is not yet available in the pilot.</p>}
           {!canContinue && <p className="inline-note">Enter your name and age, then agree to the voice data terms to continue.</p>}
           <div className="card-actions"><button type="button" disabled={!canContinue || accountBusy} onClick={() => void continueToVoiceSamples()}>{accountBusy ? 'Setting up your profile…' : 'Continue to voice samples'} <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => goTo(1)}>Back</button></div>
@@ -562,8 +567,8 @@ export function SautiDashboard() {
           <p className="comfort-copy">Use a phrase that feels comfortable to you.</p>
           <div className="sample-row"><strong>{target ? 'Example ' + Math.min(saved + 1, target) + ' of ' + target : 'Optional training example'}</strong><div className="sample-dots" aria-label={saved + ' of ' + target + ' saved'}>{Array.from({ length: Math.max(target, 1) }, (_, index) => <span className={index < saved ? 'done' : index === saved ? 'current' : ''} key={index}/>)}</div></div>
           <RecordingButtons mode="enroll"/>
-          <div className="record-secondary"><button className="soft-button" type="button" disabled={!hasClip} onClick={() => playClip()}>▶ Listen</button><button className="soft-button" type="button" disabled={!pendingClip || state === 'processing'} onClick={() => void savePendingClip()}>✓ Save voice sample</button><button className="soft-button" type="button" disabled={state !== 'idle'} onClick={() => { setPendingClip(null); setHasClip(false); if (clipUrl.current) { URL.revokeObjectURL(clipUrl.current); clipUrl.current = ''; } setStatus('Ready to record again. Unsaved audio was discarded.'); }}>↻ Record again</button></div>
-          <p className="break-copy">Take a break whenever you need. Your recording will only be uploaded after you choose Save.</p>
+          <div className="record-secondary">{journeyVariant !== 'c' && <><button className="soft-button" type="button" disabled={!hasClip} onClick={() => playClip()}>▶ Listen</button><button className="soft-button" type="button" disabled={!pendingClip || state === 'processing'} onClick={() => void savePendingClip()}>✓ Save voice sample</button></>}<button className="soft-button" type="button" disabled={state !== 'idle'} onClick={() => { setPendingClip(null); setHasClip(false); if (clipUrl.current) { URL.revokeObjectURL(clipUrl.current); clipUrl.current = ''; } setStatus('Ready to record another example. Previously saved recordings remain stored.'); }}>↻ Record another example</button></div>
+          <p className="break-copy">{journeyVariant === 'c' ? 'Your recording is saved automatically when you finish speaking, using the consent you gave. Take a break whenever you need.' : 'Take a break whenever you need. Your recording will only be uploaded after you choose Save.'}</p>
           {journeyVariant === 'c' && <details className="preferences-advanced inline-recording-options"><summary>Need more speaking time or a different recording button?</summary><div className="settings-grid"><div className="field"><label htmlFor="clip-pace">Clip length</label><select id="clip-pace" value={maxSeconds} onChange={event => setMaxSeconds(event.target.value)}><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="8">8 seconds</option><option value="15">15 seconds</option></select></div><div className="field"><label htmlFor="record-style">Recording control</label><select id="record-style" value={listenMethod} onChange={event => setListenMethod(event.target.value as 'toggle' | 'separate')}><option value="toggle">One start and stop button</option><option value="separate">Separate start and stop buttons</option></select></div></div><p>Choose the setting that feels comfortable to you. There is no time limit to decide.</p></details>}
           <details className="calibration-card" aria-label="Technical training progress">
             <summary>More about training progress</summary>
@@ -583,13 +588,13 @@ export function SautiDashboard() {
         </div>
 
         <div hidden={step !== 4}>
-          <div className="section-heading"><Icon tone="blue">✓</Icon><div><p className="step-kicker">Step 4 of 5</p><h2>Check recognition</h2></div></div>
+          <div className="section-heading"><Icon tone="blue">✓</Icon><div><p className="step-kicker">Step 4 of 5</p><h2>{journeyVariant === 'c' ? 'Test with your voice' : 'Check recognition'}</h2></div></div>
           <p className="lead-copy">Explore how Sauti can respond. A personalized voice model must be trained and validated before it can recognize your commands.</p>
-          {journeyVariant === 'c' && <div className="model-readiness" aria-label="Voice recognition readiness"><strong>{!modelStatusChecked ? 'Checking recognition availability' : speechServiceMode === 'prototype' ? 'Experimental speech recognition' : 'Your voice model is not ready yet'}</strong><p>{speechServiceMode === 'prototype' ? 'The speech service can attempt recognition, but it may reject your voice until your profile is validated.' : 'Your voice samples have been saved. You can explore the commands below while the research team prepares and evaluates your personal model.'}</p></div>}
+          {journeyVariant === 'c' && <div className="model-readiness" aria-label="Voice recognition readiness"><strong>{!modelStatusChecked ? 'Checking personalization status' : speechServiceMode === 'prototype' ? 'Experimental speech recognition available' : 'Personalizing your experience'}</strong><p>{speechServiceMode === 'prototype' ? 'The speech service can attempt recognition, but it may reject your voice until your profile is validated.' : 'Your voice samples have been saved. Training and validation must finish before your personal model can be marked ready. This status does not represent a timed progress estimate.'}</p></div>}
           <RecordingButtons mode="recognize"/>
           {prediction && <div className={'prediction-card ' + prediction.status}><span className="prediction-icon">{prediction.status === 'accepted' ? '✓' : '!'}</span><div><strong>{prediction.status === 'accepted' ? labelFor(prediction.intent, language) : 'Command rejected safely'}</strong><small>{prediction.reason || 'Accepted by the active personal model.'}</small></div></div>}
           <div className="toolkit-check">
-            <div className="toolkit-heading"><Icon>AI</Icon><div><h3>Try a command without speaking</h3><p>Choose a button to see how the accessibility controls work. This does not train your model or upload audio.</p></div></div>
+            <div className="toolkit-heading"><Icon>AI</Icon><div><h3>{journeyVariant === 'c' ? 'Optional demo without speaking' : 'Try a command without speaking'}</h3><p>Choose a button to see how the accessibility controls work. This does not train your model or upload audio.</p></div></div>
             <div className="controls">{TEST_COMMANDS.map(command => <button type="button" className="soft-button" key={command.utterance} onClick={() => void runToolkit(command.utterance)}>{command.label}</button>)}</div>
             <button type="button" className="text-button" disabled={!speaking} onClick={silence}>Stop speaking</button>
             <div id="controlled-site" className="content" aria-label="Demo article under toolkit control"><h3>Welcome to the accessible demo</h3><p>Here is a real application surface. The official toolkit Controller is responsible for actions here.</p><h3>Our goal</h3><p>The co-designer uses preferred speech to navigate in Kenyan English or Kiswahili.</p><h3>Accessibility matters</h3><p>The person chooses commands. Uncertain predictions are rejected and feedback stays available to screen readers.</p><h3>A longer page</h3><p>This section gives scroll commands a real distance to move inside the article.</p><p>Text size, contrast, and motion settings are applied here by the toolkit DOM receiver.</p><p>The end of the demo article is below this line.</p></div>
@@ -608,7 +613,7 @@ export function SautiDashboard() {
           </> : <>
           <p className="lead-copy">Your recordings are safely linked to your voice profile. Sauti can help you explore accessible commands while your model is prepared.</p>
           <div className="journey-success"><span aria-hidden="true">✓</span><div><strong>Your voice examples are saved.</strong><p>You can return to record more, practise the demo, or delete your voice data at any time.</p></div></div>
-          <div className="model-readiness"><strong>Browser extension setup is experimental</strong><p>The extension is not paired automatically and requires the research team to configure access. You do not need to do this to finish this journey.</p></div>
+          <div className="model-readiness"><strong>Browser extension installation is not available yet</strong><p>The extension must be published and securely paired before one button installation can work. The research team can configure experimental access. You do not need this to finish your voice setup.</p></div>
           <details className="advanced-settings"><summary>Research team: technical extension setup</summary>
             <ol className="extension-steps"><li>Build and load the extension from <code>apps/extension/dist</code>.</li><li>Open its side panel and paste this PWA origin and profile ID.</li><li>Enter a separately provisioned pilot user ID and token. Never share a participant browser session.</li><li>Enable only the website you want Sauti to control.</li></ol>
             <button type="button" onClick={() => void copyExtensionSetup()}>Copy extension setup</button>
@@ -618,7 +623,7 @@ export function SautiDashboard() {
         </div>
       </section>
 
-      <aside className="side-stack">
+      <aside className="side-stack"><details className="profile-details"><summary>My voice and privacy</summary>
         <section className="side-card privacy-card">
           <h2>Your voice, your choice</h2>
           <div className="privacy-summary"><Icon>▰</Icon><p>Private recordings linked to your profile</p></div>
@@ -637,7 +642,7 @@ export function SautiDashboard() {
           <button type="button" className="soft-button full-width" disabled={!prediction} onClick={() => goTo(5)}>Connect extension</button>
           <small>Available after you run a recognition check.</small>
         </section>
-      </aside>
+      </details></aside>
     </div>
 
     <div role="status" aria-live="polite" className="global-status">{status}</div>

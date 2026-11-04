@@ -8,6 +8,18 @@ import { createController, createDomReceiver } from '@sauti/shared/controller';
 import { capReadPort } from '@sauti/shared/page-text';
 
 const COMMANDS: Intent[] = ['SCROLL_DOWN', 'SCROLL_UP', 'GO_BACK', 'READ_PAGE', 'UNDO'];
+/** Version of the consent text below. Bump it whenever the wording changes, so each clip records what was agreed. */
+const TERMS_VERSION = '2026-11-v1';
+/** TEMPLATE: have a Kenyan data protection lawyer review this text and set a real contact before real users enrol. */
+const TERMS_CONTACT = process.env.NEXT_PUBLIC_SAUTI_PRIVACY_CONTACT?.trim() || '';
+const RETENTION_OPTIONS = [30, 90, 180, 365] as const;
+const TONES = [
+  { id: 'neutral', label: 'Calm', prompt: 'in your normal, calm voice' },
+  { id: 'happy', label: 'Happy', prompt: 'as if you are happy or pleased' },
+  { id: 'frustrated', label: 'Frustrated', prompt: 'as if you are a little frustrated' },
+] as const;
+type ToneId = (typeof TONES)[number]['id'];
+const ROLE_LABEL: Record<'train' | 'calibration' | 'test', string> = { train: 'Training', calibration: 'Calibration', test: 'Untouched test' };
 const STEPS = ['Your preferences', 'Your permission', 'Voice samples', 'Check recognition', 'Connect extension'] as const;
 const TEST_COMMANDS = [
   { utterance: 'scroll down', label: 'scroll down' },
@@ -50,6 +62,12 @@ export function SautiDashboard() {
   const [sessionRole, setSessionRole] = useState<SessionRole>('train');
   const [chosen, setChosen] = useState<Intent[]>(COMMANDS);
   const [consent, setConsent] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [ageOk, setAgeOk] = useState(false);
+  const [retentionDays, setRetentionDays] = useState<number>(90);
+  const [readSteps, setReadSteps] = useState(false);
+  const [hasClip, setHasClip] = useState(false);
+  const [roleSessions, setRoleSessions] = useState<Record<SessionRole, string>>({ train: '', calibration: '', test: '' });
   const [improvementConsent, setImprovementConsent] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [deleteArmed, setDeleteArmed] = useState(false);
@@ -66,6 +84,8 @@ export function SautiDashboard() {
   const recordMode = useRef<RecordMode>('enroll');
   const busy = useRef(false);
   const speakGen = useRef(0);
+  const clipUrl = useRef('');
+  const clipAudio = useRef<HTMLAudioElement | null>(null);
   const controller = useRef<ToolkitController | null>(null);
   const liveCreds = useRef({ userId: '', token: '' });
   const speechBind = useRef({ href: '', userId: '', token: '' });
@@ -74,14 +94,32 @@ export function SautiDashboard() {
   const intentOptions = useMemo(() => [...chosen, 'UNKNOWN' as Intent], [chosen]);
   const target = sampleTarget(sessionRole, intent);
   const saved = counts[sampleKey(sessionRole, language, intent)] || 0;
-  const permissionReady = Boolean(userId.trim() && userToken.trim() && consent);
+  function roleProgress(role: SessionRole) {
+    const rows = chosen.map(command => ({ command, have: counts[sampleKey(role, language, command)] || 0, need: sampleTarget(role, command) }));
+    const unknownNeed = sampleTarget(role, 'UNKNOWN');
+    const unknownHave = counts[sampleKey(role, language, 'UNKNOWN')] || 0;
+    const done = chosen.length >= 3 && rows.every(row => row.have >= row.need) && unknownHave >= unknownNeed;
+    return { rows, unknownHave, unknownNeed, done };
+  }
+  const progress = { train: roleProgress('train'), calibration: roleProgress('calibration'), test: roleProgress('test') };
+  const readyToTrain = progress.train.done && progress.calibration.done && progress.test.done;
+  const trainCommand = 'python -m sauti_ml.train --profile-id ' + profileId + ' --calibration-session ' + roleSessions.calibration + ' --test-session ' + roleSessions.test;
+  const nextTone = TONES[saved % TONES.length];
+  const permissionReady = Boolean(userId.trim() && userToken.trim() && consent && termsAccepted && ageOk && TERMS_CONTACT);
 
   useEffect(() => {
     const id = window.localStorage.getItem('sauti-demo-profile') || crypto.randomUUID();
     window.localStorage.setItem('sauti-demo-profile', id);
     setProfileId(id);
-    sessionId.current = crypto.randomUUID();
-    setSessionShown(sessionId.current);
+    let saved: Record<SessionRole, string> | null = null;
+    try { saved = JSON.parse(window.localStorage.getItem('sauti-role-sessions') || 'null'); } catch { saved = null; }
+    const fresh = (value: unknown) => (typeof value === 'string' && /^[0-9a-f-]{36}$/i.test(value) ? value : crypto.randomUUID());
+    const sessions: Record<SessionRole, string> = { train: fresh(saved?.train), calibration: fresh(saved?.calibration), test: fresh(saved?.test) };
+    window.localStorage.setItem('sauti-role-sessions', JSON.stringify(sessions));
+    setRoleSessions(sessions);
+    sessionId.current = sessions.train;
+    setSessionShown(sessions.train);
+    try { setCounts(JSON.parse(window.localStorage.getItem('sauti-counts') || '{}')); } catch { /* start fresh */ }
     void fetch('/api/health', { cache: 'no-store' })
       .then(response => response.json())
       .then(body => setBackendConfigured(Boolean(body.speech_api_configured)))
@@ -92,8 +130,40 @@ export function SautiDashboard() {
       control: capReadPort(createDomReceiver(root, { scrollTarget: root }), root),
       operator: { abilityModel: { supportAreas: ['motor'] } },
     });
-    return () => { recording.current?.cancel(); stopSpeaking(); controller.current = null; };
+    return () => { recording.current?.cancel(); stopSpeaking(); clipAudio.current?.pause(); if (clipUrl.current) URL.revokeObjectURL(clipUrl.current); controller.current = null; };
   }, []);
+
+  useEffect(() => { window.localStorage.setItem('sauti-counts', JSON.stringify(counts)); }, [counts]);
+
+  /** Spoken guidance for each step, so a person never has to read to carry on. */
+  function stepScript(forStep: Step): string {
+    if (forStep === 1) return 'Step 1 of 5. Your preferences. Choose your language and the commands you want to practise, then press Save and continue.';
+    if (forStep === 2) return 'Step 2 of 5. Your permission. Read the voice data terms, choose how long we may keep your clips, tick the boxes to agree, then continue.';
+    if (forStep === 3) {
+      const tone = TONES[saved % TONES.length];
+      return target
+        ? 'Step 3 of 5. Teach Sauti your voice. Example ' + Math.min(saved + 1, target) + ' of ' + target + ' for ' + labelFor(intent, language) + '. Press start, then say your phrase ' + tone.prompt + '.'
+        : 'Step 3 of 5. Say something unrelated to any command, such as a name or a different sentence.';
+    }
+    if (forStep === 4) return 'Step 4 of 5. Check recognition. Press start and say one of your commands. Sauti only acts when it is sure.';
+    return 'Step 5 of 5. Connect the browser extension, so your commands work on other websites you choose.';
+  }
+
+  function hearStep() {
+    const gen = ++speakGen.current;
+    stopSpeaking();
+    const started = speakText(stepScript(step), language, { onend: () => { if (speakGen.current === gen) setSpeaking(false); }, onerror: () => { if (speakGen.current === gen) setSpeaking(false); } });
+    setSpeaking(started);
+    if (!started) setStatus('Spoken guidance is unavailable in this browser. The same words are shown on screen.');
+  }
+
+  useEffect(() => {
+    if (!readSteps) return;
+    const gen = ++speakGen.current;
+    stopSpeaking();
+    speakText(stepScript(step), language, { onend: () => { if (speakGen.current === gen) setSpeaking(false); } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readSteps, step, saved, intent, sessionRole, language]);
 
   function silence() {
     speakGen.current += 1;
@@ -109,11 +179,20 @@ export function SautiDashboard() {
     setStep(next);
   }
 
+  function selectRoleSession(role: SessionRole, sessions = roleSessions) {
+    sessionId.current = sessions[role];
+    setSessionShown(sessions[role]);
+  }
+
   function newSession(message = true) {
     const id = crypto.randomUUID();
+    const next = { ...roleSessions, [sessionRole]: id };
+    setRoleSessions(next);
+    setCounts(current => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(sessionRole + '|'))));
+    window.localStorage.setItem('sauti-role-sessions', JSON.stringify(next));
     sessionId.current = id;
     setSessionShown(id);
-    if (message) setStatus('A new recording session is ready. Earlier clips stay in their original session.');
+    if (message) setStatus('A new ' + ROLE_LABEL[sessionRole].toLowerCase() + ' session is ready. Earlier clips stay in their original session.');
   }
 
   async function runToolkit(utterance: string) {
@@ -140,11 +219,18 @@ export function SautiDashboard() {
     form.append('audio', audio, 'utterance.wav');
     form.append('profile_id', profileId);
     form.append('language', language);
+    if (clipUrl.current) URL.revokeObjectURL(clipUrl.current);
+    clipUrl.current = URL.createObjectURL(audio); // stays in this browser tab. Never uploaded for playback.
+    setHasClip(true);
     if (mode === 'enroll') {
       form.append('intent', intent);
       form.append('session_id', sessionId.current);
       form.append('session_role', sessionRole);
-      form.append('consent', String(consent));
+      form.append('consent', String(consent && termsAccepted && ageOk));
+      form.append('tone', TONES[saved % TONES.length].id satisfies ToneId);
+      form.append('retention_days', String(retentionDays));
+      form.append('terms_version', TERMS_VERSION);
+      form.append('improvement_consent', String(improvementConsent));
     }
     const response = await fetch(mode === 'enroll' ? '/api/enroll' : '/api/recognize', {
       method: 'POST',
@@ -196,8 +282,9 @@ export function SautiDashboard() {
       setStatus('Open Your permission and enter your personal user ID and access token first.');
       return;
     }
-    if (mode === 'enroll' && !consent) {
-      setStatus('Explicit permission is required before a voice sample can be stored.');
+    if (mode === 'enroll' && !permissionReady) {
+      setStatus('Finish the voice data terms, confirm your age, and enter your credentials before recording.');
+      goTo(2);
       return;
     }
     recordMode.current = mode;
@@ -225,6 +312,15 @@ export function SautiDashboard() {
     return <div className="record-actions"><button type="button" className="record-button" disabled={state !== 'idle'} onClick={() => void beginRecording(mode)}>● Start voice recording</button><button type="button" className="soft-button" disabled={state !== 'listening'} onClick={() => void finishRecording()}>■ Stop and process voice</button></div>;
   }
 
+  function playClip() {
+    if (!clipUrl.current) return;
+    clipAudio.current?.pause();
+    const audio = new Audio(clipUrl.current);
+    clipAudio.current = audio;
+    audio.onerror = () => setStatus('This browser could not play the clip back.');
+    void audio.play().catch(() => setStatus('This browser blocked playback. Press Listen again.'));
+  }
+
   async function deleteProfile() {
     const response = await fetch('/api/profile?profile_id=' + encodeURIComponent(profileId), {
       method: 'DELETE',
@@ -234,6 +330,9 @@ export function SautiDashboard() {
     if (!response.ok) { setStatus(body.detail || body.error || 'Deletion failed.'); return; }
     setDeleteArmed(false);
     setCounts({});
+    window.localStorage.removeItem('sauti-counts');
+    if (clipUrl.current) { URL.revokeObjectURL(clipUrl.current); clipUrl.current = ''; }
+    setHasClip(false);
     setPrediction(null);
     setStatus(body.deleted ? 'Deleted ' + body.recordings_removed + ' recording(s) and the private model for this profile.' : 'No stored recordings were found.');
   }
@@ -273,6 +372,7 @@ export function SautiDashboard() {
       </nav>
 
       <section className="main-card">
+        <div className="hear-step"><button type="button" className="soft-button" onClick={hearStep}>🔊 Hear this step</button><button type="button" className="text-button" disabled={!speaking} onClick={silence}>Stop speaking</button></div>
         <div hidden={step !== 1}>
           <div className="section-heading"><Icon>⚙</Icon><div><p className="step-kicker">Step 1 of 5</p><h2>Your preferences</h2></div></div>
           <p className="lead-copy">Choose the language, commands, and recording control that feel useful and comfortable.</p>
@@ -282,6 +382,7 @@ export function SautiDashboard() {
             if (!event.target.checked && intent === command) setIntent('UNKNOWN');
           }}/><span className="command-check">✓</span><span>{labelFor(command, language)}</span></label>)}</fieldset>
           <div className="settings-grid"><div className="field"><label htmlFor="listen">Recording control</label><select id="listen" value={listenMethod} onChange={event => setListenMethod(event.target.value as 'toggle' | 'separate')}><option value="toggle">One start and stop button</option><option value="separate">Separate start and stop buttons</option></select></div><div className="field"><label htmlFor="maxsec">Clip length</label><select id="maxsec" value={maxSeconds} onChange={event => setMaxSeconds(event.target.value)}><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="8">8 seconds</option></select></div></div>
+          <label className="check-row"><input type="checkbox" checked={readSteps} onChange={event => { setReadSteps(event.target.checked); if (!event.target.checked) silence(); }}/><span><strong>Read each step aloud</strong><small>Sauti speaks the instructions for every step. Nothing is recorded while it speaks.</small></span></label>
           <label className="check-row"><input type="checkbox" checked={autoStop} onChange={event => setAutoStop(event.target.checked)}/><span><strong>Stop automatically</strong><small>Recording ends at the selected clip length.</small></span></label>
           <div className="card-actions"><button type="button" onClick={() => goTo(2)}>Save and continue <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => setStatus('Your preferences remain on this screen until you continue.')}>Pause setup</button></div>
         </div>
@@ -291,9 +392,22 @@ export function SautiDashboard() {
           <p className="lead-copy">Your voice is personal data. Sauti stores a clip only after you deliberately start recording and give permission.</p>
           <div className="field"><label htmlFor="user">Personal user ID</label><input id="user" autoComplete="off" value={userId} onChange={event => setUserId(event.target.value)} placeholder="Your account UUID"/></div>
           <div className="field"><label htmlFor="code">Personal access token</label><input id="code" type="password" autoComplete="off" value={userToken} onChange={event => setUserToken(event.target.value)} placeholder="Not saved in this browser"/></div>
+          <section className="terms-box" tabIndex={0} role="region" aria-label={'Voice data terms, version ' + TERMS_VERSION}>
+            <h3>Voice data terms <small>(version {TERMS_VERSION})</small></h3>
+            <p><strong>What we keep.</strong> The short voice clips you choose to record, the command each clip is for, its language and tone (calm, happy or frustrated), and your profile ID.</p>
+            <p><strong>Why.</strong> To build and evaluate your personal command recognizer and run your approved commands. Separate optional permission covers future improvements; we do not use clips for advertising or sell voice recordings.</p>
+            <p><strong>How long.</strong> Each clip is scheduled for deletion after the selected period, subject to the retention sweep. Your personal model remains until you delete your profile. You may withdraw consent and request deletion sooner.</p>
+            <p><strong>Where.</strong> Clips are encrypted in private storage. Ask the project team where its current server is hosted and whether cross border transfers apply before giving consent.</p>
+            <p><strong>Your rights.</strong> You can see, correct or delete your data, and withdraw this permission at any time using Delete my voice data. You may also complain to the Office of the Data Protection Commissioner.</p>
+            <p><strong>Contact.</strong> {TERMS_CONTACT || 'No privacy contact configured yet. Enrollment is unavailable.'}</p>
+            <p><strong>Important.</strong> Consent does not replace legal registration or other data protection obligations. Contact the project team to exercise access, correction and withdrawal rights.</p>
+          </section>
+          <div className="field"><label htmlFor="retention">Keep my voice clips for</label><select id="retention" value={retentionDays} onChange={event => setRetentionDays(Number(event.target.value))}>{RETENTION_OPTIONS.map(days => <option key={days} value={days}>{days} days</option>)}</select></div>
+          <label className="permission-card"><input type="checkbox" checked={termsAccepted} onChange={event => setTermsAccepted(event.target.checked)}/><span><strong>I have read and agree to the voice data terms</strong><small>This is my clear and informed permission to keep my voice clips for the period I chose.</small></span></label>
+          <label className="permission-card"><input type="checkbox" checked={ageOk} onChange={event => setAgeOk(event.target.checked)}/><span><strong>I confirm I am 18 or older</strong><small>Participation by children needs a separate verified guardian consent flow, which is not enabled in this pilot.</small></span></label>
           <label className="permission-card"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)}/><span><strong>Store the voice samples I deliberately record</strong><small>Samples are sent to the private speech service and linked to this profile. You can delete the profile later.</small></span></label>
           <label className="permission-card secondary-permission"><input type="checkbox" checked={improvementConsent} onChange={event => setImprovementConsent(event.target.checked)}/><span><strong>Consider recordings I approve for a future model update</strong><small>This does not switch models automatically. A new version must pass separate checks before activation.</small></span></label>
-          {!permissionReady && <p className="inline-note">Add your personal credentials and storage permission before recording.</p>}
+          {!permissionReady && <p className="inline-note">Add your credentials, agree to the terms, confirm your age, and ensure the project has a privacy contact configured before recording.</p>}
           <div className="card-actions"><button type="button" disabled={!permissionReady} onClick={() => goTo(3)}>Continue to voice samples <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => goTo(1)}>Back</button></div>
         </div>
 
@@ -302,12 +416,26 @@ export function SautiDashboard() {
           <div className="segmented language-switch"><button type="button" className={language === 'en-KE' ? 'selected' : ''} aria-pressed={language === 'en-KE'} onClick={() => setLanguage('en-KE')}>English</button><button type="button" className={language === 'sw-KE' ? 'selected' : ''} aria-pressed={language === 'sw-KE'} onClick={() => setLanguage('sw-KE')}>Kiswahili</button></div>
           <div className="field"><label htmlFor="intent">Command to practise</label><select id="intent" value={intent} onChange={event => setIntent(event.target.value as Intent)}>{intentOptions.map(command => <option key={command} value={command}>{labelFor(command, language)}</option>)}</select></div>
           <div className="phrase-card"><span aria-hidden="true">◖))</span><strong>{labelFor(intent, language)}</strong></div>
+          {target > 0 && <p className="tone-prompt"><span className={'tone-chip tone-' + nextTone.id}>{nextTone.label}</span> Say your phrase {nextTone.prompt}.</p>}
+          {intent === 'UNKNOWN' && <p className="tone-prompt">Say something unrelated to any command, such as a name or a different sentence.</p>}
           <p className="comfort-copy">Use a phrase that feels comfortable to you.</p>
           <div className="sample-row"><strong>{target ? 'Example ' + Math.min(saved + 1, target) + ' of ' + target : 'Optional training example'}</strong><div className="sample-dots" aria-label={saved + ' of ' + target + ' saved'}>{Array.from({ length: Math.max(target, 1) }, (_, index) => <span className={index < saved ? 'done' : index === saved ? 'current' : ''} key={index}/>)}</div></div>
           <RecordingButtons mode="enroll"/>
-          <div className="record-secondary"><button className="soft-button" type="button" disabled>▶ Listen</button><button className="soft-button" type="button" onClick={() => setStatus('Record a fresh example. Existing samples remain stored in their session.')}>↻ Record again</button></div>
+          <div className="record-secondary"><button className="soft-button" type="button" disabled={!hasClip} onClick={() => playClip()}>▶ Listen</button><button className="soft-button" type="button" onClick={() => setStatus('Record a fresh example. Existing samples remain stored in their session.')}>↻ Record again</button></div>
           <p className="break-copy">Take a break whenever you need.</p>
-          <details className="advanced-settings"><summary>Session settings</summary><div className="settings-grid"><div className="field"><label htmlFor="role">Recording session</label><select id="role" value={sessionRole} onChange={event => { setSessionRole(event.target.value as SessionRole); newSession(false); }}><option value="train">Training</option><option value="calibration">Calibration</option><option value="test">Untouched test</option></select></div><div className="field"><label htmlFor="session">Session ID</label><input id="session" readOnly value={sessionShown}/></div></div><button type="button" className="soft-button" onClick={() => newSession()}>Start a new recording session</button><p>Use different sessions for training, calibration, and the untouched test. Include unrelated speech under Unknown speech.</p></details>
+          <section className="calibration-card" aria-label="Calibration progress">
+            <h3>Calibration progress</h3>
+            <p className="calibration-help">Record at least three examples per command for training, then two for calibration and two for the untouched test. Vary your speaking style naturally. These samples help evaluate your command recognizer; accuracy is not guaranteed.</p>
+            {(['train', 'calibration', 'test'] as SessionRole[]).map(role => <div className="calibration-row" key={role}>
+              <strong>{ROLE_LABEL[role]}</strong>
+              <span className={'state-pill ' + (progress[role].done ? 'ready' : 'pending')}>{progress[role].done ? 'Complete' : 'In progress'}</span>
+              <small>{progress[role].rows.map(row => labelFor(row.command, language) + ' ' + Math.min(row.have, row.need) + '/' + row.need).join(' · ')}{progress[role].unknownNeed ? ' · Unknown speech ' + Math.min(progress[role].unknownHave, progress[role].unknownNeed) + '/' + progress[role].unknownNeed : ''}</small>
+            </div>)}
+            {readyToTrain
+              ? <div className="train-box"><p><strong>All three sessions are complete.</strong> Open the Railway service, go to Console, and run this once to build your personal model:</p><code>{trainCommand}</code><button type="button" className="soft-button" onClick={() => void navigator.clipboard.writeText(trainCommand).then(() => setStatus('Training command copied.')).catch(() => setStatus('Copy was unavailable.'))}>Copy training command</button></div>
+              : <p className="inline-note">Keep recording until all three sessions show Complete.</p>}
+          </section>
+          <details className="advanced-settings"><summary>Session settings</summary><div className="settings-grid"><div className="field"><label htmlFor="role">Recording session</label><select id="role" value={sessionRole} onChange={event => { const role = event.target.value as SessionRole; setSessionRole(role); selectRoleSession(role); }}><option value="train">Training</option><option value="calibration">Calibration</option><option value="test">Untouched test</option></select></div><div className="field"><label htmlFor="session">Session ID</label><input id="session" readOnly value={sessionShown}/></div></div><button type="button" className="soft-button" onClick={() => newSession()}>Start a new recording session</button><p>Use different sessions for training, calibration, and the untouched test. Include unrelated speech under Unknown speech.</p></details>
           <div className="card-actions"><button type="button" onClick={() => goTo(4)}>Check recognition <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => setStatus('Setup paused. Your saved samples remain in private storage.')}>Pause setup</button></div>
         </div>
 

@@ -531,3 +531,72 @@ def test_sweep_removes_expired_clips_and_unauthorized_enroll_deletes_nothing(mon
     assert purge_expired_profiles() >= 1
     assert not audio.exists()
     assert purge_expired_profiles() == 0
+
+
+def test_enroll_stores_tone_retention_and_terms_and_purge_honours_it(monkeypatch, tmp_path):
+    import json, os, time
+    from sauti_ml.storage import load_manifest, purge_expired_folder, profile_dir
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('ALLOW_ENROLLMENT', 'true')
+    monkeypatch.setenv('SAUTI_RETENTION_DAYS', '30')
+    base = payload() | {'session_id': str(uuid4()), 'intent': 'SCROLL_DOWN', 'consent': 'true', 'session_role': 'train'}
+    ok = client.post('/v1/enroll', data=base | {'tone': 'happy', 'retention_days': '180', 'terms_version': '2026-11'},
+                     files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert ok.status_code == 200, ok.text
+    short = client.post('/v1/enroll', data=base | {'tone': 'neutral'},
+                        files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert short.status_code == 200
+    rows = load_manifest(base['profile_id'])
+    kept = next(r for r in rows if r.get('tone') == 'happy')
+    assert kept['retention_days'] == 180 and kept['terms_version'] == '2026-11' and kept['consented_at']
+    # Age every clip to 60 days: the 30-day default clip expires, the 180-day clip stays.
+    folder = profile_dir(base['profile_id'])
+    old = time.time() - 60 * 86400
+    for wav_file in (folder / 'audio').glob('*.wav'):
+        os.utime(wav_file, (old, old))
+    assert purge_expired_folder(folder) == 1
+    assert [r.get('tone') for r in load_manifest(base['profile_id'])] == ['happy']
+
+
+def test_enroll_rejects_unknown_tone_and_bad_retention(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('ALLOW_ENROLLMENT', 'true')
+    base = payload() | {'session_id': str(uuid4()), 'intent': 'SCROLL_DOWN', 'consent': 'true', 'session_role': 'train'}
+    for extra in ({'tone': 'angry-ish'}, {'retention_days': '99999'}):
+        resp = client.post('/v1/enroll', data=base | extra,
+                           files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+        assert resp.status_code == 422
+    assert not list(tmp_path.rglob('*.wav'))
+
+
+def test_required_terms_are_enforced_for_pilot(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('ALLOW_ENROLLMENT', 'true')
+    monkeypatch.setenv('SAUTI_REQUIRE_TERMS', 'true')
+    monkeypatch.setenv('SAUTI_PRIVACY_CONTACT', 'privacy@example.org')
+    monkeypatch.setenv('SAUTI_TERMS_VERSION', '2026-11-v1')
+    base = payload() | {'session_id': str(uuid4()), 'intent': 'SCROLL_DOWN', 'consent': 'true'}
+    for terms_version in (None, '2026-01-old'):
+        data = base | ({'terms_version': terms_version} if terms_version else {})
+        response = client.post('/v1/enroll', data=data, files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+        assert response.status_code == 403
+    accepted = client.post('/v1/enroll', data=base | {'terms_version': '2026-11-v1', 'improvement_consent': 'true'},
+                           files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert accepted.status_code == 200, accepted.text
+    from sauti_ml.storage import load_manifest
+    assert load_manifest(base['profile_id'])[0]['improvement_consent'] is True
+
+
+def test_pilot_rejects_enrollment_without_privacy_contact(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('ALLOW_ENROLLMENT', 'true')
+    monkeypatch.setenv('SAUTI_REQUIRE_TERMS', 'true')
+    monkeypatch.delenv('SAUTI_PRIVACY_CONTACT', raising=False)
+    data = payload() | {'session_id': str(uuid4()), 'intent': 'SCROLL_UP', 'consent': 'true', 'terms_version': '2026-11-v1'}
+    response = client.post('/v1/enroll', data=data, files={'audio': ('test.wav', wav(), 'audio/wav')}, headers=auth())
+    assert response.status_code == 503
+    assert not list(tmp_path.rglob('*.wav'))

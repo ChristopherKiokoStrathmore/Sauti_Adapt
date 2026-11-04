@@ -176,3 +176,16 @@ footer{text-align:center;padding:28px 18px;color:#716a7d;font-size:.85rem}
   .flow-card{width:100%}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+.hear-step{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.terms-box{max-height:210px;overflow:auto;border:1px solid #ded9eb;border-radius:15px;padding:14px 16px;background:#fff;margin:12px 0;line-height:1.5}
+.terms-box h3{margin:0 0 8px}.terms-box small{color:#6d677b;font-weight:400}.terms-box p{margin:8px 0}
+.terms-box:focus-visible{outline:3px solid #5b2fd0;outline-offset:2px}
+.tone-prompt{margin:10px 0;color:#2b2540}
+.tone-chip{display:inline-block;border-radius:999px;padding:4px 11px;font-size:.8rem;font-weight:700;margin-right:6px;background:#ece7fb;color:#3d2a8c}
+.tone-chip.tone-happy{background:#fff0cc;color:#725313}.tone-chip.tone-frustrated{background:#fde4e1;color:#8a2a1f}
+.calibration-card{border:1px solid #ded9eb;border-radius:15px;padding:14px 16px;margin:16px 0;background:#faf9ff}
+.calibration-card h3{margin:0 0 6px}.calibration-help{color:#6d677b;margin:0 0 10px;line-height:1.45}
+.calibration-row{display:grid;grid-template-columns:150px auto 1fr;gap:6px 10px;align-items:center;padding:8px 0;border-top:1px solid #ece8f6}
+.calibration-row small{grid-column:1/-1;color:#6d677b;line-height:1.5}
+.train-box{margin-top:10px;display:grid;gap:8px}.train-box code{display:block;padding:10px 12px;border-radius:10px;background:#1e1b2e;color:#e8e4ff;font-size:.82rem;overflow-x:auto;white-space:nowrap}

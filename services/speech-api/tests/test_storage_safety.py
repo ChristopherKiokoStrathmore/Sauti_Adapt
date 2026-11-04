@@ -19,6 +19,18 @@ def test_missing_private_storage_fails_closed(monkeypatch):
         assert_owner(str(uuid4()), str(uuid4()))
 
 
+def test_shallow_railway_layout_uses_app_root_without_index_error(monkeypatch):
+    from sauti_ml import storage
+    # Railway installs only the service, e.g. /app/sauti_ml/storage.py.
+    monkeypatch.setattr(storage, '__file__', '/app/sauti_ml/storage.py')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', '/data/sauti-private')
+    assert storage.repo_root() == Path('/app')
+    assert storage.private_root() == Path('/data/sauti-private')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', '/app/participant-recordings')
+    with pytest.raises(RuntimeError, match='outside the git repository'):
+        storage.private_root()
+
+
 def test_withdrawn_clip_invalidates_model_release(monkeypatch, tmp_path):
     from cryptography.fernet import Fernet
     monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))

@@ -29,11 +29,14 @@ test('saving the third command example advances to recognition automatically', a
   await page.evaluate(async () => {
     const audio = new AudioContext();
     await audio.resume();
-    const output = audio.createMediaStreamDestination();
-    const oscillator = audio.createOscillator();
-    oscillator.connect(output);
-    oscillator.start();
-    navigator.mediaDevices.getUserMedia = async () => output.stream;
+    // Each recording ends its media tracks. Return a fresh stream for each sample.
+    navigator.mediaDevices.getUserMedia = async () => {
+      const output = audio.createMediaStreamDestination();
+      const oscillator = audio.createOscillator();
+      oscillator.connect(output);
+      oscillator.start();
+      return output.stream;
+    };
   });
   for (let i = 0; i < 3; i++) {
     await page.getByRole('button', { name: 'Start voice recording' }).click();

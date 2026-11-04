@@ -1,0 +1,123 @@
+{
+  "name": "@ai4a11y/toolkit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Platform-agnostic core of the AI for Accessibility Toolkit: Librarian (personal memory/profile agent), Datastore, ability + surface model, skill layer, and cross-app sync behind injected platform ports.",
+  "type": "module",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./index.js"
+    },
+    "./core/librarian": {
+      "types": "./types/core/librarian.d.ts",
+      "default": "./core/librarian.js"
+    },
+    "./core/datastore": {
+      "types": "./types/core/datastore.d.ts",
+      "default": "./core/datastore.js"
+    },
+    "./core/taxonomy": {
+      "types": "./types/core/taxonomy.d.ts",
+      "default": "./core/taxonomy.js"
+    },
+    "./core/units": {
+      "types": "./types/core/units.d.ts",
+      "default": "./core/units.js"
+    },
+    "./core/surface": {
+      "types": "./types/core/surface.d.ts",
+      "default": "./core/surface.js"
+    },
+    "./core/ability": {
+      "types": "./types/core/ability.d.ts",
+      "default": "./core/ability.js"
+    },
+    "./core/strength": {
+      "types": "./types/core/strength.d.ts",
+      "default": "./core/strength.js"
+    },
+    "./core/memory-class": {
+      "types": "./types/core/memory-class.d.ts",
+      "default": "./core/memory-class.js"
+    },
+    "./core/skill": {
+      "types": "./types/core/skill.d.ts",
+      "default": "./core/skill.js"
+    },
+    "./core/skill-builder": {
+      "types": "./types/core/skill-builder.d.ts",
+      "default": "./core/skill-builder.js"
+    },
+    "./platforms/chrome/web-surface": {
+      "types": "./types/platforms/chrome/web-surface.d.ts",
+      "default": "./platforms/chrome/web-surface.js"
+    },
+    "./platforms/chrome/*.js": {
+      "types": "./types/platforms/chrome/*.d.ts",
+      "default": "./platforms/chrome/*.js"
+    },
+    "./platforms/node/kv.js": {
+      "types": "./types/platforms/node/kv.d.ts",
+      "default": "./platforms/node/kv.js"
+    },
+    "./platforms/node/ports.js": {
+      "types": "./types/platforms/node/ports.d.ts",
+      "default": "./platforms/node/ports.js"
+    },
+    "./platforms/node/shared-store.js": {
+      "types": "./types/platforms/node/shared-store.d.ts",
+      "default": "./platforms/node/shared-store.js"
+    },
+    "./package.json": "./package.json",
+    "./surfaces/web": {
+      "types": "./types/surfaces/web.d.ts",
+      "default": "./surfaces/web.js"
+    },
+    "./surfaces/xr": {
+      "types": "./types/surfaces/xr.d.ts",
+      "default": "./surfaces/xr.js"
+    },
+    "./sync": {
+      "types": "./types/sync/index.d.ts",
+      "default": "./sync/index.js"
+    },
+    "./ports": {
+      "types": "./types/ports/index.d.ts",
+      "default": "./ports/index.js"
+    },
+    "./registry": {
+      "types": "./types/registry/tools.d.ts",
+      "default": "./registry/tools.js"
+    },
+    "./protocol/adapter": {
+      "default": "./protocol/adapter/index.js"
+    },
+    "./adapter-mcp": {
+      "default": "./adapter-mcp/index.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "core/",
+    "ports/",
+    "sync/",
+    "surfaces/",
+    "platforms/",
+    "registry/",
+    "protocol/",
+    "adapter-mcp/",
+    "skills/",
+    "types/",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node test/ability-model-test.js && node test/skill-test.js && node test/skill-edge-test.js && node test/skill-apply-test.js && node test/codesign-scenarios-test.js && node test/scenario-test.js && node test/grants-audience-test.js && node test/notes-test.mjs && node test/phase1.test.mjs && node test/phase3.test.mjs && node test/phase3-crossapp.test.mjs && node test/package-boundary-test.js && node test/protocol-conformance-test.js && node test/cross-surface-translation-test.js && node test/api-docs-test.js && node test/sr-baseline.test.mjs",
+    "docs": "node scripts/generate-api-docs.mjs && node scripts/generate-skill.mjs",
+    "demo:xr": "node hosts/xr-demo/demo.js",
+    "demo:skill": "node hosts/skill-demo/demo.js",
+    "demo:node": "node platforms/node/host.js",
+    "types": "tsc -p tsconfig.json"
+  }
+}

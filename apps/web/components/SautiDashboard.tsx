@@ -302,7 +302,7 @@ export function SautiDashboard() {
       form.append('session_id', sessionId.current);
       form.append('session_role', sessionRole);
       form.append('consent', String(consent && termsAccepted && eligibleAge));
-      form.append('tone', TONES[saved % TONES.length].id satisfies ToneId);
+      form.append('tone', journeyVariant === 'c' ? 'neutral' : TONES[saved % TONES.length].id satisfies ToneId);
       form.append('retention_days', String(retentionDays));
       form.append('terms_version', TERMS_VERSION);
       form.append('improvement_consent', String(improvementConsent));
@@ -557,13 +557,14 @@ export function SautiDashboard() {
           <div className="segmented language-switch"><button type="button" className={language === 'en-KE' ? 'selected' : ''} aria-pressed={language === 'en-KE'} onClick={() => setLanguage('en-KE')}>English</button><button type="button" className={language === 'sw-KE' ? 'selected' : ''} aria-pressed={language === 'sw-KE'} onClick={() => setLanguage('sw-KE')}>Kiswahili</button></div>
           <div className="field"><label htmlFor="intent">Command to practise</label><select id="intent" value={intent} onChange={event => setIntent(event.target.value as Intent)}>{intentOptions.map(command => <option key={command} value={command}>{labelFor(command, language)}</option>)}</select></div>
           <div className="phrase-card"><span aria-hidden="true">◖))</span><strong>{labelFor(intent, language)}</strong></div>
-          {target > 0 && <p className="tone-prompt"><span className={'tone-chip tone-' + nextTone.id}>{nextTone.label}</span> Say your phrase {nextTone.prompt}.</p>}
+          {target > 0 && (journeyVariant === 'c' ? <p className="tone-prompt">Speak naturally. There is no need to change your voice or rush.</p> : <p className="tone-prompt"><span className={'tone-chip tone-' + nextTone.id}>{nextTone.label}</span> Say your phrase {nextTone.prompt}.</p>)}
           {intent === 'UNKNOWN' && <p className="tone-prompt">Say something unrelated to any command, such as a name or a different sentence.</p>}
           <p className="comfort-copy">Use a phrase that feels comfortable to you.</p>
           <div className="sample-row"><strong>{target ? 'Example ' + Math.min(saved + 1, target) + ' of ' + target : 'Optional training example'}</strong><div className="sample-dots" aria-label={saved + ' of ' + target + ' saved'}>{Array.from({ length: Math.max(target, 1) }, (_, index) => <span className={index < saved ? 'done' : index === saved ? 'current' : ''} key={index}/>)}</div></div>
           <RecordingButtons mode="enroll"/>
           <div className="record-secondary"><button className="soft-button" type="button" disabled={!hasClip} onClick={() => playClip()}>▶ Listen</button><button className="soft-button" type="button" disabled={!pendingClip || state === 'processing'} onClick={() => void savePendingClip()}>✓ Save voice sample</button><button className="soft-button" type="button" disabled={state !== 'idle'} onClick={() => { setPendingClip(null); setHasClip(false); if (clipUrl.current) { URL.revokeObjectURL(clipUrl.current); clipUrl.current = ''; } setStatus('Ready to record again. Unsaved audio was discarded.'); }}>↻ Record again</button></div>
-          <p className="break-copy">Take a break whenever you need. If you need more time to speak, adjust the clip length in Your preferences.</p>
+          <p className="break-copy">Take a break whenever you need. Your recording will only be uploaded after you choose Save.</p>
+          {journeyVariant === 'c' && <details className="preferences-advanced inline-recording-options"><summary>Need more speaking time or a different recording button?</summary><div className="settings-grid"><div className="field"><label htmlFor="clip-pace">Clip length</label><select id="clip-pace" value={maxSeconds} onChange={event => setMaxSeconds(event.target.value)}><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="8">8 seconds</option><option value="15">15 seconds</option></select></div><div className="field"><label htmlFor="record-style">Recording control</label><select id="record-style" value={listenMethod} onChange={event => setListenMethod(event.target.value as 'toggle' | 'separate')}><option value="toggle">One start and stop button</option><option value="separate">Separate start and stop buttons</option></select></div></div><p>Choose the setting that feels comfortable to you. There is no time limit to decide.</p></details>}
           <details className="calibration-card" aria-label="Technical training progress">
             <summary>More about training progress</summary>
             <h3 className="visually-hidden">Calibration progress</h3>
@@ -583,26 +584,37 @@ export function SautiDashboard() {
 
         <div hidden={step !== 4}>
           <div className="section-heading"><Icon tone="blue">✓</Icon><div><p className="step-kicker">Step 4 of 5</p><h2>Check recognition</h2></div></div>
-          <p className="lead-copy">Try your voice command and see how Sauti responds. Recognition only works after your personal model has been trained and validated.</p>
+          <p className="lead-copy">Explore how Sauti can respond. A personalized voice model must be trained and validated before it can recognize your commands.</p>
+          {journeyVariant === 'c' && <div className="model-readiness" aria-label="Voice recognition readiness"><strong>{!modelStatusChecked ? 'Checking recognition availability' : speechServiceMode === 'prototype' ? 'Experimental speech recognition' : 'Your voice model is not ready yet'}</strong><p>{speechServiceMode === 'prototype' ? 'The speech service can attempt recognition, but it may reject your voice until your profile is validated.' : 'Your voice samples have been saved. You can explore the commands below while the research team prepares and evaluates your personal model.'}</p></div>}
           <RecordingButtons mode="recognize"/>
           {prediction && <div className={'prediction-card ' + prediction.status}><span className="prediction-icon">{prediction.status === 'accepted' ? '✓' : '!'}</span><div><strong>{prediction.status === 'accepted' ? labelFor(prediction.intent, language) : 'Command rejected safely'}</strong><small>{prediction.reason || 'Accepted by the active personal model.'}</small></div></div>}
           <div className="toolkit-check">
-            <div className="toolkit-heading"><Icon>AI</Icon><div><h3>AI4A11y Toolkit check</h3><p>Test the official Controller directly while the personal model is being prepared.</p></div></div>
+            <div className="toolkit-heading"><Icon>AI</Icon><div><h3>Try a command without speaking</h3><p>Choose a button to see how the accessibility controls work. This does not train your model or upload audio.</p></div></div>
             <div className="controls">{TEST_COMMANDS.map(command => <button type="button" className="soft-button" key={command.utterance} onClick={() => void runToolkit(command.utterance)}>{command.label}</button>)}</div>
             <button type="button" className="text-button" disabled={!speaking} onClick={silence}>Stop speaking</button>
             <div id="controlled-site" className="content" aria-label="Demo article under toolkit control"><h3>Welcome to the accessible demo</h3><p>Here is a real application surface. The official toolkit Controller is responsible for actions here.</p><h3>Our goal</h3><p>The co-designer uses preferred speech to navigate in Kenyan English or Kiswahili.</p><h3>Accessibility matters</h3><p>The person chooses commands. Uncertain predictions are rejected and feedback stays available to screen readers.</p><h3>A longer page</h3><p>This section gives scroll commands a real distance to move inside the article.</p><p>Text size, contrast, and motion settings are applied here by the toolkit DOM receiver.</p><p>The end of the demo article is below this line.</p></div>
           </div>
-          <div className="card-actions"><button type="button" onClick={() => goTo(5)}>Continue to extension <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => goTo(3)}>Back to samples</button></div>
+          <div className="card-actions"><button type="button" onClick={() => goTo(5)}>{journeyVariant === 'a' ? 'Continue to extension' : 'Finish this journey'} <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => goTo(3)}>Back to samples</button></div>
         </div>
 
         <div hidden={step !== 5}>
           <div className="section-heading"><Icon>✚</Icon><div><p className="step-kicker">Step 5 of 5</p><h2>Connect the browser extension</h2></div></div>
+          {journeyVariant === 'a' ? <>
           <p className="lead-copy">The extension uses the same private profile on websites you explicitly permit.</p>
           <div className="connection-box"><div className="extension-window" aria-hidden="true"><span/><span/><span/><strong>✚</strong></div><div><strong>Profile ready to share with the extension</strong><p>Copy the profile ID and this website address, then paste them into the Sauti Adapt extension.</p></div></div>
           <ol className="extension-steps"><li>Build and load the extension from <code>apps/extension/dist</code>.</li><li>Open its side panel and paste this PWA origin and profile ID.</li><li>Enter the pilot user ID and token supplied by the research team.</li><li>Enable only the website you want Sauti to control.</li></ol>
           <button type="button" onClick={() => void copyExtensionSetup()}>Copy extension setup</button>
           <p className="inline-note">The extension currently requires separate credentials supplied by the research team. Automatic browser account pairing is not yet available. Do not share your private voice session to connect an extension.</p>
-          <div className="card-actions"><button type="button" className="soft-button" onClick={() => goTo(4)}>Run another recognition check</button><button className="text-button" type="button" onClick={() => goTo(1)}>Review setup</button></div>
+          </> : <>
+          <p className="lead-copy">Your recordings are safely linked to your voice profile. Sauti can help you explore accessible commands while your model is prepared.</p>
+          <div className="journey-success"><span aria-hidden="true">✓</span><div><strong>Your voice examples are saved.</strong><p>You can return to record more, practise the demo, or delete your voice data at any time.</p></div></div>
+          <div className="model-readiness"><strong>Browser extension setup is experimental</strong><p>The extension is not paired automatically and requires the research team to configure access. You do not need to do this to finish this journey.</p></div>
+          <details className="advanced-settings"><summary>Research team: technical extension setup</summary>
+            <ol className="extension-steps"><li>Build and load the extension from <code>apps/extension/dist</code>.</li><li>Open its side panel and paste this PWA origin and profile ID.</li><li>Enter a separately provisioned pilot user ID and token. Never share a participant browser session.</li><li>Enable only the website you want Sauti to control.</li></ol>
+            <button type="button" onClick={() => void copyExtensionSetup()}>Copy extension setup</button>
+          </details>
+          </>}
+          <div className="card-actions"><button type="button" className="soft-button" onClick={() => goTo(3)}>Record more examples</button><button type="button" className="soft-button" onClick={() => goTo(4)}>Try the demo again</button><button className="text-button" type="button" onClick={() => goTo(1)}>Review setup</button></div>
         </div>
       </section>
 

@@ -282,8 +282,9 @@ export function SautiDashboard() {
       setStatus('Open Your permission and enter your personal user ID and access token first.');
       return;
     }
-    if (mode === 'enroll' && !consent) {
-      setStatus('Explicit permission is required before a voice sample can be stored.');
+    if (mode === 'enroll' && !permissionReady) {
+      setStatus('Finish the voice data terms, confirm your age, and enter your credentials before recording.');
+      goTo(2);
       return;
     }
     recordMode.current = mode;

@@ -45,7 +45,7 @@ test('A baseline exposes full preference and extension information for compariso
   await startOnboarding(page, 'a');
   await expect(page.getByRole('group', { name: 'Commands to practise' })).toBeVisible();
   await expect(page.locator('#listen')).toBeVisible();
-  await page.getByRole('button', { name: /Check recognition/ }).click();
+  await page.getByRole('button', { name: 'Check recognition', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Check recognition' })).toBeVisible();
   await page.getByRole('button', { name: /Continue to extension/ }).click();
   await expect(page.getByText('Build and load the extension', { exact: false })).toBeVisible();

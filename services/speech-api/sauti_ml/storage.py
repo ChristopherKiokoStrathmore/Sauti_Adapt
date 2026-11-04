@@ -91,8 +91,7 @@ def claim_owner(profile_id: str, user_id: str) -> None:
 def assert_owner(profile_id: str, user_id: str) -> None:
     profile_id = canonical_uuid(profile_id)
     user_id = canonical_uuid(user_id)
-    if not os.environ.get('SAUTI_PRIVATE_DIR', '').strip():
-        return
+    # Missing storage configuration must not silently bypass ownership checks.
     folder = profile_dir(profile_id)
     if not folder.exists():
         return
@@ -181,6 +180,17 @@ def load_manifest(profile_id: str, user_id: str | None = None):
     return result
 
 
+def invalidate_released_model(folder: Path) -> None:
+    """Fail closed after a training clip is withdrawn or expires.
+
+    Previously released prototypes can encode information from deleted speech.
+    Invalidate the release record immediately; a new evaluation is required.
+    """
+    release = folder / 'evaluation.json'
+    if release.is_file():
+        release.unlink()
+
+
 def delete_recording(profile_id: str, recording_id: str, user_id: str) -> dict:
     assert_owner(profile_id, user_id)
     profile_id = canonical_uuid(profile_id)
@@ -204,6 +214,8 @@ def delete_recording(profile_id: str, recording_id: str, user_id: str) -> dict:
                     except Exception:
                         pass
                     audio.unlink()
+                invalidate_released_model(folder)
+                invalidate_released_model(folder)
                 removed += 1
                 continue
             kept.append(line)

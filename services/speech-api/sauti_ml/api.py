@@ -125,8 +125,9 @@ def create_participant(
         user_id, token = create_participant_account()
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail='Account storage is not available.') from exc
+    from uuid import uuid4
     audit('participant', 'created', user_id)
-    return JSONResponse({'user_id': user_id, 'token': token}, headers={'cache-control': 'no-store'})
+    return JSONResponse({'user_id': user_id, 'token': token, 'profile_id': str(uuid4())}, headers={'cache-control': 'no-store'})
 
 
 @app.get('/v1/readiness', dependencies=[Depends(require_token)])

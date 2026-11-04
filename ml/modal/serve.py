@@ -14,6 +14,7 @@ import hmac
 import os
 
 import modal
+from fastapi import Request
 
 MODEL_IDS = {
     "english": "cdli/whisper-large-v3_finetuned_kenyan_english_nonstandard_speech_v1.0",
@@ -106,7 +107,7 @@ class CDLIWhisper:
     timeout=300,
 )
 @modal.fastapi_endpoint(method="POST")
-async def transcribe(request):
+async def transcribe(request: Request):
     from fastapi import HTTPException
 
     expected = os.environ.get("SAUTI_GPU_BEARER_TOKEN", "")

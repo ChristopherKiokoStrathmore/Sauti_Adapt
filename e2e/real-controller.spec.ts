@@ -46,6 +46,7 @@ async function openRecognitionCheck(page: Page): Promise<void> {
 }
 
 async function prepareRecognition(page: Page): Promise<void> {
+  await page.getByText('Recording accessibility options').click();
   await page.locator('#listen').selectOption('separate');
   await page.getByRole('button', { name: /Your permission/ }).click();
   await page.getByText('Existing pilot account (optional)').click();

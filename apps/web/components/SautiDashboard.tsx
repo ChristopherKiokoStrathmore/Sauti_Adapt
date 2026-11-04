@@ -70,6 +70,9 @@ export function SautiDashboard() {
   const [sessionShown, setSessionShown] = useState('');
   const [userId, setUserId] = useState('');
   const [userToken, setUserToken] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [age, setAge] = useState('');
+  const [speechCondition, setSpeechCondition] = useState('prefer-not-to-say');
   const [language, setLanguage] = useState<Language>('en-KE');
   const [intent, setIntent] = useState<Intent>('SCROLL_DOWN');
   const [sessionRole, setSessionRole] = useState<SessionRole>('train');
@@ -125,7 +128,9 @@ export function SautiDashboard() {
   const readyToTrain = progress.train.done && progress.calibration.done && progress.test.done;
   const trainCommand = 'python -m sauti_ml.train --profile-id ' + profileId + ' --calibration-session ' + roleSessions.calibration + ' --test-session ' + roleSessions.test;
   const nextTone = TONES[saved % TONES.length];
-  const permissionReady = Boolean(userId.trim() && userToken.trim() && consent && termsAccepted && ageOk && TERMS_CONTACT);
+  const ageNumber = Number(age);
+  const eligibleAge = /^\d{1,3}$/.test(age) && ageNumber >= 18 && ageNumber <= 120;
+  const permissionReady = Boolean(displayName.trim() && displayName.trim().length <= 100 && eligibleAge && userId.trim() && userToken.trim() && consent && termsAccepted && ageOk && TERMS_CONTACT);
 
   useEffect(() => {
     const id = window.localStorage.getItem('sauti-demo-profile') || crypto.randomUUID();
@@ -158,7 +163,7 @@ export function SautiDashboard() {
   /** Spoken guidance for each step, so a person never has to read to carry on. */
   function stepScript(forStep: Step): string {
     if (forStep === 1) return 'Step 1 of 5. Your preferences. Choose your language and the commands you want to practise, then press Save and continue.';
-    if (forStep === 2) return 'Step 2 of 5. Your permission. Read the voice data terms, choose how long we may keep your clips, tick the boxes to agree, then continue.';
+    if (forStep === 2) return 'Step 2 of 5. About you and your permission. Enter your name and age, optionally describe your speech needs, then review the voice data terms and consent before continuing.';
     if (forStep === 3) {
       const tone = TONES[saved % TONES.length];
       return target
@@ -316,11 +321,11 @@ export function SautiDashboard() {
   async function beginRecording(mode: RecordMode) {
     if (busy.current || recording.current) return;
     if (!profileId || !userId.trim() || !userToken.trim()) {
-      setStatus('Open Your permission and enter your personal user ID and access token first.');
+      setStatus('Your secure pilot credentials have not been configured. Ask the research team for access.');
       return;
     }
     if (mode === 'enroll' && !permissionReady) {
-      setStatus('Finish the voice data terms, confirm your age, and enter your credentials before recording.');
+      setStatus('Complete your name, adult age confirmation, voice data terms, and secure pilot access before recording.');
       goTo(2);
       return;
     }
@@ -435,10 +440,23 @@ export function SautiDashboard() {
         </div>
 
         <div hidden={step !== 2}>
-          <div className="section-heading"><Icon tone="green">✓</Icon><div><p className="step-kicker">Step 2 of 5</p><h2>Your permission</h2></div></div>
+          <div className="section-heading"><Icon tone="green">✓</Icon><div><p className="step-kicker">Step 2 of 5</p><h2>About you and your permission</h2></div></div>
           <p className="lead-copy">Your voice is personal data. Sauti stores a clip only after you deliberately start recording and give permission.</p>
-          <div className="field"><label htmlFor="user">Personal user ID</label><input id="user" autoComplete="off" value={userId} onChange={event => setUserId(event.target.value)} placeholder="Your account UUID"/></div>
-          <div className="field"><label htmlFor="code">Personal access token</label><input id="code" type="password" autoComplete="off" value={userToken} onChange={event => setUserToken(event.target.value)} placeholder="Not saved in this browser"/></div>
+          <div className="field"><label htmlFor="participant-name">Your name</label><input id="participant-name" autoComplete="name" maxLength={100} value={displayName} onChange={event => setDisplayName(event.target.value)} placeholder="How should we address you?"/></div>
+          <div className="field"><label htmlFor="participant-age">Your age (18 or older)</label><input id="participant-age" type="number" min="18" max="120" inputMode="numeric" value={age} onChange={event => setAge(event.target.value)} placeholder="Age in years"/></div>
+          <div className="field"><label htmlFor="speech-condition">Speech or accessibility needs (optional)</label><select id="speech-condition" value={speechCondition} onChange={event => setSpeechCondition(event.target.value)}>
+            <option value="prefer-not-to-say">Prefer not to say</option>
+            <option value="cerebral-palsy">Cerebral palsy</option>
+            <option value="dysarthria">Dysarthria</option>
+            <option value="apraxia">Apraxia of speech</option>
+            <option value="other">Other speech or motor disability</option>
+            <option value="none">No diagnosed disability</option>
+          </select><small>Optional and not used to decide whether Sauti can understand your voice. These answers stay in this page session and are not uploaded or saved.</small></div>
+          <details className="advanced-settings"><summary>Secure pilot access (provided by the research team)</summary>
+            <p>For now, the private speech service requires a user ID and access token. Name and age cannot authenticate a voice profile. We are keeping these technical fields separate until secure account creation is available.</p>
+            <div className="field"><label htmlFor="user">Pilot user ID</label><input id="user" autoComplete="off" value={userId} onChange={event => setUserId(event.target.value)} placeholder="Provided by the research team"/></div>
+            <div className="field"><label htmlFor="code">Pilot access token</label><input id="code" type="password" autoComplete="off" value={userToken} onChange={event => setUserToken(event.target.value)} placeholder="Not saved in this browser"/></div>
+          </details>
           <section className="terms-box" tabIndex={0} role="region" aria-label={'Voice data terms, version ' + TERMS_VERSION}>
             <h3>Voice data terms <small>(version {TERMS_VERSION})</small></h3>
             <p><strong>What we keep.</strong> The short voice clips you choose to record, the command each clip is for, its language and tone (calm, happy or frustrated), and your profile ID.</p>
@@ -454,7 +472,7 @@ export function SautiDashboard() {
           <label className="permission-card"><input type="checkbox" checked={ageOk} onChange={event => setAgeOk(event.target.checked)}/><span><strong>I confirm I am 18 or older</strong><small>Participation by children needs a separate verified guardian consent flow, which is not enabled in this pilot.</small></span></label>
           <label className="permission-card"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)}/><span><strong>Store the voice samples I deliberately record</strong><small>Samples are sent to the private speech service and linked to this profile. You can delete the profile later.</small></span></label>
           <label className="permission-card secondary-permission"><input type="checkbox" checked={improvementConsent} onChange={event => setImprovementConsent(event.target.checked)}/><span><strong>Consider recordings I approve for a future model update</strong><small>This does not switch models automatically. A new version must pass separate checks before activation.</small></span></label>
-          {!permissionReady && <p className="inline-note">Add your credentials, agree to the terms, confirm your age, and ensure the project has a privacy contact configured before recording.</p>}
+          {!permissionReady && <p className="inline-note">Enter your name and adult age, review the terms, and obtain secure pilot access from the research team before recording.</p>}
           <div className="card-actions"><button type="button" disabled={!permissionReady} onClick={() => goTo(3)}>Continue to voice samples <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => goTo(1)}>Back</button></div>
         </div>
 
@@ -533,7 +551,7 @@ export function SautiDashboard() {
           <div className="section-heading"><Icon>✚</Icon><div><p className="step-kicker">Step 5 of 5</p><h2>Connect the browser extension</h2></div></div>
           <p className="lead-copy">The extension uses the same private profile on websites you explicitly permit.</p>
           <div className="connection-box"><div className="extension-window" aria-hidden="true"><span/><span/><span/><strong>✚</strong></div><div><strong>Profile ready to share with the extension</strong><p>Copy the profile ID and this website address, then paste them into the Sauti Adapt extension.</p></div></div>
-          <ol className="extension-steps"><li>Build and load the extension from <code>apps/extension/dist</code>.</li><li>Open its side panel and paste this PWA origin and profile ID.</li><li>Enter the same personal user ID and token.</li><li>Enable only the website you want Sauti to control.</li></ol>
+          <ol className="extension-steps"><li>Build and load the extension from <code>apps/extension/dist</code>.</li><li>Open its side panel and paste this PWA origin and profile ID.</li><li>Enter the pilot user ID and token supplied by the research team.</li><li>Enable only the website you want Sauti to control.</li></ol>
           <button type="button" onClick={() => void copyExtensionSetup()}>Copy extension setup</button>
           <p className="inline-note">The website cannot confirm an unpacked extension is installed. Connection is completed in the extension side panel.</p>
           <div className="card-actions"><button type="button" className="soft-button" onClick={() => goTo(4)}>Run another recognition check</button><button className="text-button" type="button" onClick={() => goTo(1)}>Review setup</button></div>

@@ -44,6 +44,25 @@
         <button type="button" id="calibrate-btn" class="btn btn-primary" disabled>Calibrate head position</button>
         <p class="hint" id="calibrate-hint">Turn the head pointer on to calibrate.</p>
 
+        <div class="field">
+          <div class="field-top">
+            <label for="pointer-speed" class="field-label">Pointer speed</label>
+            <output id="speed-value" for="pointer-speed" class="readout"><span id="speed-number">1.0</span><span class="unit">×</span></output>
+          </div>
+          <input type="range" id="pointer-speed" min="0.6" max="1.6" step="0.1" value="1" class="range">
+          <p class="hint">Lower means more head movement for the same distance, and finer aim on small buttons.</p>
+        </div>
+
+        <fieldset class="field">
+          <legend class="field-label">Steadiness</legend>
+          <div class="segmented segmented-3">
+            <label><input type="radio" name="steadiness" value="low"><span>Responsive</span></label>
+            <label><input type="radio" name="steadiness" value="medium" checked><span>Balanced</span></label>
+            <label><input type="radio" name="steadiness" value="high"><span>Steady</span></label>
+          </div>
+          <p class="hint">Steady smooths out small shakes but follows a little later.</p>
+        </fieldset>
+
         <div class="field" data-feature="summaries">
           <div class="field-top">
             <label for="dwell-time" class="field-label">Dwell to click</label>

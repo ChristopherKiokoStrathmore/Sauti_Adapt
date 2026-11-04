@@ -2,6 +2,7 @@
 // the worker writes summaries and this view renders what it is sent.
 import type { ApiChoice, ApiStatus, ApiStatusResponse, DisplayMode, RuntimeMessage } from '../shared/types';
 import { SUMMARIES_ENABLED } from '../shared/features';
+import { asSteadiness, clampSpeed } from '../gaze/motion';
 
 // Summaries are switched off for now (shared/features.ts): hide everything that belongs to them.
 if (!SUMMARIES_ENABLED) {
@@ -38,6 +39,8 @@ const ui = {
   calibrateHint: byId<HTMLParagraphElement>('calibrate-hint'),
   dwellTime: byId<HTMLInputElement>('dwell-time'),
   dwellNumber: byId<HTMLSpanElement>('dwell-number'),
+  pointerSpeed: byId<HTMLInputElement>('pointer-speed'),
+  speedNumber: byId<HTMLSpanElement>('speed-number'),
   mouthEnabled: byId<HTMLInputElement>('mouth-click-enabled'),
   mouthStatus: byId<HTMLParagraphElement>('mouth-status'),
   calibrateMouthBtn: byId<HTMLButtonElement>('calibrate-mouth-btn'),
@@ -190,8 +193,16 @@ function showSummary(html: string, title?: string) {
 
 async function loadSettings() {
   const stored = await chrome.storage.local.get([
-    'apiChoice', 'customPrompt', 'displayMode', 'gazeEnabled', 'gazeDwellMs', 'mouthClickEnabled', 'mouthCalV1'
+    'apiChoice', 'customPrompt', 'displayMode', 'gazeEnabled', 'gazeDwellMs', 'mouthClickEnabled', 'mouthCalV1',
+    'gazeSpeed', 'gazeSteadiness'
   ]);
+  const speed = clampSpeed(stored.gazeSpeed);
+  ui.pointerSpeed.value = String(speed);
+  ui.speedNumber.textContent = speed.toFixed(1);
+  const steady = asSteadiness(stored.gazeSteadiness);
+  for (const input of document.querySelectorAll<HTMLInputElement>('input[name="steadiness"]')) {
+    input.checked = input.value === steady;
+  }
   if (stored.apiChoice === 'summarization' || stored.apiChoice === 'prompt') settings.apiChoice = stored.apiChoice;
   if (typeof stored.customPrompt === 'string' && stored.customPrompt) settings.customPrompt = stored.customPrompt;
   if (stored.displayMode === 'tooltip' || stored.displayMode === 'panel' || stored.displayMode === 'both') {
@@ -281,6 +292,18 @@ function bindEvents() {
     ui.calibrateMouthBtn.blur();
     sendToActiveTab({ type: 'TRIGGER_MOUTH_CALIBRATION' });
   });
+
+  ui.pointerSpeed.addEventListener('input', () => {
+    const speed = clampSpeed(parseFloat(ui.pointerSpeed.value));
+    ui.speedNumber.textContent = speed.toFixed(1);
+    void chrome.storage.local.set({ gazeSpeed: speed });
+  });
+
+  for (const input of document.querySelectorAll<HTMLInputElement>('input[name="steadiness"]')) {
+    input.addEventListener('change', () => {
+      void chrome.storage.local.set({ gazeSteadiness: asSteadiness(input.value) });
+    });
+  }
 
   ui.dwellTime.addEventListener('input', () => {
     const value = parseInt(ui.dwellTime.value, 10);

@@ -1,4 +1,5 @@
 import type { Human, Result, Config, Point } from '@vladmandic/human';
+import { MOTION_PRESETS, adaptiveAlpha, asSteadiness, clampSpeed, type Steadiness } from './motion';
 import { MouthGesture, mouthThresholds } from './mouth-gesture';
 
 type HumanConstructor = new (config?: Partial<Config>) => Human;
@@ -93,6 +94,8 @@ let headAutoCenter = { nx: 0, ny: 0, ready: false };
   let mouthCalSamples: number[] = [];    // Temporary calibration samples
   let mouthClickEnabled = false;         // Whether mouth clicking is enabled
   const mouthGesture = new MouthGesture(); // onset -> freeze, click once, re-arm on close
+  let pointerSpeed = 1;                  // side panel "Pointer speed" (gazeSpeed)
+  let steadiness: Steadiness = 'medium'; // side panel "Steadiness" (gazeSteadiness)
 
   let gazeEnabled = false;
   if (typeof window.__gazeHeadMode !== 'boolean') {
@@ -968,8 +971,9 @@ let headAutoCenter = { nx: 0, ny: 0, ready: false };
     if (window.__gazeHeadMode) {
       if (headFrame) {
         if (!headFilterX || !headFilterY) {
-          headFilterX = createOneEuroFilter();
-          headFilterY = createOneEuroFilter();
+          const preset = MOTION_PRESETS[steadiness];
+          headFilterX = createOneEuroFilter(preset.minCutoff, preset.beta);
+          headFilterY = createOneEuroFilter(preset.minCutoff, preset.beta);
           lastHeadPoint = null;
         }
         const filterX = headFilterX;
@@ -1024,6 +1028,11 @@ let headAutoCenter = { nx: 0, ny: 0, ready: false };
           normY = Math.max(-1.4, Math.min(1.4, normY + edgeBlend));
         }
 
+        // Pointer speed: below 1 the same head turn moves the pointer less (finer aim,
+        // more head movement to reach the edges); above 1 it moves further.
+        normX *= pointerSpeed;
+        normY *= pointerSpeed;
+
         normX = Math.max(-1.2, Math.min(1.2, normX));
         normY = Math.max(-1.4, Math.min(1.4, normY));
 
@@ -1038,13 +1047,12 @@ let headAutoCenter = { nx: 0, ny: 0, ready: false };
           const filteredY = filterY(mapped[1], ts);
           let finalX = Number.isFinite(filteredX) ? filteredX : mapped[0];
           let finalY = Number.isFinite(filteredY) ? filteredY : mapped[1];
-          let smoothingAlpha = HEAD_POINTER_LERP;
-          if (Math.abs(normX) < HEAD_CENTER_THRESHOLD && Math.abs(normY) < HEAD_CENTER_THRESHOLD) {
-            smoothingAlpha = HEAD_CENTER_LERP;
-          } else if (Math.abs(normX) > HEAD_EDGE_THRESHOLD || Math.abs(normY) > HEAD_EDGE_THRESHOLD) {
-            smoothingAlpha = HEAD_EDGE_LERP;
-          }
+          // Follow rate grows with the distance still to cover (Research/001, D): big head
+          // moves arrive quickly instead of trailing and overshooting; small corrections
+          // stay smooth. Nutshell used a fixed 6-12 %.
           if (lastHeadPoint) {
+            const remaining = Math.hypot(finalX - lastHeadPoint[0], finalY - lastHeadPoint[1]);
+            const smoothingAlpha = adaptiveAlpha(remaining, MOTION_PRESETS[steadiness]);
             finalX = lastHeadPoint[0] + smoothingAlpha * (finalX - lastHeadPoint[0]);
             finalY = lastHeadPoint[1] + smoothingAlpha * (finalY - lastHeadPoint[1]);
             lastHeadPoint[0] = finalX;
@@ -1383,6 +1391,14 @@ let headAutoCenter = { nx: 0, ny: 0, ready: false };
     } else if (changes.earCalV1 && changes.earCalV1.newValue) {
       console.debug('[GazeCore] Ignoring legacy blink calibration; will rebuild.');
     }
+    if (changes.gazeSpeed) {
+      pointerSpeed = clampSpeed(changes.gazeSpeed.newValue);
+    }
+    if (changes.gazeSteadiness) {
+      steadiness = asSteadiness(changes.gazeSteadiness.newValue);
+      headFilterX = null; // rebuilt with the new preset on the next frame
+      headFilterY = null;
+    }
     if (changes.mouthClickEnabled) {
       mouthGesture.reset();
       mouthClickEnabled = changes.mouthClickEnabled.newValue || false;
@@ -1427,7 +1443,9 @@ let headAutoCenter = { nx: 0, ny: 0, ready: false };
     mouthCalibration = cal;
   });
 
-  storageGet([GAZE_ENABLED_KEY, HEAD_CAL_STORAGE_KEY, EAR_CAL_STORAGE_KEY, 'mouthCalV1', 'mouthClickEnabled', 'headCalV1', 'earCalV1']).then((store) => {
+  storageGet([GAZE_ENABLED_KEY, HEAD_CAL_STORAGE_KEY, EAR_CAL_STORAGE_KEY, 'mouthCalV1', 'mouthClickEnabled', 'headCalV1', 'earCalV1', 'gazeSpeed', 'gazeSteadiness']).then((store) => {
+    pointerSpeed = clampSpeed(store.gazeSpeed);
+    steadiness = asSteadiness(store.gazeSteadiness);
     if (store[HEAD_CAL_STORAGE_KEY]) {
       headCal = store[HEAD_CAL_STORAGE_KEY] as HeadCalibration;
       headModeWarned = false;

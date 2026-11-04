@@ -154,6 +154,7 @@ main { padding: 16px; display: grid; gap: 16px; }
 
 /* ---------- fields ---------- */
 fieldset.field { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.field .hint { margin-top: 6px; }
 .field { display: grid; }
 .field-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
 .field-label, legend.field-label { font-size: 13px; font-weight: 500; color: var(--fg); padding: 0; margin-bottom: 8px; }
@@ -172,6 +173,7 @@ fieldset.field { border: 0; padding: 0; margin: 0; min-width: 0; }
   display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px;
   background: var(--band); border: 1px solid var(--line); border-radius: 10px;
 }
+.segmented-3 { grid-template-columns: 1fr 1fr 1fr; }
 .segmented label { position: relative; }
 .segmented input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
 .segmented span {

@@ -1,4 +1,5 @@
 import type { Human, Result, Config, Point } from '@vladmandic/human';
+import { MouthGesture, mouthThresholds } from './mouth-gesture';
 
 type HumanConstructor = new (config?: Partial<Config>) => Human;
 type ScalarFilter = (value: number, timestampMs: number) => number;
@@ -91,6 +92,7 @@ let headAutoCenter = { nx: 0, ny: 0, ready: false };
   let mouthCalibration: MouthCalibration | null = null;  // { closedRatio, openRatio, threshold }
   let mouthCalSamples: number[] = [];    // Temporary calibration samples
   let mouthClickEnabled = false;         // Whether mouth clicking is enabled
+  const mouthGesture = new MouthGesture(); // onset -> freeze, click once, re-arm on close
 
   let gazeEnabled = false;
   if (typeof window.__gazeHeadMode !== 'boolean') {
@@ -927,6 +929,7 @@ let headAutoCenter = { nx: 0, ny: 0, ready: false };
       // Only detect clicks if calibrated, enabled, and NOT calibrating
       if (mouthCalibration && mouthClickEnabled && !window.__gazeMouthCalActive) {
         const threshold = mouthCalibration.threshold;
+        const thresholds = mouthThresholds(mouthCalibration);
 
         // Debug log mouth ratio - log every 100 frames to see patterns
         if (!window.__mouthFrameCount) window.__mouthFrameCount = 0;
@@ -935,13 +938,18 @@ let headAutoCenter = { nx: 0, ny: 0, ready: false };
           console.log(`[GazeCore] Mouth stats: MAR=${mouthRatio.toFixed(3)}, threshold=${threshold.toFixed(3)}, calibration=`, mouthCalibration);
         }
 
-        // Mouth open detected: ratio above calibrated threshold and cooldown period passed
-        if (mouthRatio > threshold && (ts - lastMouthClickTime) > MOUTH_OPEN_COOLDOWN_MS) {
-          lastMouthClickTime = ts;
-          window.dispatchEvent(new CustomEvent('smile:click', {
-            detail: { mouthRatio, ts }
-          }));
-          console.log(`[GazeCore] 👄 MOUTH OPEN CLICK! MAR: ${mouthRatio.toFixed(3)} > ${threshold.toFixed(3)}`);
+        // Research/001, B: freeze on onset, click once, re-arm only after the mouth closes.
+        // (Nutshell clicked again every 800 ms while the mouth stayed open.)
+        for (const evt of mouthGesture.update(mouthRatio, thresholds, ts)) {
+          if (evt === 'onset') {
+            window.dispatchEvent(new CustomEvent('mouth:onset', { detail: { ts } }));
+          } else if (evt === 'click' && (ts - lastMouthClickTime) > MOUTH_OPEN_COOLDOWN_MS) {
+            lastMouthClickTime = ts;
+            window.dispatchEvent(new CustomEvent('smile:click', { detail: { mouthRatio, ts } }));
+            console.log(`[GazeCore] Mouth click: MAR ${mouthRatio.toFixed(3)} > ${threshold.toFixed(3)}`);
+          } else if (evt === 'release' || evt === 'timeout') {
+            window.dispatchEvent(new CustomEvent('mouth:release', { detail: { ts } }));
+          }
         }
       }
     }
@@ -1073,6 +1081,11 @@ let headAutoCenter = { nx: 0, ny: 0, ready: false };
      lastPointTs = now;
      return;
    }
+
+    // While a mouth click is in progress the pointer holds still (Research/001, B).
+    if (mouthGesture.frozen) {
+      return;
+    }
 
     if (now - lastPointTs >= POINT_THROTTLE_MS) {
       lastPointTs = now;
@@ -1371,6 +1384,7 @@ let headAutoCenter = { nx: 0, ny: 0, ready: false };
       console.debug('[GazeCore] Ignoring legacy blink calibration; will rebuild.');
     }
     if (changes.mouthClickEnabled) {
+      mouthGesture.reset();
       mouthClickEnabled = changes.mouthClickEnabled.newValue || false;
       console.log('[GazeCore] Mouth click enabled changed to:', mouthClickEnabled);
     }

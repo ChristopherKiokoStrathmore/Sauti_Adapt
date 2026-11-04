@@ -4,7 +4,7 @@ import { tooltipCss, tooltipHead, waitHtml, INK, PAPER, LIME, MONO } from '../sh
 import type { RuntimeMessage, SummaryResult } from '../shared/types';
 import { errorMessage } from '../shared/types';
 import { SUMMARIES_ENABLED } from '../shared/features';
-import { clickablesNear, closestClickable, edgeDistance } from './targets';
+import { clickablesNear, closestClickable, edgeDistance, invalidateTargets } from './targets';
 
 type DwellTarget = { element: HTMLElement; type: 'link' | 'close-button'; distance: number };
 type EdgeKey = 'top' | 'bottom' | 'left' | 'right';
@@ -553,6 +553,10 @@ interface GazeJob {
     if (!gazeEnabled || phase !== 'live') {
       return;
     }
+    // Pointer and target stay put while a mouth click is in progress.
+    if (clickLock) {
+      return;
+    }
     const detail: Partial<GazePointDetail> = event.detail || {};
     if (typeof detail.x !== 'number' || typeof detail.y !== 'number') {
       return;
@@ -975,50 +979,62 @@ interface GazeJob {
     }
   }
 
-  window.addEventListener('blink:click', (event) => {
-    const button = event && event.detail && event.detail.button === 'right' ? 2 : 0;
-    const target = lastSnapLink || nearestLink(lastPointerX, lastPointerY) || document.elementFromPoint(lastPointerX, lastPointerY);
+  // ---------- clicking (Research/001, solution B) ----------
+
+  /** Set when the mouth starts to open: the click goes to this target, wherever the head drifts. */
+  let clickLock: { target: Element | null; x: number; y: number } | null = null;
+
+  function targetUnderPointer(x: number, y: number): Element | null {
+    return snappedTarget?.element || lastSnapLink || nearestLink(x, y) || document.elementFromPoint(x, y);
+  }
+
+  window.addEventListener('mouth:onset', () => {
+    if (!gazeEnabled) return;
+    clickLock = { target: targetUnderPointer(lastPointerX, lastPointerY), x: lastPointerX, y: lastPointerY };
+  });
+
+  window.addEventListener('mouth:release', () => {
+    clickLock = null;
+  });
+
+  function performClick(button: 0 | 2) {
+    const x = clickLock?.x ?? lastPointerX;
+    const y = clickLock?.y ?? lastPointerY;
+    const target = clickLock?.target ?? targetUnderPointer(x, y);
+
     if (!target) {
       beep(280, 140);
       return;
     }
     synthClick(target, button);
-    beep(button === 2 ? 320 : 560, 150);
+    beep(button === 2 ? 320 : 660, 150);
+    invalidateTargets();
+    console.debug('[GazeDwell] Click executed on:', target);
+  }
+
+  window.addEventListener('blink:click', (event) => {
+    performClick(event && event.detail && event.detail.button === 'right' ? 2 : 0);
   });
 
-  // Smile-to-click: trigger click on magnetically snapped target when user smiles
-  window.addEventListener('smile:click', (event) => {
-    // Priority 1: Check if dwelling in navigation zone
+  // Mouth click: navigate in the edge zones, otherwise click the locked or snapped target.
+  window.addEventListener('smile:click', () => {
     if (navZoneDwelling) {
-      const now = performance.now();
-      const dwellDuration = now - navDwellStart;
-
-      // Require at least 300ms dwell before confirming navigation
+      const dwellDuration = performance.now() - navDwellStart;
+      // Require at least 300ms in the zone before confirming navigation
       if (dwellDuration >= 300) {
         if (navZoneDwelling === 'back') {
           window.history.back();
-          beep(400, 100); // Low beep for back
-          console.debug('[GazeDwell] Navigate BACK via mouth click');
-        } else if (navZoneDwelling === 'forward') {
+          beep(400, 100);
+        } else {
           window.history.forward();
-          beep(800, 100); // High beep for forward
-          console.debug('[GazeDwell] Navigate FORWARD via mouth click');
+          beep(800, 100);
         }
         navZoneDwelling = null;
         navDwellStart = 0;
         return;
       }
     }
-
-    // Priority 2: Click on snapped target or nearest link
-    const target = lastSnapLink || nearestLink(lastPointerX, lastPointerY) || document.elementFromPoint(lastPointerX, lastPointerY);
-    if (!target) {
-      beep(280, 140);  // Error beep if no target
-      return;
-    }
-    synthClick(target, 0);  // Left click only (button = 0)
-    beep(660, 150);  // Higher pitch beep for smile click (distinguishable from blink)
-    console.debug(`[GazeDwell] Smile click executed on:`, target);
+    performClick(0);
   });
 
   function init() {

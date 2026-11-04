@@ -83,6 +83,8 @@ interface WindowEventMap {
   'blink:released': CustomEvent<{ duration: number; timestamp: number }>;
   'blink:click': CustomEvent<{ button: 'left' | 'right' }>;
   'smile:click': CustomEvent<{ mouthRatio: number; ts: number }>;
+  'mouth:onset': CustomEvent<{ ts: number }>;
+  'mouth:release': CustomEvent<{ ts: number }>;
   'mouth-cal:start': Event;
   'mouth-cal:complete': CustomEvent<MouthCalibration>;
   'youtube-captions-ready': CustomEvent<{ videoId: string; captionCount: number }>;

@@ -477,3 +477,10 @@ box-shadow:inset -18px -24px 44px rgba(13,8,60,.74),0 0 70px rgba(173,76,244,.28
 .calibration-card summary::before{content:"＋";font-size:1.22rem;font-weight:750}
 .calibration-card[open] summary::before{content:"−"}
 .calibration-card[open] summary{border-bottom:1px solid #e5ddf5;margin-bottom:14px}
+
+
+.preferences-advanced{margin:13px 0 19px;border:1px solid #e7e1f3;border-radius:18px;background:#faf9ff;padding:0 17px}
+.preferences-advanced summary{display:flex;align-items:center;gap:10px;min-height:59px;color:#5025af;font-size:1rem;font-weight:730;cursor:pointer}
+.preferences-advanced summary::before{content:"＋";font-weight:800;font-size:1.2rem}
+.preferences-advanced[open] summary::before{content:"−"}
+.preferences-advanced .command-grid{margin:12px 0 20px}

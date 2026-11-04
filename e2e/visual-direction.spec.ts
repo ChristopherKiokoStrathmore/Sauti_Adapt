@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('participant experience uses clear, accessible cinematic hierarchy on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Your voice/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Your voice.*Your way/i, level: 1 })).toBeVisible();
   await expect(page.locator('.intro-visual')).toBeVisible();
   await expect(page.locator('.stepper-intro')).toContainText('STEP 1 OF 5');
   await expect(page.getByRole('button', { name: /Save and continue/ })).toBeVisible();

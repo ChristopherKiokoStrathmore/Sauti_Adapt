@@ -1,0 +1,388 @@
+// Skill — a SKILL.md accessibility playbook that orchestrates adapters.
+//
+// This is the layer the diagrams call "skills" and the Engineer builds: a
+// model-facing SKILL.md (name + description + instructions) that names WHICH
+// adapters to apply, with WHAT settings, for a given need and page. Adapters
+// are the executable code (tools/adapters/, the extension's built-in tools);
+// a skill composes them into a recipe.
+//
+// A skill is BOTH:
+//   - model-facing — the markdown body is instructions an agent reads
+//     (progressive disclosure: name+description first, full body on demand);
+//   - machine-runnable — a fenced JSON recipe block compiles deterministically
+//     to the same settings object the adapter apply-path already consumes, so
+//     applying a skill needs no LLM at apply-time.
+//
+// Pure, with no platform or library dependency (no YAML lib, no DOM):
+// frontmatter is simple `key: value` lines; the recipe is a ```json fenced
+// block. Parsed/validated/resolved here; authored as .md files in
+// toolkit/skills/builtin/. The only imports are two pure vocabularies: the
+// support areas (core/ability.js) and the site categories (core/taxonomy.js)
+// that validateSkill checks against.
+
+import { SUPPORT_AREAS } from './ability.js';
+import { taxonomy as defaultTaxonomy } from './taxonomy.js';
+
+/**
+ * @typedef {Object} SkillRecipeStep
+ * @property {string} id           - adapter id (must exist in the tools registry)
+ * @property {Object} [settings]   - settings to apply for that adapter
+ *
+ * @typedef {Object} SkillRecipeAction
+ * @property {string} prompt       - plain-language task the browser agent runs
+ * @property {string} [name]       - short label for the task
+ *
+ * @typedef {Object} Skill
+ * @property {string} name
+ * @property {string} description  - when to use it (what the model matches on)
+ * @property {string[]} supportAreas
+ * @property {string[]} siteRelevance
+ * @property {{ adapters: SkillRecipeStep[], actions?: SkillRecipeAction[] }} recipe
+ * @property {string} body         - full markdown (instructions), sans frontmatter
+ *
+ * A recipe can compose two kinds of steps: adapters (page-fixing code applied
+ * directly) and actions (tasks the browser agent performs, how a reusable
+ * task saved from the Assistant becomes a skill). Most skills use only one.
+ */
+
+/**
+ * @typedef {Object} ToolEntry
+ * One adapter in the tools registry (registry/tools.js `skillRegistry`).
+ * @property {string} id
+ * @property {string} name
+ * @property {string} description
+ * @property {string[]} supportAreas
+ * @property {string[]} siteRelevance
+ * @property {Record<string, any>} [settings]  Settings this adapter sets when enabled.
+ * @property {boolean} [requiresAI]
+ * @property {string} [icon]
+ * @property {string} [emoji]
+ * @property {boolean} [quickStart]
+ *
+ * @typedef {Pick<ToolEntry, 'id'|'name'|'description'|'supportAreas'|'siteRelevance'>} ToolPromptEntry
+ *
+ * @typedef {Object} ToolsRegistry
+ * The AA_TOOLS-shaped registry a host injects (registry/tools.js `asAATools()`
+ * builds the reference one). Only `settingsMeta` is read on the core's main
+ * paths, and every such read guards it. The Librarian's LLM paths
+ * (`interpretNeedsPrompt`, `buildSkill`, `extract`) also call
+ * `settingsVocabularyLines` and `forPrompt` unguarded, and skill validation
+ * reads `byId`; a host that never reaches those paths may leave them out.
+ * FLAG(review): the optional members mirror what the core guards for at
+ * runtime today, not a design decision about the registry contract.
+ * @property {number} [version]
+ * @property {ToolEntry[]} [list]
+ * @property {import('./units.js').SettingsMeta} settingsMeta
+ * @property {() => string[]} [settingsVocabularyLines]  One prompt-ready line per setting.
+ * @property {(id: string) => ToolEntry|null|undefined} [byId]
+ * @property {(area: string) => ToolEntry[]} [byArea]
+ * @property {(ids: string[]) => Record<string, any>} [settingsFor]
+ * @property {() => ToolPromptEntry[]} [forPrompt]
+ */
+
+/**
+ * @typedef {Object} SkillTaxonomy
+ * What validateSkill reads from a taxonomy: `categoryIds()` when present,
+ * else the `categories` data. The Librarian's own `taxonomy` dependency is
+ * the full ./taxonomy.js Taxonomy; this is the tolerance validateSkill
+ * extends to a caller that has only the data.
+ * @property {() => string[]} [categoryIds]
+ * @property {Array<{ id?: string }|null|undefined>} [categories]
+ */
+
+const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
+
+// Parse a tiny YAML subset: `key: value`, where value is a plain string or an
+// inline list `[a, b, c]`. Enough for name/description/supportAreas/siteRelevance.
+/**
+ * @param {string} text
+ * @returns {Record<string, any>}
+ */
+function parseFrontmatter(text) {
+  /** @type {Record<string, any>} */
+  const out = {};
+  for (const line of text.split('\n')) {
+    const m = line.match(/^([a-zA-Z][\w-]*):\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1];
+    /** @type {string|string[]} */
+    let val = m[2].trim();
+    if (val.startsWith('[') && val.endsWith(']')) {
+      val = val.slice(1, -1).split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+    } else {
+      val = val.replace(/^["']|["']$/g, '');
+    }
+    out[key] = val;
+  }
+  return out;
+}
+
+// Extract the first ```json fenced block (the machine-runnable recipe).
+/**
+ * @param {string} body
+ * @returns {{ adapters: SkillRecipeStep[], actions: SkillRecipeAction[] }}
+ */
+function extractRecipe(body) {
+  const m = body.match(/```json\s*([\s\S]*?)```/);
+  if (!m) return { adapters: [], actions: [] };
+  try {
+    const parsed = JSON.parse(m[1]);
+    return {
+      adapters: Array.isArray(parsed.adapters) ? parsed.adapters : [],
+      actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+    };
+  } catch {
+    return { adapters: [], actions: [] };
+  }
+}
+
+/**
+ * Parse a SKILL.md string into a Skill object. Tolerant: missing pieces come
+ * back empty rather than throwing, so a half-formed LLM output still parses
+ * (validateSkill catches the problems).
+ * @param {string} markdown
+ * @returns {Skill}
+ */
+export function parseSkill(markdown) {
+  // Normalize line endings and tolerate preamble the LLM may add before the
+  // frontmatter (e.g. "Here's your skill:\n\n---\n..."): drop everything up to
+  // the frontmatter opener. Anchor on a `---` that is *immediately followed by
+  // a `key: value` line*, not just any bare `---` — otherwise a stray markdown
+  // horizontal rule in the preamble gets mistaken for the opener and swallows
+  // the real frontmatter into the body.
+  let src = String(markdown || '').replace(/\r\n?/g, '\n');
+  const lines = src.split('\n');
+  const fmStart = lines.findIndex((l, i) => l.trim() === '---' && /^\s*[a-zA-Z][\w-]*\s*:/.test(lines[i + 1] || ''));
+  if (fmStart > 0) src = lines.slice(fmStart).join('\n');
+  const fm = src.match(FRONTMATTER_RE);
+  /** @type {Record<string, any>} */
+  const front = fm ? parseFrontmatter(fm[1]) : {};
+  const body = fm ? fm[2].trim() : src.trim();
+  // The two vocabulary lists are normalized here, not in validateSkill: a
+  // bare `vision, reading` (no brackets) or a capitalized `[Vision]` is a
+  // formatting slip, not a vocabulary miss, and both vocabularies are
+  // lowercase ids that matchSkill compares exactly. Split, trim, lowercase.
+  /** @param {any} v */
+  const asList = (v) => (Array.isArray(v) ? v : String(v ?? '').split(','))
+    .map(s => String(s).trim().toLowerCase()).filter(Boolean);
+  return {
+    name: front.name || '',
+    description: front.description || '',
+    supportAreas: asList(front.supportAreas),
+    siteRelevance: asList(front.siteRelevance),
+    recipe: extractRecipe(body),
+    body,
+  };
+}
+
+/**
+ * Serialize a Skill back to SKILL.md text (round-trips with parseSkill for the
+ * structured fields). Used by the Engineer to persist a built skill.
+ * @param {Skill} skill
+ * @returns {string}
+ */
+export function serializeSkill(skill) {
+  /** @param {any} a */
+  const list = (a) => `[${vocabList(a).join(', ')}]`;
+  const front = [
+    '---',
+    `name: ${skill.name}`,
+    `description: ${skill.description}`,
+    `supportAreas: ${list(skill.supportAreas)}`,
+    `siteRelevance: ${list(skill.siteRelevance)}`,
+    '---',
+  ].join('\n');
+  // If the body already carries a recipe block, trust it; otherwise append one.
+  let body = skill.body || '';
+  if (!/```json/.test(body)) {
+    body = `${body}\n\n## Recipe\n\`\`\`json\n${JSON.stringify(skill.recipe || { adapters: [] }, null, 2)}\n\`\`\`\n`;
+  }
+  return `${front}\n\n${body.trim()}\n`;
+}
+
+/**
+ * Read a vocabulary field (supportAreas, siteRelevance) as a list. parseSkill
+ * always produces one, but a hand-built skill object (a saveSkill caller, a
+ * test) may carry a single string, or nothing at all. One reader, used by BOTH
+ * validateSkill and matchSkill, so what validation calls valid is exactly what
+ * retrieval can score: a lone 'vision' is one value, never six characters to
+ * iterate, and a non-iterable value never throws. The Librarian also runs a
+ * skill's two fields through it before storing, so what lands in the Skills db
+ * is always a list.
+ * @param {any} v
+ * @returns {any[]}
+ */
+export function vocabList(v) {
+  if (Array.isArray(v)) return v;
+  return (v == null || v === '') ? [] : [v];
+}
+
+/**
+ * Validate a skill against the tools registry (AA_TOOLS) and the two
+ * vocabularies: the name/description exist, every recipe adapter id is a real
+ * tool, every settings key is in the settings vocabulary, every supportArea is
+ * in SUPPORT_AREAS, and every siteRelevance value is a taxonomy category or
+ * 'all'. Returns collected errors (empty = valid).
+ *
+ * The vocabulary checks reject rather than warn: supportAreas and
+ * siteRelevance are what retrieval matches on (matchSkill), so a value outside
+ * the vocabulary is a skill that can never be found again (issue #34).
+ * @param {Skill} skill
+ * @param {{ tools?: ToolsRegistry|null, taxonomy?: SkillTaxonomy|null }} [deps]
+ *   tools    = the AA_TOOLS registry (byId + settingsMeta)
+ *   taxonomy = the site taxonomy; defaults to the bundled one when absent or
+ *              null. Normally the bundled object or a host's own with the same
+ *              shape, so `categoryIds()` is used when present. A plain
+ *              `{ categories: [{ id }] }` is also read, so a caller that has
+ *              only the data can validate; that is a tolerance here, not a
+ *              host port. The Librarian's `taxonomy` dependency still needs
+ *              the full object (`categoryIds`, `categoryForHost`, `contexts`,
+ *              `version`).
+ * Both vocabulary fields are read through vocabList, so a hand-built skill
+ * that carries a single string is checked as a one-item list and scored the
+ * same way by matchSkill.
+ * @returns {{ valid: boolean, errors: string[] }}
+ */
+export function validateSkill(skill, { tools, taxonomy } = {}) {
+  const errors = [];
+  if (!skill.name) errors.push('missing name');
+  if (!skill.description) errors.push('missing description');
+  for (const a of vocabList(skill.supportAreas)) {
+    if (!SUPPORT_AREAS.includes(a)) errors.push(`supportArea "${a}" not one of ${SUPPORT_AREAS.join(', ')}`);
+  }
+  // 'all' is not a taxonomy category; it is the skill layer's own "any site"
+  // value (matchSkill scores it separately), so it is allowed here by name.
+  const tax = taxonomy || defaultTaxonomy;
+  const categories = typeof tax.categoryIds === 'function'
+    ? tax.categoryIds()
+    : (Array.isArray(tax.categories) ? tax.categories : []).map(c => c?.id);
+  for (const c of vocabList(skill.siteRelevance)) {
+    if (c !== 'all' && !categories.includes(c)) errors.push(`siteRelevance "${c}" not one of ${categories.join(', ')}, all`);
+  }
+  const steps = skill.recipe?.adapters || [];
+  const actions = skill.recipe?.actions || [];
+  if (steps.length === 0 && actions.length === 0) errors.push('recipe has no adapters or actions');
+  for (const act of actions) {
+    if (!act || typeof act.prompt !== 'string' || !act.prompt.trim()) errors.push('recipe action missing prompt');
+  }
+  const meta = tools?.settingsMeta || {};
+  for (const step of steps) {
+    if (!step || typeof step.id !== 'string') { errors.push('recipe step missing adapter id'); continue; }
+    if (tools?.byId && !tools.byId(step.id)) errors.push(`unknown adapter "${step.id}"`);
+    for (const [key, val] of Object.entries(step.settings || {})) {
+      const m = meta[key];
+      if (Object.keys(meta).length && !m) { errors.push(`unknown setting "${key}" in adapter "${step.id}"`); continue; }
+      if (!m) continue;
+      // Value must match the setting's declared type and range/options —
+      // an LLM-authored recipe can name a real key with a bad value.
+      if (m.type === 'number') {
+        if (typeof val !== 'number' || Number.isNaN(val)) errors.push(`setting "${key}" must be a number`);
+        else if (Array.isArray(m.range) && (val < m.range[0] || val > m.range[1])) errors.push(`setting "${key}"=${val} out of range ${m.range[0]}–${m.range[1]}`);
+      } else if (m.type === 'boolean' && typeof val !== 'boolean') {
+        errors.push(`setting "${key}" must be true or false`);
+      } else if (m.type === 'enum' && Array.isArray(m.options) && !m.options.includes(val)) {
+        errors.push(`setting "${key}"="${val}" not one of ${m.options.join(', ')}`);
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Compile a skill's recipe to the deterministic apply-plan: the merged
+ * settings object (same shape the extension's applyVisualSettings consumes)
+ * plus the ordered adapter ids, plus any agent actions to run. This is the
+ * bridge skill → adapters, no LLM. Later steps win on key conflicts
+ * (author-ordered).
+ * @param {Skill} skill
+ * @returns {{ settings: Record<string, any>, adapterIds: string[], actions: SkillRecipeAction[] }}
+ */
+export function resolveSkill(skill) {
+  /** @type {Record<string, any>} */
+  const settings = {};
+  const adapterIds = [];
+  for (const step of (skill.recipe?.adapters || [])) {
+    if (!step?.id) continue;
+    adapterIds.push(step.id);
+    Object.assign(settings, step.settings || {});
+  }
+  const actions = (skill.recipe?.actions || [])
+    .filter(a => a && typeof a.prompt === 'string' && a.prompt.trim())
+    .map(a => ({ name: a.name || a.prompt, prompt: a.prompt }));
+  return { settings, adapterIds, actions };
+}
+
+/**
+ * Score how well a skill fits a person + page (for Librarian retrieval).
+ * Deterministic: overlap of supportAreas with the profile, plus a site match.
+ * 0 = irrelevant. Higher = better fit.
+ * @param {Skill} skill
+ * @param {{ supportAreas?: string[], category?: string|null }} ctx
+ * @returns {number}
+ */
+export function matchSkill(skill, { supportAreas = [], category = null } = {}) {
+  let score = 0;
+  const areas = new Set(vocabList(supportAreas));
+  for (const a of vocabList(skill.supportAreas)) if (areas.has(a)) score += 2;
+  const rel = vocabList(skill.siteRelevance);
+  if (category && rel.includes(category)) score += 3;
+  if (rel.includes('all')) score += 1;
+  return score;
+}
+
+// Words too generic to signal WHICH skill a need is about. Post-singular form
+// ('site' also covers 'sites'); words of 1-2 letters are dropped by length.
+const GENERIC_WORDS = new Set([
+  'the', 'and', 'for', 'with', 'when', 'that', 'this', 'them', 'they', 'have',
+  'from', 'make', 'making', 'want', 'need', 'please', 'help', 'like', 'can',
+  'could', 'would', 'site', 'page', 'website', 'web', 'get', 'turn', 'use',
+  'using', 'more', 'some', 'all', 'every', 'thing',
+]);
+
+/** @param {string|null|undefined} text */
+function needTokens(text) {
+  return String(text || '').toLowerCase().split(/[^a-z0-9]+/)
+    .map(w => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) ? w.slice(0, -1) : w)
+    .filter(w => w.length > 2 && !GENERIC_WORDS.has(w));
+}
+
+// Same word, or one is a prefix of the other ("read" ~ "reading") — enough
+// stemming for needs phrased in plain language, without a stemmer dependency.
+/**
+ * @param {string} a
+ * @param {string} b
+ */
+function tokenLike(a, b) {
+  if (a === b) return true;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return short.length >= 4 && long.startsWith(short);
+}
+
+/**
+ * Score how well a skill covers a plain-language NEED (the diagrams' "does
+ * the skill exist in the db?" check, before the Engineer builds a new one).
+ * Deterministic keyword overlap: each need word counts once, at the weight
+ * of the best field it appears in. 0 = no meaningful overlap.
+ * @param {Skill} skill
+ * @param {string} need
+ * @returns {number}
+ */
+export function matchSkillToNeed(skill, need) {
+  const needToks = [...new Set(needTokens(need))];
+  if (!needToks.length) return 0;
+  const fields = [
+    { toks: needTokens(skill.name), weight: 3 },
+    { toks: needTokens(vocabList(skill.supportAreas).join(' ')), weight: 2 },
+    { toks: needTokens(vocabList(skill.siteRelevance).join(' ')), weight: 2 },
+    { toks: needTokens(skill.description), weight: 2 },
+  ];
+  let score = 0;
+  for (const t of needToks) {
+    let best = 0;
+    for (const f of fields) {
+      if (f.weight > best && f.toks.some(ft => tokenLike(t, ft))) best = f.weight;
+    }
+    score += best;
+  }
+  return score;
+}

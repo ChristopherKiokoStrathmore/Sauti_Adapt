@@ -41,6 +41,18 @@ async function fontScale(page: Page): Promise<string> {
   return page.locator('#controlled-site').evaluate((element) => element.style.getPropertyValue('--aa-font-scale'));
 }
 
+async function openRecognitionCheck(page: Page): Promise<void> {
+  await page.getByRole('button', { name: /Check recognition/ }).click();
+}
+
+async function prepareRecognition(page: Page): Promise<void> {
+  await page.locator('#listen').selectOption('separate');
+  await page.getByRole('button', { name: /Your permission/ }).click();
+  await page.locator('#user').fill(USER_ID);
+  await page.locator('#code').fill(USER_TOKEN);
+  await openRecognitionCheck(page);
+}
+
 test('a foreign browser origin cannot call the speech proxy', async ({ request }) => {
   const response = await request.post('/api/recognize', {
     headers: { origin: 'https://evil.example', 'x-sauti-user': USER_ID, 'x-sauti-user-token': USER_TOKEN },
@@ -69,6 +81,7 @@ test('the page bundles the pinned upstream Controller and not the stock speech w
 
 test('bigger text and undo use upstream handle() and the upstream style variable', async ({ page }) => {
   await page.goto('/');
+  await openRecognitionCheck(page);
   const site = page.locator('#controlled-site');
   const before = await site.evaluate((element) => getComputedStyle(element).fontSize);
   await expect(fontScale(page)).resolves.toBe('');
@@ -89,6 +102,7 @@ test('bigger text and undo use upstream handle() and the upstream style variable
 
 test('scroll down moves the article through the real receiver', async ({ page }) => {
   await page.goto('/');
+  await openRecognitionCheck(page);
   const site = page.locator('#controlled-site');
   const before = await site.evaluate((element) => element.scrollTop);
   await page.getByRole('button', { name: 'scroll down', exact: true }).click();
@@ -137,6 +151,7 @@ test('mock-mode audio is rejected and does not move the demo DOM', async ({ page
 test('read aloud and outline skip hidden headings in Chromium', async ({ page }) => {
   await page.goto('/');
   await expect.poll(() => page.locator('#profile').inputValue()).not.toBe('');
+  await openRecognitionCheck(page);
   await page.locator('#controlled-site').evaluate(element => {
     element.insertAdjacentHTML('afterbegin', `
       <h2 style="display:none">SECRET-DISPLAY</h2>
@@ -159,6 +174,7 @@ test('read aloud and outline skip hidden headings in Chromium', async ({ page })
 test('read this is spoken and a rejected recognition is silent', async ({ page }) => {
   await page.goto('/');
   await expect.poll(() => page.locator('#profile').inputValue()).not.toBe('');
+  await prepareRecognition(page);
   await page.evaluate(() => {
     const slot = window as Window & { __spoken: string[] };
     slot.__spoken = [];
@@ -166,9 +182,6 @@ test('read this is spoken and a rejected recognition is silent', async ({ page }
   });
   await page.getByRole('button', { name: 'Read this page aloud' }).click();
   await expect.poll(() => page.evaluate(() => ((window as Window & { __spoken?: string[] }).__spoken || []).join('\n'))).toContain('Welcome to the accessible demo');
-  await page.locator('#user').fill(USER_ID);
-  await page.locator('#code').fill(USER_TOKEN);
-  await page.locator('#listen').selectOption('separate');
   await holdRecognition(page, { status: 'rejected', intent: 'UNKNOWN', language: null, confidence: 0.2, model_version: 'fixture', reason: 'UNCERTAIN_OR_UNKNOWN' });
   await page.getByRole('button', { name: 'Start voice recording' }).click();
   await expect(page.getByRole('button', { name: 'Stop and process voice' })).toBeEnabled();
@@ -185,9 +198,7 @@ test('read this is spoken and a rejected recognition is silent', async ({ page }
 test('a route change or cleared token during recognition runs no command', async ({ page }) => {
   await page.goto('/');
   await expect.poll(() => page.locator('#profile').inputValue()).not.toBe('');
-  await page.locator('#user').fill(USER_ID);
-  await page.locator('#code').fill(USER_TOKEN);
-  await page.locator('#listen').selectOption('separate');
+  await prepareRecognition(page);
   const site = page.locator('#controlled-site');
   const before = await site.evaluate((element) => element.scrollTop);
   await holdRecognition(page, { status: 'accepted', intent: 'SCROLL_DOWN', language: 'en-KE', confidence: 0.9, model_version: 'fixture', reason: null });
@@ -202,14 +213,13 @@ test('a route change or cleared token during recognition runs no command', async
 
   await page.goto('/');
   await expect.poll(() => page.locator('#profile').inputValue()).not.toBe('');
-  await page.locator('#user').fill(USER_ID);
-  await page.locator('#code').fill(USER_TOKEN);
-  await page.locator('#listen').selectOption('separate');
+  await prepareRecognition(page);
   await holdRecognition(page, { status: 'accepted', intent: 'SCROLL_DOWN', language: 'en-KE', confidence: 0.9, model_version: 'fixture', reason: null });
   await page.getByRole('button', { name: 'Start voice recording' }).click();
   await page.waitForTimeout(400);
   await page.getByRole('button', { name: 'Stop and process voice' }).click();
   await expect.poll(() => page.evaluate(() => Boolean((window as Window & { __release?: () => void }).__release))).toBeTruthy();
+  await page.getByRole('button', { name: /Your permission/ }).click();
   await page.locator('#code').fill('');
   await page.evaluate(() => (window as Window & { __release?: () => void }).__release?.());
   await expect(page.getByRole('status')).toContainText('Sign-in changed');
@@ -238,6 +248,7 @@ async function holdRecognition(page: Page, payload: object) {
 
 test('read this page speaks the on-screen article with speechSynthesis', async ({ page }) => {
   await page.goto('/');
+  await openRecognitionCheck(page);
   const available = await page.evaluate(() => typeof window.speechSynthesis?.speak === 'function');
   test.skip(!available, 'speechSynthesis is not available in this browser');
   await page.evaluate(() => {
@@ -258,3 +269,4 @@ test('read this page speaks the on-screen article with speechSynthesis', async (
   expect(spoken.some((item) => item.lang === 'en-KE' && item.text.includes('Welcome to the accessible demo'))).toBeTruthy();
   await expect(page.getByRole('status')).toContainText('Welcome to the accessible demo');
 });
+

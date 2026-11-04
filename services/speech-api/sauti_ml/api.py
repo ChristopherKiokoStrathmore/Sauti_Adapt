@@ -107,6 +107,10 @@ async def enroll(
     session_id: str = Form(...), intent: Intent = Form(...),
     language: Language = Form(...), consent: bool = Form(False),
     session_role: str | None = Form(default=None),
+    tone: str | None = Form(default=None),
+    retention_days: int | None = Form(default=None),
+    terms_version: str | None = Form(default=None),
+    improvement_consent: bool = Form(False),
     user_id: str = Depends(require_user),
 ):
     if os.environ.get('ALLOW_ENROLLMENT') != 'true':
@@ -115,13 +119,21 @@ async def enroll(
     if not consent:
         audit('enroll', 'no-consent', user_id, profile_id)
         raise HTTPException(status_code=403, detail='Explicit permission to record and retain this clip is required.')
+    if os.environ.get('SAUTI_REQUIRE_TERMS') == 'true':
+        if not os.environ.get('SAUTI_PRIVACY_CONTACT', '').strip():
+            raise HTTPException(status_code=503, detail='Pilot privacy contact is not configured.')
+        if terms_version != os.environ.get('SAUTI_TERMS_VERSION', '2026-11-v1'):
+            audit('enroll', 'invalid-terms', user_id, profile_id)
+            raise HTTPException(status_code=403, detail='Current voice-data terms must be accepted before enrollment.')
     try:
         canonical_uuid(profile_id)
         canonical_uuid(session_id)
         assert_owner(profile_id, user_id)
         purge_expired(profile_id, user_id)
         samples = await read_audio(audio)
-        recording_id = store_enrollment(profile_id, session_id, intent, language, samples, session_role or None, user_id)
+        recording_id = store_enrollment(profile_id, session_id, intent, language, samples, session_role or None, user_id,
+                                        tone=tone or None, retention_days=retention_days, terms_version=terms_version or None,
+                                        improvement_consent=improvement_consent)
     except PermissionError as exc:
         audit('enroll', 'forbidden', user_id, profile_id)
         raise HTTPException(status_code=403, detail=str(exc)) from exc

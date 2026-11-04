@@ -1,0 +1,141 @@
+// Controller M2 (web) test — the DOM ControlPort adapter, exercised in node
+// against a minimal hand-rolled DOM stub (no jsdom, zero deps). Proves the web
+// receiver renders/undoes settings and reads content, and that the SAME
+// Controller core drives it exactly as it drove the non-web mock.
+//
+//   node toolkit/test/controller-web.test.mjs
+
+import { createDomReceiver } from '../web/dom-receiver.js';
+import { createController } from '../createController.js';
+
+let pass = 0, fail = 0;
+function check(name, cond) {
+  if (cond) { pass++; console.log('PASS:', name); }
+  else { fail++; console.log('FAIL:', name); }
+}
+
+// Minimal DOM stub: just the surface dom-receiver.js touches.
+function makeStubApp() {
+  const styles = new Map();
+  const classes = new Set();
+  const dataset = {};
+  const headings = [
+    { tagName: 'H2', textContent: 'Getting started' },
+    { tagName: 'H2', textContent: 'How adaptation works' },
+    { tagName: 'H3', textContent: 'Details' },
+  ];
+  const root = {
+    style: {
+      setProperty: (n, v) => styles.set(n, String(v)),
+      getPropertyValue: (n) => styles.get(n) || '',
+      removeProperty: (n) => styles.delete(n),
+    },
+    classList: {
+      contains: (c) => classes.has(c),
+      toggle: (c, on) => { if (on) classes.add(c); else classes.delete(c); return classes.has(c); },
+    },
+    dataset,
+    textContent: 'Getting started How adaptation works Details some readable body text',
+    getAttribute: (a) => (a === 'aria-label' ? 'Demo article' : null),
+    querySelector: (sel) => (/h1|h2|heading/i.test(sel) ? headings[0] : null),
+    querySelectorAll: (sel) => (/h1|h2|h3/i.test(sel) ? headings : []),
+  };
+  const scroller = { clientHeight: 400, _scrolled: false, scrollBy() { this._scrolled = true; } };
+  return { root, scroller, styles, classes, dataset };
+}
+
+async function run() {
+  // ── 1. dom-receiver direct ────────────────────────────────────────────────
+  {
+    const { root, scroller, styles, classes, dataset } = makeStubApp();
+    const recv = createDomReceiver(root, { scrollTarget: scroller });
+
+    const caps = await recv.describeCapabilities();
+    check('web caps: platform web, has fontScale + scroll, can read', caps.platform === 'web' && caps.settingKeys.includes('fontScale') && caps.actions.includes('scroll') && caps.canReadContent);
+
+    await recv.applySettings({ fontScale: 150, darkMode: true, contrastMode: 'yellow-black' });
+    check('web apply: fontScale → --aa-font-scale 1.5', styles.get('--aa-font-scale') === '1.5');
+    check('web apply: darkMode → aa-dark class', classes.has('aa-dark'));
+    check('web apply: contrastMode → data-aa-contrast', dataset.aaContrast === 'yellow-black');
+
+    const undo = await recv.undoLast();
+    check('web undo: reverts all three', !styles.has('--aa-font-scale') && !classes.has('aa-dark') && dataset.aaContrast === undefined && undo.remainingUndos === 0);
+
+    const outline = await recv.getContent('outline');
+    check('web content(outline): headings', outline.outline.length === 3 && outline.source === 'untrusted-content');
+    const text = await recv.getContent('text');
+    check('web content(text): body text', /Getting started/.test(text.text));
+
+    check('web action: scroll performs', (await recv.performAction('scroll', 'down')).ok && scroller._scrolled);
+    check('web action: unknown refused', (await recv.performAction('teleport')).ok === false);
+  }
+
+  // ── 2. Same Controller core drives the web receiver ───────────────────────
+  {
+    const { root, styles, classes } = makeStubApp();
+    const recv = createDomReceiver(root, {});
+    const c = createController({ control: recv });
+
+    await c.handle('bigger text'); // baseline 100 + 10 → 110 → 1.1
+    check('core→web: "bigger text" renders --aa-font-scale 1.1', styles.get('--aa-font-scale') === '1.1');
+
+    await c.handle('dark mode');
+    check('core→web: "dark mode" adds aa-dark', classes.has('aa-dark'));
+
+    const rd = await c.handle('read this');
+    check('core→web: "read this" reads the app text', rd.ok && /getting started/i.test(rd.say));
+
+    const r = await c.handle('large cursor'); // not a web-receiver capability
+    check('core→web: honesty — unsupported key refused, not faked', r.ok === false && r.data.unsupported.includes('largeCursor'));
+  }
+
+  // ── 3. A key cleared to null is not set, not zero ─────────────────────────
+  // A reset ("back to my profile" in /chat, issue #26) sends a number back to
+  // null, which the receiver renders as "remove". The key has to leave the
+  // active map as well: a null left behind reads as 0 to a relative step, so
+  // the next "bigger text" would land on the range minimum (50%) instead of
+  // baseline + 10.
+  {
+    const { root, styles } = makeStubApp();
+    const recv = createDomReceiver(root, {});
+    const c = createController({ control: recv });
+
+    await recv.applySettings({ fontScale: 150, lineHeight: 2.0 });
+    const res = await recv.applySettings({ fontScale: null, lineHeight: null });
+    check('web clear: null is reported as applied', 'fontScale' in res.applied && 'lineHeight' in res.applied);
+    check('web clear: the CSS variables are gone', !styles.has('--aa-font-scale') && !styles.has('--aa-line-height'));
+    const active = (await recv.getContext()).activeSettings;
+    check('web clear: a cleared key is no longer active', !('fontScale' in active) && !('lineHeight' in active));
+
+    await c.handle('bigger text');
+    check('web clear: "bigger text" after a clear starts from the baseline', styles.get('--aa-font-scale') === '1.1');
+
+    const undo = await recv.undoLast(); // the "bigger text"
+    await recv.undoLast();              // the clear itself
+    check('web clear: undo restores the value the clear removed', undo.remainingUndos === 2 && styles.get('--aa-font-scale') === '1.5' && styles.get('--aa-line-height') === '2');
+  }
+
+  // ── 3c. A key cleared to its off value is not "in effect" either ───────────
+  // A reset sends a boolean back to false and an enum back to 'none', which the
+  // renderers drop rather than set. Those keys have to leave the active map the
+  // way a null does, or getContext reports settings that are off as current and
+  // "what's set" answers with a list of things nobody turned on.
+  {
+    const { root, classes, dataset } = makeStubApp();
+    const recv = createDomReceiver(root, {});
+    const c = createController({ control: recv });
+
+    await recv.applySettings({ darkMode: true, contrastMode: 'yellow-black' });
+    await recv.applySettings({ darkMode: false, contrastMode: 'none', dyslexiaFont: true });
+    check('web clear: an off boolean and a none enum are rendered off', !classes.has('aa-dark') && dataset.aaContrast === undefined);
+    const active = (await recv.getContext()).activeSettings;
+    check('web clear: neither is reported as active', !('darkMode' in active) && !('contrastMode' in active));
+    check('web clear: a key that IS in effect still is', active.dyslexiaFont === true);
+    check('web clear: "what is set" names only what is in effect', (await c.handle('what is set')).say === 'Currently set: dyslexiaFont true.');
+  }
+
+  console.log(`\nController M2 (web): ${pass} passed, ${fail} failed`);
+  if (fail) process.exit(1);
+}
+
+run();

@@ -8,7 +8,7 @@ from functools import lru_cache
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from .audio import AudioValidationError, decode_wav
-from .auth import audit, fail_pair_locked, note_auth_failure, note_ip_attempt, origin_allowed, trusted_client_ip, verify_user
+from .auth import audit, create_participant_account, fail_pair_locked, note_auth_failure, note_ip_attempt, origin_allowed, trusted_client_ip, verify_user
 from .contracts import Intent, Language, Recognition, reject
 from .prototype import PrototypeModel
 from .storage import assert_owner, canonical_uuid, delete_profile, delete_recording, profile_dir, purge_expired, purge_expired_profiles, store_enrollment
@@ -99,6 +99,26 @@ async def read_audio(audio: UploadFile):
 @app.get('/health')
 def health():
     return {'status': 'ok', 'mode': os.environ.get('SPEECH_MODE', 'mock'), 'enrollment_enabled': os.environ.get('ALLOW_ENROLLMENT') == 'true'}
+
+
+@app.post('/v1/participants', dependencies=[Depends(require_token)])
+def create_participant(request: Request):
+    """Issue a private account only after a consented adult onboarding request.
+
+    No name, disability label, or recording is collected by this endpoint.
+    """
+    from .auth import _consume
+    if os.environ.get('SAUTI_AUTO_PROVISION') != 'true':
+        raise HTTPException(status_code=403, detail='Automatic enrollment is not enabled.')
+    if os.environ.get('SAUTI_REQUIRE_TERMS') != 'true' or not os.environ.get('SAUTI_PRIVACY_CONTACT'):
+        raise HTTPException(status_code=503, detail='Voice privacy safeguards are not configured.')
+    _consume('provision:' + trusted_client_ip(request), 3)
+    try:
+        user_id, token = create_participant_account()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail='Account storage is not available.') from exc
+    audit('participant', 'created', user_id)
+    return JSONResponse({'user_id': user_id, 'token': token}, headers={'cache-control': 'no-store'})
 
 
 @app.get('/v1/readiness', dependencies=[Depends(require_token)])

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- `apps/extension` is now **Headway**, a TypeScript rebuild of Nutshell (head-pointer browsing and on-device link summaries). It replaces the Sauti voice extension. Its e2e specs (`e2e/extension.spec.ts`, `e2e/binding.spec.ts`, `e2e/extension-sites.mjs`) are removed, and `build:extension` / `typecheck:extension` now target the `headway` workspace. Other docs that describe the Sauti extension are not updated yet.
+- Headway's own code is all TypeScript under `strict`. Readability and Human.js come from typed npm packages instead of vendored files; Human 3.3.6 is byte-identical to Nutshell's copy. WebGazer and clmtrackr were vendored but never referenced, so they were dropped.
+- The manifest sits at the extension root and points into `dist/`. The unused `webNavigation` permission was removed. Only the six Human models the config loads are shipped (dist 34 MB → 18 MB, confirmed by watching network requests on a live page).
+- Nutshell bugs found while typing, and fixed:
+  - The gaze tooltip's bullet regex `[\*-•]` was a character range that matched letters, so lines such as "I think…" became bullets. There is now one shared, tested formatter.
+  - In "panel" mode, YouTube summaries never reached the side panel: the code compared against `'sidepanel'`, which is not a mode, and sent `action` where the panel listens on `type`.
+  - On X, mousing out of a non-link tweet ran `delete` on `null` and threw.
+  - The HUD and an empty camera box showed on every page even with tracking off.
+  - Two dots appeared on the page: the head pointer, plus a dwell dot drawn at the link's centre, which matched the pointer once both used the brand colour. There is now one pointer. Dwell progress is a ring that fills around it, and the snapped link gets a thin frame.
+  - Fetch error text went into the tooltip as raw HTML; it is escaped now.
+- Human.js config notes (no behaviour change): `attention/description/antispoof/liveness: false` are now `{ enabled: false }`. `filter.temporalSmoothing` does not exist in Human 3.3.6 and was silently ignored, so it was removed.
+- New identity: the h mark, wordmark and icons are in `~/Documents/headway-brand` (outside the repo). The side panel, tooltips, scroll and navigation zones, dwell ring and calibration dialogs were redesigned with one accent colour. Status shows as glyph plus word.
+- Checks: strict typecheck passes, 12 node tests pass, and the build passes. The unpacked extension was loaded in Chromium for Testing: the hover pipeline reached the summariser, and Human.js loaded with a fake camera. Not verified: real Gemini Nano output, tracking with a real face, live YouTube and X capture.
+
 - Bootstrap verifies upstream AI4A11y commit `7cf5006dbab9e328fadf54b654147c6bca44113d` and exits non-zero on a different SHA, a dirty checkout, or missing Controller files. The clone stays gitignored.
 - Next.js typecheck calls the real `createController` / `createDomReceiver`. A module declaration types `operator` as the documented ability-model object, so the `operator = null` default no longer forces a cast. `handle()` results are narrowed before reading `pending`.
 - Recorded provenance and upstream notes in `vendor/README.md`.

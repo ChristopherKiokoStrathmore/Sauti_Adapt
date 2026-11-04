@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Headway target test</title>
+<style>
+  :root { --bg:#0f100d; --surface:#171814; --fg:#eeeee6; --muted:#a3a598; --line:rgba(238,238,230,.14); --lime:#c8f031; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; }
+  header { display:flex; gap:16px; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:17px; font-weight:600; letter-spacing:-.01em; }
+  .controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  label { color: var(--muted); font-size: 13px; }
+  input[type=text], select { background:var(--surface); color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font:inherit; }
+  button.ui { min-height:44px; padding:0 18px; border-radius:10px; border:1px solid var(--line); background:var(--surface); color:var(--fg); font:600 15px/1 inherit; cursor:pointer; }
+  button.ui.primary { background: var(--lime); color:#11120e; border-color: transparent; }
+  #arena { position: relative; height: calc(100vh - 73px); overflow: hidden; }
+  #status { position:absolute; left:20px; top:14px; color:var(--muted); font: 500 13px/1.4 ui-monospace, Menlo, monospace; pointer-events:none; }
+  .target, .decoy { position:absolute; border-radius:8px; border:0; padding:0; cursor:pointer; }
+  .target { background: var(--lime); box-shadow: 0 0 0 2px #11120e inset; }
+  .decoy { background: #5c5e55; }
+  #results { padding: 24px 20px 40px; max-width: 920px; }
+  table { width:100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); }
+  th { color: var(--muted); font-weight:500; font-size:13px; }
+  .note { color: var(--muted); max-width: 70ch; }
+  pre { background: var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px; overflow:auto; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Headway target test</h1>
+  <div class="controls">
+    <label>Person <input type="text" id="who" placeholder="initials" size="6"></label>
+    <label>Build <input type="text" id="build" placeholder="e.g. before / A+B" size="10"></label>
+    <label>Layout
+      <select id="layout">
+        <option value="open">Open space</option>
+        <option value="crowded">Crowded (neighbours 6 px away)</option>
+      </select>
+    </label>
+    <button class="ui primary" id="start" type="button">Start 25 targets</button>
+  </div>
+</header>
+
+<main>
+  <section id="arena" aria-label="Test area">
+    <p id="status">Press Start. Each lime square appears one at a time: move to it and click it. Grey squares are decoys.</p>
+  </section>
+  <section id="results" hidden>
+    <h2>Results</h2>
+    <table id="table"><thead><tr><th>Size (px)</th><th>Hit</th><th>Gave up</th><th>Misses</th><th>Median time (s)</th></tr></thead><tbody></tbody></table>
+    <p class="note">A miss is any click that is not on the lime target: a decoy or empty space. After 30 seconds a target counts as given up and the next one appears. Copy the block below into the research file (Research/001, Solutions tried).</p>
+    <pre id="raw"></pre>
+    <button class="ui" id="again" type="button">Run again</button>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var SIZES = [24, 32, 44, 64, 110];
+  var PER_SIZE = 5;
+  var GIVE_UP_MS = 30000;
+  var arena = document.getElementById('arena');
+  var status = document.getElementById('status');
+  var trials = [], i = 0, current = null, shownAt = 0, misses = 0, timer = null, layout = 'open';
+
+  function shuffle(a) { for (var k = a.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)); var t = a[k]; a[k] = a[j]; a[j] = t; } return a; }
+
+  function clearArena() {
+    Array.prototype.slice.call(arena.querySelectorAll('.target, .decoy')).forEach(function (n) { n.remove(); });
+  }
+
+  function place(size) {
+    clearArena();
+    var w = arena.clientWidth, h = arena.clientHeight, pad = 140;
+    var x = pad + Math.random() * Math.max(1, w - 2 * pad - size);
+    var y = pad + Math.random() * Math.max(1, h - 2 * pad - size);
+    var t = document.createElement('button');
+    t.className = 'target'; t.type = 'button'; t.setAttribute('aria-label', 'Target ' + size + ' px');
+    t.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + size + 'px;height:' + size + 'px';
+    arena.appendChild(t);
+    if (layout === 'crowded') {
+      [[-(size + 6), 0], [size + 6, 0]].forEach(function (d) {
+        var o = document.createElement('button');
+        o.className = 'decoy'; o.type = 'button'; o.setAttribute('aria-label', 'Decoy');
+        o.style.cssText = 'left:' + (x + d[0]) + 'px;top:' + (y + d[1]) + 'px;width:' + size + 'px;height:' + size + 'px';
+        arena.appendChild(o);
+      });
+    }
+    current = t; shownAt = performance.now(); misses = 0;
+    status.textContent = 'Target ' + (i + 1) + ' of ' + trials.length + ' · ' + size + ' px';
+    clearTimeout(timer);
+    timer = setTimeout(function () { finish(false); }, GIVE_UP_MS);
+  }
+
+  function finish(hit) {
+    clearTimeout(timer);
+    var tr = trials[i];
+    tr.hit = hit; tr.ms = hit ? Math.round(performance.now() - shownAt) : null; tr.misses = misses;
+    i++;
+    if (i < trials.length) place(trials[i].size); else report();
+  }
+
+  arena.addEventListener('click', function (e) {
+    if (!current) return;
+    if (e.target === current) finish(true); else misses++;
+  });
+
+  function median(xs) { if (!xs.length) return null; var s = xs.slice().sort(function (a, b) { return a - b; }); var m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+
+  function report() {
+    clearArena(); current = null;
+    status.textContent = 'Done.';
+    var tbody = document.querySelector('#table tbody'); tbody.innerHTML = '';
+    var summary = SIZES.map(function (size) {
+      var rows = trials.filter(function (t) { return t.size === size; });
+      var hits = rows.filter(function (t) { return t.hit; });
+      var med = median(hits.map(function (t) { return t.ms; }));
+      var row = { size: size, hit: hits.length, gaveUp: rows.length - hits.length, misses: rows.reduce(function (n, t) { return n + t.misses; }, 0), medianS: med === null ? null : +(med / 1000).toFixed(2) };
+      var tr = document.createElement('tr');
+      [row.size, row.hit + ' / ' + rows.length, row.gaveUp, row.misses, row.medianS === null ? '—' : row.medianS].forEach(function (v) { var td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+      tbody.appendChild(tr);
+      return row;
+    });
+    var record = { date: new Date().toISOString().slice(0, 16), person: document.getElementById('who').value || null, build: document.getElementById('build').value || null, layout: layout, summary: summary, trials: trials };
+    document.getElementById('raw').textContent = JSON.stringify(record, null, 1);
+    document.getElementById('results').hidden = false;
+    arena.hidden = true;
+  }
+
+  function start() {
+    layout = document.getElementById('layout').value;
+    trials = shuffle([].concat.apply([], SIZES.map(function (s) { var a = []; for (var k = 0; k < PER_SIZE; k++) a.push({ size: s }); return a; })));
+    i = 0;
+    document.getElementById('results').hidden = true;
+    arena.hidden = false;
+    place(trials[0].size);
+  }
+
+  document.getElementById('start').addEventListener('click', start);
+  document.getElementById('again').addEventListener('click', start);
+})();
+</script>
+</body>
+</html>

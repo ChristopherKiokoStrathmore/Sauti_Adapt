@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Head pointer precision (Research/001). The pointer snaps to any clickable, not only links, measured to the target's edge, and the snapped target is framed. Mouth click freezes the pointer as the mouth starts to open and clicks once per opening; Nutshell re-clicked every 800 ms while the mouth stayed open. A picker with large numbered tiles appears when a click lands between small targets. The follow rate depends on distance, and the side panel adds Pointer speed and Steadiness. A target test page is in `apps/extension/Research/`. 19 tests pass. Not yet measured with a person.
 - `apps/extension` is now **Headway**, a TypeScript rebuild of Nutshell (head-pointer browsing and on-device link summaries). It replaces the Sauti voice extension. Its e2e specs (`e2e/extension.spec.ts`, `e2e/binding.spec.ts`, `e2e/extension-sites.mjs`) are removed, and `build:extension` / `typecheck:extension` now target the `headway` workspace. Other docs that describe the Sauti extension are not updated yet.
 - Headway's own code is all TypeScript under `strict`. Readability and Human.js come from typed npm packages instead of vendored files; Human 3.3.6 is byte-identical to Nutshell's copy. WebGazer and clmtrackr were vendored but never referenced, so they were dropped.
 - The manifest sits at the extension root and points into `dist/`. The unused `webNavigation` permission was removed. Only the six Human models the config loads are shipped (dist 34 MB → 18 MB, confirmed by watching network requests on a live page).

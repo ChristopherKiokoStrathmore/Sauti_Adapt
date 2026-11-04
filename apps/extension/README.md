@@ -44,6 +44,10 @@ Headway's own code is all TypeScript under `strict`. Two libraries were vendored
 
 Nutshell also shipped WebGazer and clmtrackr, but no code referenced them, so Headway does not include them.
 
+## Research
+
+`Research/` records each problem we hit and what we tried, one numbered file per problem. `Research/target-test.html` measures hit rate and time on 24–110 px targets; serve it over http so the content scripts run.
+
 ## Checks
 
 ```bash

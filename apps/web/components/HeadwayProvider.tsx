@@ -60,6 +60,8 @@ function ensureHuman(): Promise<HumanConstructor> {
 }
 
 function candidateAt(x: number, y: number): HTMLElement | null {
+  // This website demo never activates admin controls or third party pages.
+  if (window.location.pathname !== '/' && window.location.pathname !== '/workspace') return null;
   const node = document.elementFromPoint(x, y) as HTMLElement | null;
   const target = node?.closest<HTMLElement>('button, a, summary, [data-headway-action], .aw-radio, .aw-form input[type="text"]');
   if (!target || !target.isConnected || target.closest('[data-headway-ignore]')) return null;

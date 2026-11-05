@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { COMMAND_LABELS, commandToUtterance, validRecognition, type Intent, type Language, type Recognition } from '@sauti/shared';
 import { clampClipMs, startRecording, type RecordingSession } from '@sauti/shared/audio';
@@ -639,7 +640,7 @@ export function SautiDashboard() {
           <div className="status-row"><span aria-hidden="true">●</span><strong>Voice profile</strong><span className={'state-pill ' + (saved > 0 ? 'ready' : 'pending')}>{saved > 0 ? 'In progress' : 'Not started'}</span></div>
           <div className="status-row"><span aria-hidden="true">●</span><strong>Recognition check</strong><span className={'state-pill ' + (prediction?.status === 'accepted' ? 'ready' : 'pending')}>{prediction?.status === 'accepted' ? 'Accepted' : 'Pending'}</span></div>
           <div className="status-row"><span aria-hidden="true">●</span><strong>Headway website demo</strong><span className="state-pill neutral">{headwayPhase}</span></div>
-          <a className="soft-button full-width" href="/workspace">Open accessible workspace</a>
+          <Link className="soft-button full-width" href="/workspace">Open accessible workspace</Link>
           <small>Optional Headway controls are available throughout onboarding and the workspace.</small>
         </section>
       </details></aside>
@@ -651,7 +652,7 @@ export function SautiDashboard() {
       <div className="after-title"><span className="after-icon" aria-hidden="true">▣</span><h2 id="after-title">After onboarding</h2></div>
       <div className="flow-card"><Icon tone="blue">▰</Icon><div><strong>Personal voice profile</strong><span>Recognizes your chosen commands</span></div></div><span className="flow-arrow" aria-hidden="true">→</span>
       <div className="flow-card"><Icon>AI</Icon><div><strong>AI4A11y Toolkit</strong><span>Handles accepted commands</span></div></div><span className="flow-arrow" aria-hidden="true">→</span>
-      <div className="flow-card"><Icon>✚</Icon><div><strong>Headway website demo</strong><span>Head controlled navigation on Sauti Adapt</span><a className="soft-button extension-quick-link" href="/workspace">Open accessible workspace</a></div></div>
+      <div className="flow-card"><Icon>✚</Icon><div><strong>Headway website demo</strong><span>Head controlled navigation on Sauti Adapt</span><Link className="soft-button extension-quick-link" href="/workspace">Open accessible workspace</Link></div></div>
       <p className="feedback-banner">Feedback you approve can support the next validated voice profile.</p>
     </section>
     <footer><p>Sauti Adapt supports access and communication. It does not diagnose or treat cerebral palsy or another medical condition.</p></footer>

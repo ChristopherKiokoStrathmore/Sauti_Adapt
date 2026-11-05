@@ -798,3 +798,15 @@ box-shadow:inset -18px -24px 44px rgba(13,8,60,.74),0 0 70px rgba(173,76,244,.28
 .hw-panel.hw-panel-collapsed{padding:9px 12px;width:min(260px,calc(100vw - 32px));top:88px;bottom:auto}
 .hw-panel.hw-panel-collapsed>:not(.hw-panel-title){display:none}
 .hw-panel.hw-panel-collapsed .hw-panel-title{gap:7px;flex-wrap:wrap}
+
+
+/* Magnetic navigation is the default Headway web experience. */
+.hw-target.hw-snap-target{
+  outline:5px solid #6420df!important;
+  outline-offset:5px!important;
+  box-shadow:0 0 0 10px rgba(150,105,245,.28),0 0 25px rgba(77,26,194,.24)!important;
+  border-radius:8px;
+}
+.hw-pointer{transition:left 95ms ease-out,top 95ms ease-out}
+.hw-pointer-waiting{transition:none}
+@media(prefers-reduced-motion:reduce){.hw-pointer{transition:none}}

@@ -46,12 +46,20 @@ async function openRecognitionCheck(page: Page): Promise<void> {
 }
 
 async function prepareRecognition(page: Page): Promise<void> {
+  // Provision a private test account through the same consent gated API used by
+  // onboarding. The participant UI no longer shows technical credentials.
+  const created = await page.request.post('/api/participant', {
+    data: { age: 24, consent: true, termsVersion: '2026-11-v1' },
+  });
+  expect(created.ok()).toBeTruthy();
+  await page.reload();
+  await expect.poll(async () => {
+    const response = await page.request.get('/api/participant');
+    return (await response.json()).authenticated;
+  }).toBe(true);
+  await page.getByRole('button', { name: /Your preferences/ }).click();
   await page.getByText('Recording accessibility options').click();
   await page.locator('#listen').selectOption('separate');
-  await page.getByRole('button', { name: /Your permission/ }).click();
-  await page.getByText('Existing pilot account (optional)').click();
-  await page.locator('#user').fill(USER_ID);
-  await page.locator('#code').fill(USER_TOKEN);
   await openRecognitionCheck(page);
 }
 
@@ -197,7 +205,7 @@ test('read this is spoken and a rejected recognition is silent', async ({ page }
   expect(spoken.filter((line) => !line.includes('Welcome'))).toEqual([]);
 });
 
-test('a route change or cleared token during recognition runs no command', async ({ page }) => {
+test('a route change or revoked participant session during recognition runs no command', async ({ page }) => {
   await page.goto('/');
   await expect.poll(() => page.locator('#profile').inputValue()).not.toBe('');
   await prepareRecognition(page);
@@ -221,10 +229,11 @@ test('a route change or cleared token during recognition runs no command', async
   await page.waitForTimeout(400);
   await page.getByRole('button', { name: 'Stop and process voice' }).click();
   await expect.poll(() => page.evaluate(() => Boolean((window as Window & { __release?: () => void }).__release))).toBeTruthy();
-  await page.getByRole('button', { name: /Your permission/ }).click();
-  await page.locator('#code').fill('');
+  // The model response must not perform actions after logout during inference.
+  const revoked = await page.request.delete('/api/participant');
+  expect(revoked.status()).toBe(200);
   await page.evaluate(() => (window as Window & { __release?: () => void }).__release?.());
-  await expect(page.getByRole('status')).toContainText('Sign-in changed');
+  await expect(page.getByRole('status')).toContainText('Session changed');
   expect(await site.evaluate((element) => element.scrollTop)).toBe(0);
 });
 

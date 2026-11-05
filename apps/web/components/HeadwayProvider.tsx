@@ -39,22 +39,41 @@ export function useHeadway() {
 function ensureHuman(): Promise<HumanConstructor> {
   if (window.__HeadwayHumanConstructor) return Promise.resolve(window.__HeadwayHumanConstructor);
   return new Promise((resolve, reject) => {
-    const prior = document.querySelector<HTMLScriptElement>('script[data-headway-human]');
-    if (prior) prior.remove();
+    // Remove an old failed loader before retrying. Loading the module itself is
+    // asynchronous, so script.onerror alone cannot capture evaluation errors.
+    document.querySelector<HTMLScriptElement>('script[data-headway-human]')?.remove();
     const tag = document.createElement('script');
     tag.src = '/headway-demo/loader.js';
     tag.type = 'module';
     tag.dataset.headwayHuman = 'true';
-    const finished = () => {
+
+    const cleanup = () => {
+      clearTimeout(timeout);
       window.removeEventListener('headway-human-ready', finished);
-      resolve(window.__HeadwayHumanConstructor!);
+      window.removeEventListener('headway-human-error', failed);
     };
-    window.addEventListener('headway-human-ready', finished, { once: true });
-    tag.onerror = () => {
-      window.removeEventListener('headway-human-ready', finished);
+    const fail = (reason: string) => {
+      cleanup();
       tag.remove();
-      reject(new Error('Headway face tracking assets could not be loaded.'));
+      reject(new Error(reason));
     };
+    const finished = () => {
+      const ctor = window.__HeadwayHumanConstructor;
+      if (typeof ctor !== 'function') {
+        fail('Headway model finished loading but no constructor was available.');
+        return;
+      }
+      cleanup();
+      resolve(ctor);
+    };
+    const failed = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail;
+      fail('Unable to load the Headway face model: ' + (detail || 'unknown module error'));
+    };
+    const timeout = window.setTimeout(() => fail('Headway model loading timed out. Check the browser console and retry.'), 45_000);
+    window.addEventListener('headway-human-ready', finished, { once: true });
+    window.addEventListener('headway-human-error', failed, { once: true });
+    tag.onerror = () => fail('Headway model loader could not be fetched.');
     document.head.appendChild(tag);
   });
 }

@@ -91,7 +91,8 @@ test('B versus C uses one task at a time, adjustable pace and honest readiness',
   await page.getByRole('button', { name: 'bigger text' }).click();
   await expect(page.getByRole('status')).toHaveText('Making text bigger.');
   await page.getByRole('button', { name: /Finish this journey/ }).click();
-  await expect(page.getByText('Your voice examples are saved.')).toBeVisible();
+  await expect(page.getByText('Your Sauti voice profile is separate and remains private.')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Download and install Headway/ })).toHaveAttribute('href', '/install');
   await expect(page.getByText('Build and load the extension', { exact: false })).toBeHidden();
 });
 

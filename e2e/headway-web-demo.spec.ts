@@ -221,32 +221,24 @@ test('magnetic Headway defaults to mouth selection, snaps with head motion, and 
   await page.evaluate(() => { (window as unknown as { __SnapFixture: { x: number } }).__SnapFixture.x = 480; });
   await expect.poll(async () => page.locator('.hw-snap-target').evaluate(el => el.outerHTML)).not.toEqual(initialTarget);
   const jumped = await page.locator('.hw-snap-target').evaluate(el => el.outerHTML);
-  console.log('MAGNET TARGET BEFORE CLICK', jumped.slice(0, 250));
   // Holding the head right must not repeatedly cycle through controls.
   await page.waitForTimeout(550);
   await expect(page.locator('.hw-snap-target')).toHaveJSProperty('outerHTML', jumped);
   const startClicks = await page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks);
   await page.evaluate(() => { (window as unknown as { __SnapFixture: { mouth: number } }).__SnapFixture.mouth = 0.48; });
   await expect.poll(async () => page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks)).toBe(startClicks + 1);
+  // A React state update must not remove the visual magnet highlight.
+  await expect(page.locator('.hw-snap-target')).toHaveCount(1);
   await page.waitForTimeout(850);
   expect(await page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks)).toBe(startClicks + 1);
   await page.evaluate(() => { (window as unknown as { __SnapFixture: { mouth: number } }).__SnapFixture.mouth = 0.2; });
   await page.waitForTimeout(600);
   await page.evaluate(() => { (window as unknown as { __SnapFixture: { mouth: number } }).__SnapFixture.mouth = 0.48; });
-  const clickedAgain = await expect.poll(
+  await expect.poll(
     async () => page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks),
-    { timeout: 4_000 },
-  ).toBe(startClicks + 2).then(() => true, () => false);
-  if (!clickedAgain) {
-    const debug = await page.evaluate(() => ({
-      url: window.location.href,
-      panel: document.querySelector('.hw-panel')?.textContent?.slice(0, 800) || 'missing',
-      target: document.querySelector('.hw-snap-target')?.outerHTML.slice(0, 350) || 'none',
-      clicks: (window as unknown as { __SnapFixture?: { clicks: number } }).__SnapFixture?.clicks ?? -1,
-    }));
-    console.log('Second mouth click investigation:', JSON.stringify(debug));
-  }
-  expect(clickedAgain).toBe(true);
+    { timeout: 5_000 },
+  ).toBe(startClicks + 2);
+  await expect(page.locator('.hw-snap-target')).toHaveCount(1);
   await page.getByRole('button', { name: 'Stop Headway', exact: true }).click();
   await expect(page.locator('.hw-snap-target')).toHaveCount(0);
 });

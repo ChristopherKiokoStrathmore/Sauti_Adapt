@@ -29,6 +29,25 @@ test('the actual bundled Human.js ESM module initializes the Headway constructor
   expect(result).toEqual({ state: 'ready', hasDetect: true, hasLoad: true });
 });
 
+test('Headway pointer appears immediately while the browser camera permission is pending', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: () => new Promise<MediaStream>(() => {
+        // Keep permission unresolved: the pointer must not wait for the camera or model.
+      }),
+    });
+  });
+  await page.goto('/');
+  await expect(page.locator('.hw-pointer')).toHaveCount(0);
+  await page.locator('.topbar').getByRole('button', { name: /Enable Headway/ }).click();
+  await expect(page.locator('.hw-pointer.hw-pointer-waiting')).toBeVisible();
+  await expect(page.locator('.hw-pointer')).toHaveCSS('pointer-events', 'none');
+  await expect(page.locator('.hw-panel')).toContainText('Requesting camera permission');
+  await page.getByRole('button', { name: 'Stop Headway' }).click();
+  await expect(page.locator('.hw-pointer')).toHaveCount(0);
+});
+
 test('Headway requests no camera permission before the user activates it', async ({ page }) => {
   await page.addInitScript(() => {
     (window as unknown as { __cameraRequests: number }).__cameraRequests = 0;
@@ -104,8 +123,12 @@ test('Headway mock camera fixture confirms global session survives Sauti client 
   await page.locator('.topbar').getByRole('button', { name: /Enable Headway/ }).click();
   await expect(page.getByText('Face detected. Headway is tracking locally.')).toBeVisible();
   const startingX = await page.locator('.hw-pointer').evaluate(el => parseFloat((el as HTMLElement).style.left));
+  // A head movement toward screen right should move the pointer right, not mirror it.
+  await page.evaluate(() => { (window as unknown as { __HeadwayFixture: { x: number } }).__HeadwayFixture.x = 400; });
+  await expect.poll(async () => page.locator('.hw-pointer').evaluate(el => parseFloat((el as HTMLElement).style.left))).toBeGreaterThan(startingX + 0.5);
+  // Returning toward screen left should move the pointer left.
   await page.evaluate(() => { (window as unknown as { __HeadwayFixture: { x: number } }).__HeadwayFixture.x = 60; });
-  await expect.poll(async () => page.locator('.hw-pointer').evaluate(el => parseFloat((el as HTMLElement).style.left))).not.toBe(startingX);
+  await expect.poll(async () => page.locator('.hw-pointer').evaluate(el => parseFloat((el as HTMLElement).style.left))).toBeLessThan(startingX - 0.5);
   await page.getByRole('button', { name: 'Minimize' }).click();
   await expect(page.locator('.hw-panel')).toHaveClass(/hw-panel-collapsed/);
   await page.getByRole('link', { name: /Open accessible workspace/i }).first().click();

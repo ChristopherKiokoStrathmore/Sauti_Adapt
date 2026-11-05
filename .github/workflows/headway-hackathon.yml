@@ -1,0 +1,55 @@
+name: Headway hackathon build and download
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/headway/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/headway-hackathon.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-headway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify Headway source and build
+        run: npm run check:headway
+      - name: Package Chrome unpacked extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'Commit: %s\nBuilt in GitHub Actions\n' "$GITHUB_SHA" > apps/headway/dist/build-info.txt
+          (cd apps/headway && zip -q -r ../../Headway-Chrome-Hackathon.zip manifest.json icons dist)
+          test -s Headway-Chrome-Hackathon.zip
+          unzip -p Headway-Chrome-Hackathon.zip manifest.json | grep -q '"name": "Headway"'
+          sha256sum Headway-Chrome-Hackathon.zip > Headway-Chrome-Hackathon.sha256
+      - name: Publish test download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view headway-hackathon >/dev/null 2>&1; then
+            gh release create headway-hackathon --target "$GITHUB_SHA" --title "Headway | Hackathon test build" --prerelease --notes "Unpacked Chrome extension for hackathon testing. Unzip, visit chrome://extensions, enable Developer mode, select Load unpacked, and select the extracted folder containing manifest.json. The extension requests broad site and Chrome debugger access; review permissions before enabling. Not a Chrome Web Store installation."
+          fi
+          gh release upload headway-hackathon Headway-Chrome-Hackathon.zip Headway-Chrome-Hackathon.sha256 --clobber
+      - name: Attach CI artifact as fallback
+        uses: actions/upload-artifact@v4
+        with:
+          name: headway-chrome-hackathon
+          path: |
+            Headway-Chrome-Hackathon.zip
+            Headway-Chrome-Hackathon.sha256
+          retention-days: 30

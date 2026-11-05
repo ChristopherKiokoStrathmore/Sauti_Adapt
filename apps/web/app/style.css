@@ -684,3 +684,8 @@ box-shadow:inset -18px -24px 44px rgba(13,8,60,.74),0 0 70px rgba(173,76,244,.28
 .hi-copy-chrome{min-height:49px;padding:10px 15px;border-radius:13px;background:#e8ddff;color:#47209e;font-size:.91rem;border:1px solid #d9c7f9;box-shadow:none;display:inline-flex;align-items:center;margin-right:14px}
 .hi-copy-chrome:hover:not(:disabled){box-shadow:none;background:#dfceff}
 .hi-install-guide .hi-copy-feedback{font-size:.84rem;margin:9px 0;color:#443169;line-height:1.45}
+
+/* A pending store review is never styled or exposed as a working download/install link. */
+.hi-install-unavailable,.hi-install-unavailable:hover{background:linear-gradient(115deg,#776790,#53466b);border-color:#685a81;box-shadow:none;color:#fff;cursor:not-allowed}
+.hi-store-status{font-size:.9rem;line-height:1.55;color:#4d406d;margin:16px 0 0}
+.install-unavailable,.install-unavailable:hover{background:#796b91;color:#fff;box-shadow:none;cursor:not-allowed;filter:none}

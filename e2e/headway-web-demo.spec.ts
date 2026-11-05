@@ -82,7 +82,7 @@ test('Headway mock camera fixture confirms global session survives Sauti client 
   await page.getByRole('link', { name: /Open accessible workspace/i }).first().click();
   await expect(page).toHaveURL(/\/workspace$/);
   await expect(page.locator('.hw-panel')).toBeVisible();
-  await page.getByRole('button', { name: 'Stop Headway' }).click();
+  await page.getByRole('button', { name: 'Stop Headway and release camera' }).click();
   expect(await page.evaluate(() => (window as unknown as { __HeadwayFixture: { stopped: number } }).__HeadwayFixture.stopped)).toBeGreaterThan(0);
   await expect(page.locator('.hw-pointer')).toHaveCount(0);
 });

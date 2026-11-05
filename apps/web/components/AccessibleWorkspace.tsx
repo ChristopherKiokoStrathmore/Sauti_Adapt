@@ -89,7 +89,7 @@ export function AccessibleWorkspace() {
       <div className="aw-card-heading"><h2 id="aw-form-title">Form completion simulation</h2><p>Navigate form controls, then submit sample information stored only on this page.</p></div>
       <form className="aw-form" onSubmit={e => {e.preventDefault();setSubmitted(true);setNotice('Practice form submitted locally.');}}>
         <label htmlFor="aw-name">Optional display name
-          <input id="aw-name" value={formName} onChange={e => setFormName(e.target.value)} placeholder="Use your keyboard or assistive input"/>
+          <input type="text" id="aw-name" value={formName} onChange={e => setFormName(e.target.value)} placeholder="Use your keyboard or assistive input"/>
         </label>
         <fieldset><legend>Choose your preferred language</legend>
           {['English','Kiswahili'].map(name => <label className="aw-radio" key={name}><input type="radio" name="practice-language" checked={formChoice === name} onChange={() => setFormChoice(name)}/>{name}</label>)}

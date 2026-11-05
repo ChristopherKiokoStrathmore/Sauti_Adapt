@@ -177,6 +177,7 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
     model.current = null;
     center.current = null;
     latest.current = null;
+    previousFace.current = false;
     target.current?.classList.remove('hw-target', 'hw-snap-target');
     target.current = null;
     mouth.current.reset();
@@ -458,8 +459,9 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
     dwell.current = { element: null, since: 0, fired: false };
     mouth.current.reset();
     setProgress(0);
-    target.current?.classList.remove('hw-target');
+    target.current?.classList.remove('hw-target', 'hw-snap-target');
     target.current = null;
+    directionArmed.current = true;
   }, []);
   const recenter = useCallback(() => {
     if (!latest.current) { setCalibrationStatus('A single face must be visible before recalibrating.'); return; }

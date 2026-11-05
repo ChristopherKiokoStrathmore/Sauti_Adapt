@@ -722,6 +722,9 @@ box-shadow:inset -18px -24px 44px rgba(13,8,60,.74),0 0 70px rgba(173,76,244,.28
 .hw-panel input[type=range]{accent-color:#763cdb}
 .hw-panel small{font-size:.76rem;line-height:1.35;color:#6a5e7b}
 .hw-pointer{position:fixed;transform:translate(-50%,-50%);width:29px;height:29px;z-index:59;pointer-events:none;filter:drop-shadow(0 2px 5px #31205e66)}
+.hw-pointer-waiting{opacity:.66;filter:drop-shadow(0 2px 5px #51476644)}
+.hw-pointer-waiting .hw-pointer-progress{border-style:dashed;border-color:#8f7db2;background:#ddd4eb;box-shadow:0 0 0 3px #8f7db255}
+.hw-pointer-waiting .hw-pointer-progress:after{background:#77648e}
 .hw-pointer-progress{display:block;width:29px;height:29px;border-radius:50%;border:3px solid #fff;background:conic-gradient(#8a4de7 var(--hw-progress,0deg),transparent 0);box-shadow:0 0 0 3px #6535c9}
 .hw-pointer-progress:after{content:'';position:absolute;top:9px;left:9px;width:11px;height:11px;border-radius:50%;background:#6834d5}
 .hw-target{outline:4px solid #8b52eb!important;outline-offset:4px!important;box-shadow:0 0 0 8px #dcccfa55!important}

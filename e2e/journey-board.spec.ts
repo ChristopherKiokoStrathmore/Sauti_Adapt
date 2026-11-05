@@ -53,7 +53,12 @@ test('A baseline exposes full preference and extension information for compariso
   await page.locator('.stepper-card button').nth(3).click();
   await expect(page.getByRole('heading', { name: 'Check recognition' })).toBeVisible();
   await page.getByRole('button', { name: /Continue to extension/ }).click();
-  await expect(page.getByRole('link', { name: 'Download Headway Chrome extension ZIP' })).toHaveAttribute('href', 'https://github.com/ChristopherKiokoStrathmore/Sauti_Adapt/releases/download/headway-hackathon/Headway-Chrome-Hackathon.zip');
+  if (process.env.NEXT_PUBLIC_HEADWAY_CHROME_WEB_STORE_URL) {
+    await expect(page.getByRole('link', { name: 'Install Headway from Chrome Web Store' }))
+      .toHaveAttribute('href', process.env.NEXT_PUBLIC_HEADWAY_CHROME_WEB_STORE_URL);
+  } else {
+    await expect(page.getByRole('status', { name: /Headway Chrome Web Store approval pending/i })).toBeVisible();
+  }
 });
 
 test('A versus B simplifies preference decisions while keeping language and accessibility options', async ({ page }) => {
@@ -93,7 +98,12 @@ test('B versus C uses one task at a time, adjustable pace and honest readiness',
   await page.getByRole('button', { name: /Finish this journey/ }).click();
   await expect(page.getByRole('heading', { name: 'Install Headway extension' })).toBeVisible();
   await expect(page.getByText('Headway works alongside Sauti.', { exact: false })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Download Headway Chrome extension ZIP' })).toHaveAttribute('href', 'https://github.com/ChristopherKiokoStrathmore/Sauti_Adapt/releases/download/headway-hackathon/Headway-Chrome-Hackathon.zip');
+  if (process.env.NEXT_PUBLIC_HEADWAY_CHROME_WEB_STORE_URL) {
+    await expect(page.getByRole('link', { name: 'Install Headway from Chrome Web Store' }))
+      .toHaveAttribute('href', process.env.NEXT_PUBLIC_HEADWAY_CHROME_WEB_STORE_URL);
+  } else {
+    await expect(page.getByRole('status', { name: /Headway Chrome Web Store approval pending/i })).toBeVisible();
+  }
   await expect(page.getByText('Build and load the extension', { exact: false })).toBeHidden();
 });
 

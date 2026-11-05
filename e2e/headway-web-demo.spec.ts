@@ -122,6 +122,8 @@ test('Headway mock camera fixture confirms global session survives Sauti client 
   await page.goto('/');
   await page.locator('.topbar').getByRole('button', { name: /Enable Headway/ }).click();
   await expect(page.getByText('Face detected. Headway is tracking locally.')).toBeVisible();
+  // This existing test checks continuous pointer motion, which is now the alternate mode.
+  await page.getByLabel('Navigation mode').selectOption('free');
   const startingX = await page.locator('.hw-pointer').evaluate(el => parseFloat((el as HTMLElement).style.left));
   // A head movement toward screen right should move the pointer right, not mirror it.
   await page.evaluate(() => { (window as unknown as { __HeadwayFixture: { x: number } }).__HeadwayFixture.x = 400; });

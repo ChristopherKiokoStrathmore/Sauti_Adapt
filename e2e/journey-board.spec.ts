@@ -53,7 +53,7 @@ test('A baseline exposes full preference and extension information for compariso
   await page.locator('.stepper-card button').nth(3).click();
   await expect(page.getByRole('heading', { name: 'Check recognition' })).toBeVisible();
   await page.getByRole('button', { name: /Continue to extension/ }).click();
-  await expect(page.getByRole('link', { name: /Download and install Headway/ })).toHaveAttribute('href', '/install');
+  await expect(page.getByRole('link', { name: 'Download Headway Chrome extension ZIP' })).toHaveAttribute('href', 'https://github.com/ChristopherKiokoStrathmore/Sauti_Adapt/releases/download/headway-hackathon/Headway-Chrome-Hackathon.zip');
 });
 
 test('A versus B simplifies preference decisions while keeping language and accessibility options', async ({ page }) => {
@@ -91,8 +91,9 @@ test('B versus C uses one task at a time, adjustable pace and honest readiness',
   await page.getByRole('button', { name: 'bigger text' }).click();
   await expect(page.getByRole('status')).toHaveText('Making text bigger.');
   await page.getByRole('button', { name: /Finish this journey/ }).click();
-  await expect(page.getByText('Your Sauti voice profile is separate and remains private.')).toBeVisible();
-  await expect(page.getByRole('link', { name: /Download and install Headway/ })).toHaveAttribute('href', '/install');
+  await expect(page.getByRole('heading', { name: 'Install Headway extension' })).toBeVisible();
+  await expect(page.getByText('Headway works alongside Sauti.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Download Headway Chrome extension ZIP' })).toHaveAttribute('href', 'https://github.com/ChristopherKiokoStrathmore/Sauti_Adapt/releases/download/headway-hackathon/Headway-Chrome-Hackathon.zip');
   await expect(page.getByText('Build and load the extension', { exact: false })).toBeHidden();
 });
 

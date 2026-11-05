@@ -46,7 +46,7 @@ test('onboarding Step 5 renders the approved Headway download journey directly',
   await expect(step.getByText('chrome://extensions', { exact: true })).toBeHidden();
   await step.getByText('See installation guide').click();
   await expect(step.getByText('chrome://extensions', { exact: true })).toBeVisible();
-  await expect(step.getByText('Load unpacked', { exact: false })).toBeVisible();
+  await expect(step.getByText('Select Load unpacked.', { exact: true })).toBeVisible();
   await step.getByRole('button', { name: 'Copy Chrome extensions address' }).click();
   await expect(step.getByRole('status')).toContainText(/Address copied|Copy unavailable/);
   await expect(step.getByRole('link', { name: /Open the full installation page/ }))

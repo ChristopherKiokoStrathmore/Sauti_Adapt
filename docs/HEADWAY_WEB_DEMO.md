@@ -28,9 +28,9 @@ There is no automatic injection of extension code into unrelated browser tabs.
 3. Accept or deny the browser camera permission. No video starts before this action.
 4. The web adapter loads local face tracking assets and detects one face.
 5. Look forward for neutral position, then use **Recenter** as needed.
-6. **Magnetic navigation** is enabled by default. Head movement left, right, up, or down snaps to a suitable nearby control. Return toward neutral between moves. The selected target has a strong purple outline.
-7. **Open mouth to select** is the default. Headway automatically estimates a relaxed closed-mouth baseline from the first face measurements; opening past threshold selects without a dwell timer. A closing gesture is required before another selection, and there is a 550 ms safety cooldown. Manual mouth calibration remains available.
-8. Optionally switch **Navigation mode** to Free pointer or **Click method** to 1.4 second dwell when they better suit the participant.
+6. **Free flowing head pointer** is enabled by default. Head movements steer the virtual pointer continuously, with unmirrored horizontal movement and adjustable sensitivity and steadiness.
+7. **Open mouth to select** is the default. Headway automatically estimates a relaxed closed-mouth baseline from the first face measurements; opening past threshold activates the safely hovered control without a dwell timer. Closing is required before selecting again, with a 550 ms safety cooldown. Manual calibration remains available.
+8. Optionally switch **Click method** to the 1.4 second dwell fallback. The magnetic snapping experiment has been removed from the active website demonstration.
 9. Move through normal Sauti onboarding. For privacy, voice recording and destructive actions are excluded from automatic pointer activation. Use ordinary input to make sensitive consent and recording decisions.
 10. On Step 5, select **Launch My Accessible Workspace**.
 11. Choose reading, shopping practice, or form practice. The same Headway provider stays mounted through client navigation.
@@ -67,8 +67,8 @@ The synthetic camera tests validate integration and head position mapping withou
 1. Open the deployed website in desktop Chrome over HTTPS.
 2. Verify the webcam indicator stays off before enabling Headway.
 3. Activate Headway and approve permission.
-4. Confirm one face is detected, the first safe target becomes highlighted, and turning the head snaps to a nearby target in the intended direction. Return toward neutral before the next jump. Confirm sensitivity changes the movement threshold.
-5. Verify automatic relaxed-mouth baseline setup, open mouth once to activate one control, keep the mouth open without repeat clicks, then close and open again to activate another. Try optional manual calibration and the free pointer mode.
+4. Confirm one face is detected and the pointer follows continuous head movement left, right, up and down. Confirm horizontal direction is natural, and sensitivity and steadiness change free pointer behavior.
+5. Verify automatic relaxed-mouth baseline setup, open mouth once to activate one control, keep the mouth open without repeat clicks, then close and open again to activate another. Try optional manual mouth calibration and the dwell fallback.
 6. Switch between the homepage and workspace and verify tracking persists without another camera prompt when using client navigation.
 7. Test all three workspace experiences and confirm no real purchase or backend form submission occurs.
 8. Pause, resume and stop, checking that the browser releases camera access.

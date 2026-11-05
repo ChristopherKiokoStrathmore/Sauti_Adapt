@@ -72,6 +72,7 @@ export function SautiDashboard() {
   const [userToken, setUserToken] = useState('');
   const [accountBusy, setAccountBusy] = useState(false);
   const [accountReady, setAccountReady] = useState(false);
+  const [accountError, setAccountError] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [age, setAge] = useState('');
   const [speechCondition, setSpeechCondition] = useState('prefer-not-to-say');
@@ -236,6 +237,7 @@ export function SautiDashboard() {
     if (!eligibleAge) { goTo(3); return; }
     if (accountReady || (userId.trim() && userToken.trim())) { goTo(3); return; }
     setAccountBusy(true);
+    setAccountError('');
     setStatus('Creating your private voice profile securely…');
     try {
       const response = await fetch('/api/participant', {
@@ -245,7 +247,12 @@ export function SautiDashboard() {
         cache: 'no-store',
       });
       const result = await response.json();
-      if (!response.ok || result.status !== 'ready') throw new Error(result.detail || result.error || 'Could not create account.');
+      if (!response.ok || result.status !== 'ready') {
+        if (response.status === 503) {
+          throw new Error('The speech service is not configured or available. For local voice enrollment, start the speech API and configure apps/web/.env.local.');
+        }
+        throw new Error(result.detail || result.error || 'Could not create account.');
+      }
       if (typeof result.profile_id !== 'string') throw new Error('Private profile was not created.');
       window.localStorage.setItem('sauti-demo-profile', result.profile_id);
       setProfileId(result.profile_id);
@@ -255,7 +262,9 @@ export function SautiDashboard() {
       setStatus('Your private voice profile is ready. You can start recording.');
       goTo(3);
     } catch (error) {
-      setStatus('Could not set up recording: ' + (error instanceof Error ? error.message : 'Please try again.'));
+      const message = error instanceof Error ? error.message : 'Please try again.';
+      setAccountError(message);
+      setStatus('Could not set up recording: ' + message);
     } finally { setAccountBusy(false); }
   }
 
@@ -570,6 +579,8 @@ export function SautiDashboard() {
           <details className="advanced-settings"><summary>Optional future model improvement consent</summary><label className="check-row"><input type="checkbox" checked={improvementConsent} onChange={event => setImprovementConsent(event.target.checked)}/><span><strong>Consider my approved recordings for a future model update</strong><small>Optional. No model changes automatically.</small></span></label></details>
           {age && !eligibleAge && <p className="inline-note">Under 18? You can explore the next step, but recording requires verified parent or guardian consent. This is not yet available in the pilot.</p>}
           {!canContinue && <p className="inline-note">Enter your name and age, then agree to the voice data terms to continue.</p>}
+          {backendConfigured === false && !accountReady && <p className="inline-note" role="status">Voice enrollment needs a running speech API. For local testing, configure apps/web/.env.local and start the local speech service. You can still test Headway independently in the accessible workspace.</p>}
+          {accountError && <p className="inline-note" role="alert"><strong>Voice profile setup unavailable.</strong> {accountError} <Link href="/workspace">Test Headway without voice enrollment</Link>.</p>}
           <div className="card-actions"><button type="button" disabled={!canContinue || accountBusy} onClick={() => void continueToVoiceSamples()}>{accountBusy ? 'Setting up your profile…' : 'Continue to voice samples'} <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => goTo(1)}>Back</button></div>
         </div>
 

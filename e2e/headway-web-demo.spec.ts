@@ -122,8 +122,8 @@ test('Headway mock camera fixture confirms global session survives Sauti client 
   await page.goto('/');
   await page.locator('.topbar').getByRole('button', { name: /Enable Headway/ }).click();
   await expect(page.getByText('Face detected. Headway is tracking locally.')).toBeVisible();
-  // This existing test checks continuous pointer motion, which is now the alternate mode.
-  await page.getByLabel('Navigation mode').selectOption('free');
+  // The continuous pointer is restored as the only navigation mode.
+  await expect(page.getByLabel('Click method')).toHaveValue('mouth');
   const startingX = await page.locator('.hw-pointer').evaluate(el => parseFloat((el as HTMLElement).style.left));
   // A head movement toward screen right should move the pointer right, not mirror it.
   await page.evaluate(() => { (window as unknown as { __HeadwayFixture: { x: number } }).__HeadwayFixture.x = 400; });
@@ -146,99 +146,4 @@ test('website bundles only local tracking assets and retains the unmodified exte
     const response = await request.get(path);
     expect(response.ok(), path + ' returned ' + response.status()).toBeTruthy();
   }
-});
-
-
-test('magnetic direction geometry chooses nearest forward control without jitter', async () => {
-  const { headDirection, nextSnapIndex, closestSnapIndex } = await import('../apps/web/lib/headway-snap');
-  const boxes = [
-    { x: 250, y: 200, width: 100, height: 60 },
-    { x: 430, y: 205, width: 100, height: 60 },
-    { x: 245, y: 330, width: 100, height: 60 },
-    { x: 55, y: 195, width: 100, height: 60 },
-  ];
-  expect(nextSnapIndex(boxes, 0, 'right')).toBe(1);
-  expect(nextSnapIndex(boxes, 0, 'down')).toBe(2);
-  expect(nextSnapIndex(boxes, 0, 'left')).toBe(3);
-  expect(nextSnapIndex(boxes, 0, 'up')).toBe(-1);
-  expect(closestSnapIndex(boxes, 600, 500)).toBe(0);
-  expect(headDirection(0.12, 0, 1)).toBe('right');
-  expect(headDirection(-0.12, 0, 1)).toBe('left');
-  expect(headDirection(0, 0.12, 1)).toBe('down');
-  expect(headDirection(0, -0.12, 1)).toBe('up');
-  expect(headDirection(0.055, 0.01, 1)).toBeNull();
-  expect(headDirection(0.01, 0.01, 1)).toBe('neutral');
-});
-
-test('magnetic Headway defaults to mouth selection, snaps with head motion, and avoids held-mouth repeats', async ({ page }) => {
-  await page.addInitScript(() => {
-    const w = window as unknown as {
-      __SnapFixture: { x: number; y: number; mouth: number; clicks: number; stopped: number };
-      __HeadwayHumanConstructor: new (args: object) => {
-        load: () => Promise<void>; detect: () => Promise<unknown>;
-      };
-    };
-    w.__SnapFixture = { x: 240, y: 150, mouth: 0.2, clicks: 0, stopped: 0 };
-    class SyntheticFaceModel {
-      async load() {}
-      async detect() {
-        const points = Array.from({ length: 468 }, () => [320, 240, 0]);
-        points[13] = [320, 240, 0];
-        points[14] = [320, 240 + 40 * w.__SnapFixture.mouth, 0];
-        points[61] = [300, 240, 0];
-        points[291] = [340, 240, 0];
-        return { face: [{
-          score: 0.95, box: [w.__SnapFixture.x, w.__SnapFixture.y, 180, 180],
-          mesh: points, rotation: { angle: { yaw: 0, pitch: 0 } },
-        }] };
-      }
-    }
-    w.__HeadwayHumanConstructor = SyntheticFaceModel as unknown as typeof w.__HeadwayHumanConstructor;
-    document.addEventListener('click', event => {
-      const selected = document.querySelector('.hw-snap-target');
-      if (selected?.contains(event.target as Node)) w.__SnapFixture.clicks++;
-    }, true);
-    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', { configurable: true, value: async () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 640; canvas.height = 480;
-      const ctx = canvas.getContext('2d')!;
-      const timer = window.setInterval(() => { ctx.fillStyle = 'white'; ctx.fillRect(0, 0, 640, 480); }, 100);
-      const stream = canvas.captureStream(20);
-      for (const track of stream.getTracks()) {
-        const stop = track.stop.bind(track);
-        track.stop = () => { w.__SnapFixture.stopped++; window.clearInterval(timer); stop(); };
-      }
-      return stream;
-    } });
-  });
-  await page.goto('/workspace');
-  await page.getByRole('button', { name: 'Enable Headway' }).click();
-  await expect(page.getByLabel('Navigation mode')).toHaveValue('snap');
-  await expect(page.getByLabel('Click method')).toHaveValue('mouth');
-  await expect(page.locator('.hw-snap-target')).toHaveCount(1);
-  await expect(page.locator('.hw-panel')).toContainText('Mouth ready.');
-  const initialTarget = await page.locator('.hw-snap-target').evaluate(el => el.outerHTML);
-  await page.evaluate(() => { (window as unknown as { __SnapFixture: { x: number } }).__SnapFixture.x = 480; });
-  await expect.poll(async () => page.locator('.hw-snap-target').evaluate(el => el.outerHTML)).not.toEqual(initialTarget);
-  const jumped = await page.locator('.hw-snap-target').evaluate(el => el.outerHTML);
-  // Holding the head right must not repeatedly cycle through controls.
-  await page.waitForTimeout(550);
-  await expect(page.locator('.hw-snap-target')).toHaveJSProperty('outerHTML', jumped);
-  const startClicks = await page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks);
-  await page.evaluate(() => { (window as unknown as { __SnapFixture: { mouth: number } }).__SnapFixture.mouth = 0.48; });
-  await expect.poll(async () => page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks)).toBe(startClicks + 1);
-  // A React state update must not remove the visual magnet highlight.
-  await expect(page.locator('.hw-snap-target')).toHaveCount(1);
-  await page.waitForTimeout(850);
-  expect(await page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks)).toBe(startClicks + 1);
-  await page.evaluate(() => { (window as unknown as { __SnapFixture: { mouth: number } }).__SnapFixture.mouth = 0.2; });
-  await page.waitForTimeout(600);
-  await page.evaluate(() => { (window as unknown as { __SnapFixture: { mouth: number } }).__SnapFixture.mouth = 0.48; });
-  await expect.poll(
-    async () => page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks),
-    { timeout: 5_000 },
-  ).toBe(startClicks + 2);
-  await expect(page.locator('.hw-snap-target')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Stop Headway', exact: true }).click();
-  await expect(page.locator('.hw-snap-target')).toHaveCount(0);
 });

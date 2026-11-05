@@ -4,11 +4,10 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { cursorFromHead, readFaceSignals, type DemoFace, type FaceSignals } from '@/lib/headway-demo';
 import { MouthGesture, mouthThresholds } from '../../headway/src/gaze/mouth-gesture';
 import { adaptiveAlpha, MOTION_PRESETS, type Steadiness } from '../../headway/src/gaze/motion';
-import { closestSnapIndex, headDirection, MOUTH_CLICK_COOLDOWN_MS, nextSnapIndex, SNAP_MIN_INTERVAL_MS, type SnapDirection } from '@/lib/headway-snap';
+const MOUTH_CLICK_COOLDOWN_MS = 550;
 
 type Phase = 'off' | 'requesting' | 'loading' | 'active' | 'paused' | 'error';
 type ClickMode = 'dwell' | 'mouth';
-type NavigationMode = 'snap' | 'free';
 type HumanLike = { load: () => Promise<unknown>; detect: (video: HTMLVideoElement) => Promise<{ face?: DemoFace[] }> };
 type HumanConstructor = new (config: Record<string, unknown>) => HumanLike;
 declare global { interface Window { __HeadwayHumanConstructor?: HumanConstructor } }
@@ -18,7 +17,6 @@ type HeadwayState = {
   message: string;
   detected: boolean;
   clickMode: ClickMode;
-  navigationMode: NavigationMode;
   sensitivity: number;
   steadiness: Steadiness;
   calibration: string;
@@ -28,7 +26,6 @@ type HeadwayState = {
   recenter: () => void;
   beginMouthCalibration: () => void;
   setClickMode: (value: ClickMode) => void;
-  setNavigationMode: (value: NavigationMode) => void;
   setSensitivity: (value: number) => void;
   setSteadiness: (value: Steadiness) => void;
 };
@@ -114,10 +111,6 @@ function candidateAt(x: number, y: number): HTMLElement | null {
   return candidate && permittedTarget(candidate) ? candidate : null;
 }
 
-function snapCandidates(): HTMLElement[] {
-  if (window.location.pathname !== '/' && window.location.pathname !== '/workspace') return [];
-  return [...document.querySelectorAll<HTMLElement>(SAFE_SELECTORS)].filter(permittedTarget);
-}
 
 function targetLabel(element: HTMLElement): string {
   return (element.getAttribute('aria-label') || element.textContent?.trim() || 'control').slice(0, 50);
@@ -139,12 +132,8 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
   const dwell = useRef({ element: null as HTMLElement | null, since: 0, fired: false });
   const lastPaint = useRef(0);
   const modeRef = useRef<ClickMode>('mouth');
-  const navigationRef = useRef<NavigationMode>('snap');
-  const directionArmed = useRef(true);
-  const lastDirectionAt = useRef(0);
   const lastMouthClickAt = useRef(-Number.POSITIVE_INFINITY);
   const automaticMouthSamples = useRef<number[]>([]);
-  const mouthBaselineReady = useRef(false);
   const speedRef = useRef(1);
   const steadyRef = useRef<Steadiness>('medium');
   const mouth = useRef(new MouthGesture());
@@ -160,7 +149,6 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState(0);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [clickMode, setClickModeState] = useState<ClickMode>('mouth');
-  const [navigationMode, setNavigationModeState] = useState<NavigationMode>('snap');
   const [sensitivity, setSensitivityState] = useState(1);
   const [steadiness, setSteadinessState] = useState<Steadiness>('medium');
   const [calibrationStatus, setCalibrationStatus] = useState('Keep your mouth relaxed briefly to set up automatic mouth selection.');
@@ -178,14 +166,11 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
     center.current = null;
     latest.current = null;
     previousFace.current = false;
-    target.current?.classList.remove('hw-target', 'hw-snap-target');
+    target.current?.classList.remove('hw-target');
     target.current = null;
     mouth.current.reset();
-    directionArmed.current = true;
-    lastDirectionAt.current = 0;
     lastMouthClickAt.current = -Number.POSITIVE_INFINITY;
     automaticMouthSamples.current = [];
-    mouthBaselineReady.current = false;
     calibration.current = null;
     mouthCalPhase.current = 'idle';
     dwell.current = { element: null, since: 0, fired: false };
@@ -242,7 +227,6 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
             const requiredOpening = Math.max(0.055, closed * 0.3);
             // The existing gesture module clicks at 70% of the calibrated range.
             calibration.current = { closedRatio: closed, openRatio: closed + requiredOpening / 0.7 };
-            mouthBaselineReady.current = true;
             mouth.current.reset();
             setCalibrationStatus('Mouth ready. Open your mouth to select the highlighted target. Close to reset.');
           } else {
@@ -265,88 +249,40 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
             mouthCalPhase.current = 'idle';
             if (closed !== null && average - closed >= 0.035) {
               calibration.current = { closedRatio: closed, openRatio: average };
-              mouthBaselineReady.current = true;
-              mouth.current.reset();
+                mouth.current.reset();
               setCalibrationStatus('Manual mouth calibration complete. Open to select, close to reset.');
             } else {
               calibration.current = null;
               automaticMouthSamples.current = [];
-              mouthBaselineReady.current = false;
-              setCalibrationStatus('Calibration was not distinct enough. Relax your mouth and retry.');
+                        setCalibrationStatus('Calibration was not distinct enough. Relax your mouth and retry.');
             }
           }
         }
       }
 
-      let current: HTMLElement | null = null;
-      if (navigationRef.current === 'snap') {
-        if (!target.current?.isConnected || !permittedTarget(target.current)) {
-          const candidates = snapCandidates();
-          const boxes = candidates.map(element => element.getBoundingClientRect());
-          const initial = closestSnapIndex(boxes, window.innerWidth, window.innerHeight);
-          target.current?.classList.remove('hw-target', 'hw-snap-target');
-          target.current = initial >= 0 ? candidates[initial] : null;
-          target.current?.classList.add('hw-target', 'hw-snap-target');
-          dwell.current = { element: target.current, since: t, fired: false };
-        }
-        if (center.current && !mouth.current.frozen) {
-          const dx = reading.horizontal - center.current.horizontal;
-          const dy = reading.vertical - center.current.vertical;
-          const direction = headDirection(dx, dy, speedRef.current);
-          if (direction === 'neutral') directionArmed.current = true;
-          if (direction && direction !== 'neutral' && directionArmed.current &&
-            t - lastDirectionAt.current > SNAP_MIN_INTERVAL_MS) {
-            directionArmed.current = false;
-            lastDirectionAt.current = t;
-            const candidates = snapCandidates();
-            const boxes = candidates.map(element => element.getBoundingClientRect());
-            const oldIndex = candidates.indexOf(target.current!);
-            const nextIndex = nextSnapIndex(boxes, oldIndex, direction as SnapDirection);
-            if (nextIndex >= 0) {
-              target.current?.classList.remove('hw-target', 'hw-snap-target');
-              target.current = candidates[nextIndex];
-              target.current.classList.add('hw-target', 'hw-snap-target');
-              target.current.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
-              dwell.current = { element: target.current, since: t, fired: false };
-              setProgress(0);
-              setMessage('Magnetic target: ' + targetLabel(target.current) + '. Open mouth to select.');
-            }
-          }
-        }
-        current = target.current;
-        if (current) {
-          // React can replace an element's className after a button changes state.
-          // Keep the magnetic target visibly locked even through such rerenders.
-          current.classList.add('hw-target', 'hw-snap-target');
-          const bounds = current.getBoundingClientRect();
-          point.current = {
-            x: Math.min(0.98, Math.max(0.02, (bounds.left + bounds.width / 2) / window.innerWidth)),
-            y: Math.min(0.98, Math.max(0.02, (bounds.top + bounds.height / 2) / window.innerHeight)),
-          };
-        }
-      } else {
-        if (!mouth.current.frozen && center.current) {
-          const desired = cursorFromHead(reading, center.current, speedRef.current, false);
-          const dx = (desired.x - point.current.x) * window.innerWidth;
-          const dy = (desired.y - point.current.y) * window.innerHeight;
-          const smoothing = adaptiveAlpha(Math.hypot(dx, dy), MOTION_PRESETS[steadyRef.current]);
-          point.current = {
-            x: point.current.x + (desired.x - point.current.x) * smoothing,
-            y: point.current.y + (desired.y - point.current.y) * smoothing,
-          };
-        }
-        const x = Math.round(point.current.x * window.innerWidth);
-        const y = Math.round(point.current.y * window.innerHeight);
-        current = candidateAt(x, y);
-        if (current !== target.current) {
-          target.current?.classList.remove('hw-target', 'hw-snap-target');
-          target.current = current;
-          dwell.current = { element: current, since: t, fired: false };
-          setProgress(0);
-        }
-        // Preserve the free pointer hover ring after a React component rerenders.
-        current?.classList.add('hw-target');
+      // The website demo uses natural continuous head movement, not magnetic snapping.
+      // Keep the already corrected unmirrored horizontal direction.
+      if (!mouth.current.frozen && center.current) {
+        const desired = cursorFromHead(reading, center.current, speedRef.current, false);
+        const dx = (desired.x - point.current.x) * window.innerWidth;
+        const dy = (desired.y - point.current.y) * window.innerHeight;
+        const smoothing = adaptiveAlpha(Math.hypot(dx, dy), MOTION_PRESETS[steadyRef.current]);
+        point.current = {
+          x: point.current.x + (desired.x - point.current.x) * smoothing,
+          y: point.current.y + (desired.y - point.current.y) * smoothing,
+        };
       }
+      const px = Math.round(point.current.x * window.innerWidth);
+      const py = Math.round(point.current.y * window.innerHeight);
+      const current = candidateAt(px, py);
+      if (current !== target.current) {
+        target.current?.classList.remove('hw-target');
+        target.current = current;
+        dwell.current = { element: current, since: t, fired: false };
+        setProgress(0);
+      }
+      // Preserve the outline after React rerenders an interactive element.
+      current?.classList.add('hw-target');
 
       // Dwell is an optional alternative, never the default.
       if (modeRef.current === 'dwell' && current && !dwell.current.fired) {
@@ -463,14 +399,12 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
     dwell.current = { element: null, since: 0, fired: false };
     mouth.current.reset();
     setProgress(0);
-    target.current?.classList.remove('hw-target', 'hw-snap-target');
+    target.current?.classList.remove('hw-target');
     target.current = null;
-    directionArmed.current = true;
   }, []);
   const recenter = useCallback(() => {
     if (!latest.current) { setCalibrationStatus('A single face must be visible before recalibrating.'); return; }
     center.current = latest.current;
-    directionArmed.current = true;
     point.current = { x: 0.5, y: 0.5 };
     setCursor(point.current);
     setCalibrationStatus('Neutral position updated. Turn your head gently, then return to center for another step.');
@@ -482,21 +416,8 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
     closedRatio.current = null;
     calibration.current = null;
     automaticMouthSamples.current = [];
-    mouthBaselineReady.current = false;
     mouth.current.reset();
     setCalibrationStatus('Close your mouth gently and hold for the first samples.');
-  }, []);
-  const setNavigationMode = useCallback((value: NavigationMode) => {
-    navigationRef.current = value;
-    setNavigationModeState(value);
-    target.current?.classList.remove('hw-target', 'hw-snap-target');
-    target.current = null;
-    directionArmed.current = true;
-    dwell.current = { element: null, since: performance.now(), fired: false };
-    mouth.current.reset();
-    setProgress(0);
-    setMessage(value === 'snap' ? 'Magnetic navigation active. Turn your head to change target, open mouth to select.' :
-      'Free pointer active. Move your head to steer, open mouth to select.');
   }, []);
   const setClickMode = useCallback((value: ClickMode) => {
     modeRef.current = value; setClickModeState(value);
@@ -533,9 +454,9 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
   }, [release, togglePause]);
 
   const ctx: HeadwayState = {
-    phase, message, detected, clickMode, navigationMode, sensitivity, steadiness,
+    phase, message, detected, clickMode, sensitivity, steadiness,
     calibration: calibrationStatus, start, stop, togglePause, recenter, beginMouthCalibration,
-    setClickMode, setNavigationMode, setSensitivity, setSteadiness,
+    setClickMode, setSensitivity, setSteadiness,
   };
 
   return <HeadwayContext.Provider value={ctx}>
@@ -556,9 +477,6 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
         <button type="button" className="hw-stop" onClick={stop}>Stop Headway</button>
       </div>
       {(phase === 'active' || phase === 'paused') && <>
-        <label>Navigation mode<select aria-label="Navigation mode" value={navigationMode} onChange={event => setNavigationMode(event.target.value as NavigationMode)}>
-          <option value="snap">Magnetic navigation (recommended)</option><option value="free">Free pointer</option>
-        </select></label>
         <label>Click method<select aria-label="Click method" value={clickMode} onChange={event => setClickMode(event.target.value as ClickMode)}>
           <option value="mouth">Open mouth to select (default)</option><option value="dwell">Dwell (hold 1.4 seconds)</option>
         </select></label>
@@ -570,8 +488,7 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
         </select></label>
         {clickMode === 'mouth' && <button type="button" onClick={beginMouthCalibration} disabled={phase !== 'active'}>Calibrate mouth click</button>}
         <small role="status">{calibrationStatus}</small>
-        <small>{navigationMode === 'snap' ? 'Turn head toward the next control, then return to center to move again. The purple outline indicates your selected target.' :
-          'Move your head freely to steer the pointer. Switch back to magnetic navigation for easier selection.'}</small>
+        <small>Move your head to steer the free flowing pointer. Open your mouth to select the hovered safe control.</small>
       </>}
       <small>Web demo only. Controls safe elements on Sauti Adapt, not other browser tabs.</small>
     </section>}

@@ -28,3 +28,7 @@ services/speech-api/private/
 test-results/
 playwright-report/
 blob-report/
+
+# Headway session exports may contain face data
+headway-session-*.json
+apps/headway/Research/course/runs/

@@ -1,9 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-
-const HEADWAY_ZIP = 'https://github.com/ChristopherKiokoStrathmore/Sauti_Adapt/releases/download/headway-hackathon/Headway-Chrome-Hackathon.zip';
-const HEADWAY_RELEASE = 'https://github.com/ChristopherKiokoStrathmore/Sauti_Adapt/releases/tag/headway-hackathon';
+import { getHeadwayStoreUrl } from '@/lib/headway-store';
 
 type Props = {
   onBack: () => void;
@@ -11,16 +8,7 @@ type Props = {
 };
 
 export function HeadwayInstallStep({ onBack, onReview }: Props) {
-  const [copyStatus, setCopyStatus] = useState('');
-
-  async function copyChromeAddress() {
-    try {
-      await navigator.clipboard.writeText('chrome://extensions');
-      setCopyStatus('Address copied. Paste it into the Chrome address bar.');
-    } catch {
-      setCopyStatus('Copy unavailable. Type chrome://extensions in Chrome’s address bar.');
-    }
-  }
+  const storeUrl = getHeadwayStoreUrl();
 
   return (
     <div className="hi-onboarding" data-testid="headway-install-step">
@@ -29,18 +17,26 @@ export function HeadwayInstallStep({ onBack, onReview }: Props) {
         <div>
           <p className="step-kicker">Step 5 of 5</p>
           <h2>Install Headway extension</h2>
-          <p className="hi-intro">Add hands free browsing with head movement and mouth gestures. Download Headway for desktop Chrome, then follow the guided setup below.</p>
+          <p className="hi-intro">Add hands free browsing with head movement and mouth gestures. When Chrome Web Store publishing is complete, install Headway directly in desktop Chrome, then follow the guided setup.</p>
         </div>
       </header>
 
       <div className="hi-feature-grid">
         <section className="hi-start-card" aria-label="Install Headway on Chrome">
           <div className="hi-download-row">
-            <a className="hi-download-button" href={HEADWAY_ZIP} aria-label="Download Headway Chrome extension ZIP">
-              <span className="hi-chrome-symbol" aria-hidden="true"><span/></span>
-              <span>Download extension</span>
-              <span className="hi-download-arrow" aria-hidden="true">↗</span>
-            </a>
+            {storeUrl ? (
+              <a className="hi-download-button" href={storeUrl} target="_blank" rel="noopener noreferrer" aria-label="Install Headway from Chrome Web Store">
+                <span className="hi-chrome-symbol" aria-hidden="true"><span/></span>
+                <span>Install extension</span>
+                <span className="hi-download-arrow" aria-hidden="true">↗</span>
+              </a>
+            ) : (
+              <div className="hi-download-button hi-install-unavailable" role="status" aria-label="Headway Chrome Web Store approval pending">
+                <span className="hi-chrome-symbol" aria-hidden="true"><span/></span>
+                <span>Store approval pending</span>
+                <span className="hi-download-arrow" aria-hidden="true">◷</span>
+              </div>
+            )}
             <div className="hi-quick-facts">
               <span><span className="hi-fact-symbol" aria-hidden="true">◉</span> Desktop Chrome</span>
               <span><span className="hi-fact-symbol" aria-hidden="true">◷</span> One time setup</span>
@@ -49,15 +45,15 @@ export function HeadwayInstallStep({ onBack, onReview }: Props) {
 
           <div className="hi-flow" aria-label="Installation overview">
             <div className="hi-flow-item">
-              <span className="hi-flow-icon" aria-hidden="true">↓</span>
-              <strong>Download</strong>
-              <small>Extract the ZIP</small>
+              <span className="hi-flow-icon" aria-hidden="true">▣</span>
+              <strong>Open store</strong>
+              <small>Use the install button</small>
             </div>
             <span className="hi-flow-arrow" aria-hidden="true">→</span>
             <div className="hi-flow-item">
               <span className="hi-flow-icon" aria-hidden="true"><span className="hi-chrome-symbol hi-chrome-small"><span/></span></span>
               <strong>Add to Chrome</strong>
-              <small>Load unpacked</small>
+              <small>Review permissions</small>
             </div>
             <span className="hi-flow-arrow" aria-hidden="true">→</span>
             <div className="hi-flow-item">
@@ -67,17 +63,20 @@ export function HeadwayInstallStep({ onBack, onReview }: Props) {
             </div>
           </div>
 
+          <p className="hi-store-status" role="status">
+            {storeUrl
+              ? 'Chrome Web Store will ask you to confirm installation and permissions. Your browser stays in control.'
+              : 'Direct installation is not available until Headway passes Chrome Web Store review. No ZIP download or developer mode setup is required once it is published.'}
+          </p>
           <details className="hi-install-guide">
             <summary><span className="hi-guide-icon" aria-hidden="true">▤</span> See installation guide <span className="hi-guide-chevron" aria-hidden="true">⌄</span></summary>
             <ol>
-              <li><strong>Download the ZIP above</strong> and extract its contents. Find the folder containing <code>manifest.json</code>.</li>
-              <li><strong>Open Chrome extensions.</strong> Type <code>chrome://extensions</code> in your Chrome address bar, then enable <strong>Developer mode</strong>.</li>
-              <li><strong>Select Load unpacked.</strong> Choose the extracted folder containing <code>manifest.json</code> and the <code>dist</code> folder.</li>
-              <li><strong>Pin and open Headway.</strong> Approve only the permissions you understand, enable head tracking when ready, and calibrate your movement and mouth click.</li>
+              <li><strong>Open the listing.</strong> Once Headway is published, select <strong>Install extension</strong> to open its official Chrome Web Store page.</li>
+              <li><strong>Choose Add to Chrome.</strong> Review the permissions, then select <strong>Add extension</strong> if you consent.</li>
+              <li><strong>Open and pin Headway.</strong> Choose it from Chrome’s Extensions menu and pin it if you like.</li>
+              <li><strong>Enable camera and calibrate.</strong> Start head tracking only when ready and follow the setup for movement and mouth clicks.</li>
             </ol>
-            <p>Chrome does not allow websites to install an unpublished extension automatically. These Chrome steps are necessary for this hackathon build.</p>
-            <button type="button" className="hi-copy-chrome" onClick={() => void copyChromeAddress()}>Copy Chrome extensions address</button>
-            <p role="status" className="hi-copy-feedback">{copyStatus}</p>
+            {!storeUrl && <p>Headway is a separate hands free browsing extension. The team must first publish a reviewed Chrome Web Store listing.</p>}
             <a href="/install" className="hi-full-guide-link">Open the full installation page <span aria-hidden="true">↗</span></a>
           </details>
         </section>
@@ -142,8 +141,7 @@ export function HeadwayInstallStep({ onBack, onReview }: Props) {
       </div>
 
       <p className="hi-download-fallback">
-        Having trouble downloading? <a href={HEADWAY_RELEASE}>View the latest Headway release</a>.
-        Headway works alongside Sauti. Your private voice profile is not shared with the extension.
+        Headway works alongside Sauti. Your private voice profile is not shared with Headway. Browser installation requires your explicit approval.
       </p>
       <div className="hi-bottom-actions">
         <button type="button" className="hi-back-button" onClick={onBack}><span aria-hidden="true">←</span> Back to recognition</button>

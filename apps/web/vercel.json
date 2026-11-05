@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
   "installCommand": "cd ../.. && npm install",
-  "buildCommand": "cd ../.. && python3 scripts/bootstrap_toolkit.py && npm run build:web"
+  "buildCommand": "cd ../.. && npm run build:web"
 }

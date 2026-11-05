@@ -16,6 +16,22 @@
 | Notebook experiments | `ml/notebooks` | Not imported by the API, the PWA, or the extension |
 | Android adapter | Product roadmap | Not implemented |
 
+### Test speech models without the extension
+
+The independent [model lab](ml/lab/README.md) provides a selector for the current
+personal baseline and the CDLI Kenyan English and Kiswahili Whisper checkpoints.
+Record once, test one model, or compare all three on the same clip. The lab also
+collects consented examples for the existing personal trainer. It is a local
+experiment and does not execute page actions or change the production recognizer.
+
+```bash
+python -m pip install -r ml/lab/requirements.txt
+python scripts/run_model_lab.py
+```
+
+Full setup, recording requirements, metric definitions, and verification limits
+are in the lab guide. Real speech performance is not established by software tests.
+
 ## 2. First run: required software
 
 * Git, Node.js 22, npm, Python 3.11 or 3.12, and a current Chrome browser.
@@ -161,3 +177,4 @@ Read `CODEX_START_HERE.md` and `AGENTS.md`. Open the repository in Codex and pas
 * Kenyan atypical speech resource: https://huggingface.co/datasets/cdli/kenyan_english_nonstandard_speech_v1.0
 * Kiswahili atypical speech resource: https://huggingface.co/datasets/cdli/kenyan_swahili_nonstandard_speech_v1.0
 * These datasets may require access approval and impose specific use conditions. They are not downloaded by this repository.
+

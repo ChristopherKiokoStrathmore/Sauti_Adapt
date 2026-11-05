@@ -90,7 +90,29 @@ def main():
         print('Cloning official AI4A11y Toolkit...', flush=True)
         run('git', 'clone', '--filter=blob:none', REPOSITORY, str(DEST))
     if not (DEST / '.git').exists():
-        raise SystemExit(f'{DEST} exists but is not a Git clone; refusing to overwrite.')
+        # The toolkit was vendored into this repository in November 2026.
+        # A GitHub checkout strips any nested .git directory. Verify the
+        # files are present, tracked by this repository and unmodified.
+        missing = [rel for rel in REQUIRED if not (DEST / rel).is_file()]
+        if missing:
+            raise SystemExit('Vendored AI4A11y toolkit is incomplete: ' + ', '.join(missing))
+        for rel in REQUIRED:
+            candidate = 'vendor/ai4a11y-toolkit/' + rel
+            tracked = subprocess.run(
+                ['git', '-C', str(ROOT), 'ls-files', '--error-unmatch', '--', candidate],
+                capture_output=True, text=True,
+            )
+            if tracked.returncode != 0:
+                raise SystemExit('Untracked toolkit dependency: ' + candidate)
+        clean = subprocess.run(
+            ['git', '-C', str(ROOT), 'diff', '--quiet', 'HEAD', '--', 'vendor/ai4a11y-toolkit'],
+            check=False,
+        )
+        if clean.returncode != 0:
+            raise SystemExit('Vendored toolkit contains changes relative to the repository commit.')
+        print('Verified repository-vendored AI4A11y toolkit (commit-locked files).')
+        print('Upstream revision originally vendored:', REVISION)
+        return
     dirty = git_text('status', '--porcelain')
     if dirty:
         raise SystemExit(

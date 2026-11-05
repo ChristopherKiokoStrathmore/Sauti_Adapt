@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import threading
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -15,7 +16,17 @@ SESSION_ROLES = frozenset({'train', 'calibration', 'test'})
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+    """Locate the source root in development and the app root in Railway.
+
+    Railway deploys services/speech-api as /app/sauti_ml, so indexing
+    parents[3] is not valid in that shallower production layout.
+    """
+    module_path = Path(__file__).resolve()
+    for parent in module_path.parents:
+        if (parent / 'services' / 'speech-api' / 'sauti_ml').is_dir():
+            return parent
+    # Isolated service deployment: /app/sauti_ml/storage.py -> /app.
+    return module_path.parent.parent
 
 
 def private_root() -> Path:
@@ -90,8 +101,7 @@ def claim_owner(profile_id: str, user_id: str) -> None:
 def assert_owner(profile_id: str, user_id: str) -> None:
     profile_id = canonical_uuid(profile_id)
     user_id = canonical_uuid(user_id)
-    if not os.environ.get('SAUTI_PRIVATE_DIR', '').strip():
-        return
+    # Missing storage configuration must not silently bypass ownership checks.
     folder = profile_dir(profile_id)
     if not folder.exists():
         return
@@ -100,13 +110,22 @@ def assert_owner(profile_id: str, user_id: str) -> None:
         raise PermissionError('This profile belongs to another person.')
 
 
-def store_enrollment(profile_id: str, session_id: str, intent: Intent, language: Language, samples, session_role: str | None = None, user_id: str | None = None) -> str:
+TONES = ('neutral', 'happy', 'frustrated', 'tired', 'excited')
+
+
+def store_enrollment(profile_id: str, session_id: str, intent: Intent, language: Language, samples, session_role: str | None = None, user_id: str | None = None, *, tone: str | None = None, retention_days: int | None = None, terms_version: str | None = None, improvement_consent: bool = False) -> str:
     profile_id = canonical_uuid(profile_id)
     session_id = canonical_uuid(session_id)
     if session_role is not None and session_role not in SESSION_ROLES:
         raise ValueError('session_role must be train, calibration, or test.')
     if not user_id:
         raise ValueError('A user id is required to store a recording.')
+    if tone is not None and tone not in TONES:
+        raise ValueError('tone must be one of: ' + ', '.join(TONES) + '.')
+    if retention_days is not None and not (1 <= retention_days <= max_retention_days()):
+        raise ValueError(f'retention_days must be between 1 and {max_retention_days()}.')
+    if terms_version is not None and not (1 <= len(terms_version) <= 40):
+        raise ValueError('terms_version must be 1 to 40 characters.')
     claim_owner(profile_id, user_id)
     folder = profile_dir(profile_id)
     recording_id = str(uuid4())
@@ -122,6 +141,14 @@ def store_enrollment(profile_id: str, session_id: str, intent: Intent, language:
     }
     if session_role:
         record['session_role'] = session_role
+    if tone:
+        record['tone'] = tone
+    if retention_days:
+        record['retention_days'] = retention_days
+    if terms_version:
+        record['terms_version'] = terms_version
+        record['consented_at'] = datetime.now(timezone.utc).isoformat(timespec='seconds')
+        record['improvement_consent'] = improvement_consent
     buffer = BytesIO()
     encode_private_wav(samples, buffer)
     line = json.dumps(record, ensure_ascii=False) + '\n'
@@ -163,6 +190,17 @@ def load_manifest(profile_id: str, user_id: str | None = None):
     return result
 
 
+def invalidate_released_model(folder: Path) -> None:
+    """Fail closed after a training clip is withdrawn or expires.
+
+    Previously released prototypes can encode information from deleted speech.
+    Invalidate the release record immediately; a new evaluation is required.
+    """
+    release = folder / 'evaluation.json'
+    if release.is_file():
+        release.unlink()
+
+
 def delete_recording(profile_id: str, recording_id: str, user_id: str) -> dict:
     assert_owner(profile_id, user_id)
     profile_id = canonical_uuid(profile_id)
@@ -186,11 +224,29 @@ def delete_recording(profile_id: str, recording_id: str, user_id: str) -> dict:
                     except Exception:
                         pass
                     audio.unlink()
+                invalidate_released_model(folder)
+                invalidate_released_model(folder)
                 removed += 1
                 continue
             kept.append(line)
         _store_manifest(folder, ('\n'.join(kept) + '\n') if kept else '')
     return {'deleted': removed > 0, 'recordings_removed': removed}
+
+
+def max_retention_days() -> int:
+    """Upper bound on a person's chosen retention. Default 365 days."""
+    try:
+        days = int(os.environ.get('SAUTI_MAX_RETENTION_DAYS', '365'))
+    except ValueError:
+        days = 365
+    return max(1, days)
+
+
+def _row_retention_days(row: dict) -> int:
+    chosen = row.get('retention_days')
+    if isinstance(chosen, int) and not isinstance(chosen, bool) and 1 <= chosen <= max_retention_days():
+        return chosen
+    return retention_days()
 
 
 def retention_days() -> int:
@@ -202,12 +258,12 @@ def retention_days() -> int:
 
 
 def purge_expired_folder(folder: Path) -> int:
-    """Delete expired clips and their cached embeddings. Does not remove a released model."""
+    """Delete expired clips, cached embeddings and the model release record."""
     import time
     manifest = folder / 'manifest.jsonl'
     if not manifest.is_file():
         return 0
-    cutoff = time.time() - retention_days() * 86400
+    now = time.time()
     kept = []
     removed = 0
     with _lock:
@@ -217,12 +273,13 @@ def purge_expired_folder(folder: Path) -> int:
             row = json.loads(line)
             recording_id = row.get('recording_id', '')
             audio = folder / 'audio' / f'{recording_id}.wav'
-            if audio.is_file() and audio.stat().st_mtime < cutoff:
+            if audio.is_file() and audio.stat().st_mtime < now - _row_retention_days(row) * 86400:
                 try:
                     discard_clip_derivatives(folder, read_private_bytes(audio))
                 except Exception:
                     pass
                 audio.unlink()
+                invalidate_released_model(folder)
                 removed += 1
                 continue
             kept.append(line)

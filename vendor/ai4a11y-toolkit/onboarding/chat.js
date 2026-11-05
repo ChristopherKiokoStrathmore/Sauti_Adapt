@@ -1,0 +1,736 @@
+// chat.js — the /chat surface: one conversational input that does BOTH halves of
+// the toolkit demo.
+//
+//   • onboarding   — a self-description ("I'm blind", "I have dyslexia") updates
+//                    the person's profile via /api/onboard, and the profile pill
+//                    at the top refreshes.
+//   • controller   — a setting or command ("bigger text", "dark mode", "read
+//                    this", "open google and search…") is carried through the
+//                    neutral ControlPort to the driven app (a local demo article
+//                    here, or a remote receiver like browser-harness).
+//
+// Routing is DETERMINISTIC-FIRST (grammar + an onboarding heuristic, instant and
+// offline); anything unmatched falls to an optional Gemini lane (/api/assist) for
+// controller-intent classification and, failing that, a general spoken answer.
+// The LLM is best-effort: with no key configured the surface still works fully
+// for settings + onboarding.
+//
+// Reuses the controller core verbatim (served at /controller/lib) — this page is
+// just a different SHAPE (a chat window) over the same createController.
+
+import { createController } from '/controller/lib/createController.js';
+import { createDomReceiver } from '/controller/lib/web/dom-receiver.js';
+import { createIframeReceiver } from '/controller/lib/web/iframe-receiver.js';
+import { websocketChannel, remoteControl } from '/controller/lib/transport/remote.js';
+import { createLlmLane } from '/controller/lib/llm-lane.js';
+import { bestVoice, forSpeech, earconThinkPulse, earconDone, earconError } from '/controller/lib/web/ui.js';
+import { detectOnboarding, visionKindOf, isResetToProfile } from '/chat-routing.js';
+import { routeTurn, classifyControllerResult, fallbackHelp, generalAnswerPrompt } from '/chat-turn.js';
+import { mergeOnboarding, onboardingReply, resetReply, resetChanges, NO_PROFILE_TO_RESET, profilePill, appliedSummary } from '/chat-profile.js';
+import { createHistory, onFirstLine, onLastLine } from '/chat-history.js';
+import { watchConnection } from '/chat-connect.js';
+import { renderWebSettings } from '/toolkit/surfaces/web.js';
+import { settingsMeta } from '/controller/toolkit/registry/tools.js';
+
+const $ = (id) => document.getElementById(id);
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const TTS = 'speechSynthesis' in window;
+
+// ── profile ──────────────────────────────────────────────────────────────────
+function currentUid() { try { return localStorage.getItem('onb-uid') || ''; } catch { return ''; } }
+let operatorModel = { supportAreas: [] };
+
+async function loadProfile() {
+  const uid = currentUid();
+  if (!uid) { operatorModel = { supportAreas: [] }; renderProfile('', null); return; }
+  try {
+    const d = await (await fetch('/api/ability-model?uid=' + encodeURIComponent(uid))).json();
+    operatorModel = (d.exists && d.model) ? d.model : { supportAreas: [] };
+    renderProfile(d.exists ? uid : '', operatorModel);
+  } catch { operatorModel = { supportAreas: [] }; renderProfile('', null); }
+}
+
+// The always-visible profile pill at the top (read-only; editing happens here in
+// chat or on the full onboarding page). Built with text nodes — the free text is
+// the person's own words and must never be injected as HTML. What to show comes
+// from profilePill() in chat-profile.js; this function only places it.
+function renderProfile(uid, model) {
+  const el = $('profile');
+  el.textContent = '';
+  const pill = profilePill(uid, model);
+  if (pill.empty) {
+    el.append('No profile yet — tell me about yourself, e.g. ');
+    const ex = document.createElement('em'); ex.textContent = '“I’m blind”'; el.append(ex);
+    el.append(' or ');
+    const l = document.createElement('a'); l.href = '/onboarding'; l.textContent = 'use full onboarding'; el.append(l, '.');
+    return;
+  }
+  const person = document.createElement('span'); person.className = 'who';
+  person.textContent = pill.uid; el.append('You: ', person);
+  if (pill.detail) el.append(pill.detail);
+}
+
+// ── onboarding (detection lives in chat-routing.js, unit-tested) ─────────────
+// Chat onboarding is ADDITIVE and conversational: a new self-description MERGES
+// with what's already known rather than replacing it ("I'm blind" then later "I
+// also have dyslexia" → vision + reading). Support areas are unioned; the free
+// text keeps its history; and the vision kind is recomputed from the COMBINED
+// text, so adding an unrelated need can never silently flip a blind profile to
+// low-vision (or vice-versa).
+async function applyOnboarding(o) {
+  const uid = currentUid() || 'demo-user';
+  const merged = mergeOnboarding(operatorModel, o, visionKindOf);
+
+  const payload = { uid, ...merged };
+  const r = await fetch('/api/onboard', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+  const d = await r.json();
+  if (!d.ok) throw new Error(d.error || 'onboarding failed');
+  try { localStorage.setItem('onb-uid', d.uid); } catch {}
+  await loadProfile();
+  rebuildController(); // the operator model changed → re-derive presentation
+  const applied = await applyProfileSettings(); // …and the page itself follows the profile
+  return onboardingReply(d, appliedSummary(applied, settingsMeta));
+}
+
+// Render the profile onto the page. Telling the surface about yourself has to
+// DO something, or the profile is a form that changed nothing: before this,
+// page adaptations only ever came from explicit commands, so "I'm blind"
+// stored a profile and left the page exactly as it was.
+//
+// The needs→settings mapping is the toolkit's own web surface, not a second
+// copy: one source of truth for what a need renders as on the web. It emits
+// only the keys the profile actually asked for, so it merges over settings the
+// person set by hand instead of stomping them, and a receiver drops any key it
+// does not support.
+//
+// Runs at boot, after each onboarding turn, and whenever what we drive changes:
+// useLocal() and, for a remote receiver, the moment its socket opens. The
+// profile follows the person onto whatever /chat is driving, so an app
+// connected after boot (browser-harness from Settings) learns it too.
+//
+// `extra` is applied in the same call, underneath the profile: a reset uses it
+// to clear keys the profile does not govern, and the profile wins where both
+// name a key.
+function profileSettings() {
+  try { return renderWebSettings(operatorModel || {}) || {}; } catch { return {}; }
+}
+async function applyProfileSettings(extra = null) {
+  const settings = { ...(extra || {}), ...profileSettings() };
+  if (!Object.keys(settings).length) return null;
+  try {
+    const res = await currentControl.applySettings(settings);
+    return (res && res.applied) || null; // what the receiver actually took, not what we asked for
+  } catch { return null; } // a receiver that refuses must not break the turn
+}
+
+// What the receiver says it has applied. Empty when it cannot say.
+async function activeSettings() {
+  try {
+    const ctx = await currentControl.getContext();
+    return (ctx && ctx.activeSettings) || {};
+  } catch { return {}; }
+}
+
+// Drop the durable user-explicit setting overrides so the profile is the source
+// again (librarian.resetToProfile via /api/reset-to-profile). Does NOT forget who
+// the person is — support areas, free text and needs all survive; that's what the
+// Reset-profile button in Settings does.
+//
+// The answer says the changes are forgotten, so the page has to agree with it.
+// Re-rendering the profile only restores the keys the profile governs; the keys
+// it never mentions (dark mode, turned on by hand) are cleared here as well, in
+// the same apply, and the reply names only what the receiver actually took.
+//
+// FLAG(review): the keys cleared are the server's `forgotten` list AND the keys
+// the receiver reports active. Issue #26 asks for the first; the second is
+// needed because this surface stores no manual change, so in a chat-only
+// session `forgotten` is empty and the receiver is the only record of "dark
+// mode". Without it the reply would say "no changes to forget" over a page
+// that is still dark.
+async function applyResetToProfile() {
+  const uid = currentUid();
+  if (!uid) return NO_PROFILE_TO_RESET;
+  const r = await fetch('/api/reset-to-profile', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid }) });
+  const d = await r.json();
+  if (!d.ok) throw new Error(d.error || 'reset failed');
+  await loadProfile();
+  rebuildController();
+  const plan = resetChanges({ forgotten: d.forgotten, active: await activeSettings(), profile: profileSettings() }, settingsMeta);
+  const applied = await applyProfileSettings(plan.clear);
+  const cleared = plan.showing.filter((k) => applied && k in applied);
+  const kept = plan.showing.filter((k) => !cleared.includes(k));
+  return resetReply(d, { cleared, kept });
+}
+
+// ── the driven app (controller half) ─────────────────────────────────────────
+let controller = null, currentControl = null, remoteChannel = null;
+
+// The Gemini lane is best-effort: complete() posts to /api/assist, which returns
+// { available:false } (→ throw → router treats it as a grammar miss) when no key
+// is configured. Never blocks the deterministic path.
+async function assistComplete(prompt) {
+  const r = await fetch('/api/assist', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt }) });
+  const d = await r.json();
+  if (!d || d.available === false || typeof d.text !== 'string') throw new Error('assist-unavailable');
+  return d.text;
+}
+
+function rebuildController() {
+  const llm = createLlmLane({ complete: assistComplete });
+  controller = createController({
+    control: currentControl,
+    operator: { abilityModel: operatorModel },
+    llm,
+    rawToTask: !!remoteChannel, // driving a URL → send free-form straight through as a task
+  });
+  window.__chat = controller;
+}
+
+// Remember the connected receiver so a page refresh reconnects to it (the socket
+// dies with the page, but the receiver — e.g. browser-harness — is still up).
+const WS_KEY = 'aa-chat-ws';
+
+// A visible connection state for the remote receiver: reconnecting → connected,
+// or failed/lost with retry / fall-back actions.
+let connHideTimer = null;
+function setConnStatus(state, url) {
+  const el = $('conn-status');
+  if (connHideTimer) { clearTimeout(connHideTimer); connHideTimer = null; }
+  el.className = 'conn ' + (state === 'hidden' ? '' : state);
+  el.textContent = '';
+  if (state === 'hidden') { el.hidden = true; return; }
+  el.hidden = false;
+  const btn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.addEventListener('click', fn); return b; };
+  if (state === 'connecting') {
+    const d = document.createElement('span'); d.className = 'pulse';
+    el.append(d, 'Reconnecting to ' + url + '…');
+  } else if (state === 'connected') {
+    el.append('✓ Connected to ' + url);
+    connHideTimer = setTimeout(() => { el.hidden = true; }, 2500);
+  } else if (state === 'failed') {
+    el.append('⚠ Couldn’t reach ' + url + '. ', btn('Retry', () => useRemote(url)), btn('Use demo preview', () => { useLocal(); }));
+  } else if (state === 'lost') {
+    el.append('⚠ Connection to ' + url + ' lost. ', btn('Reconnect', () => useRemote(url)), btn('Use demo preview', () => { useLocal(); }));
+  }
+}
+
+// ── iframe mode (screen reader on a hosted VM) ───────────────────────────────
+// The page under test renders HERE rather than behind CDP, so the chat and the
+// page share one accessibility tree and NVDA/JAWS can move between them.
+const FRAME_KEY = 'aa-chat-frame';
+let framedReceiver = null;
+
+// In this mode the tester reads the chat and the page in one document tree, so a
+// visual setting that reaches only the frame leaves the chat unadapted beside
+// it. Mirror every apply/undo onto the local receiver too — which drives the
+// demo preview and, through the surface mirror, the chat window itself.
+function alsoAdaptTheChat(port) {
+  return {
+    ...port,
+    async applySettings(changes, scope) {
+      const r = await port.applySettings(changes, scope);
+      try { await localReceiver.applySettings(changes, scope); } catch {}
+      return r;
+    },
+    async undoLast() {
+      const r = await port.undoLast();
+      try { await localReceiver.undoLast(); } catch {}
+      return r;
+    },
+  };
+}
+
+function closeFramed() {
+  if (framedReceiver) { try { framedReceiver.destroy(); } catch {} framedReceiver = null; }
+  $('framed').removeAttribute('src');
+  $('framed-panel').hidden = true;
+  $('close-framed').hidden = true;
+  try { localStorage.removeItem(FRAME_KEY); } catch {}
+}
+
+// Mutually exclusive with the remote receiver: one of them drives at a time.
+function useFramed(url, proxyBase) {
+  url = (url || '').trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  proxyBase = (proxyBase || $('proxy-base').value || 'http://127.0.0.1:8124/').trim();
+  if (remoteChannel) { remoteChannel.close(); remoteChannel = null; try { localStorage.removeItem(WS_KEY); } catch {} }
+  setConnStatus('hidden');
+  if (framedReceiver) { try { framedReceiver.destroy(); } catch {} }
+
+  const frame = $('framed');
+  framedReceiver = createIframeReceiver(frame, { proxyBase });
+  framedReceiver.load(url);
+  $('framed-url').textContent = url;
+  $('framed-panel').hidden = false;
+  $('close-framed').hidden = false;
+  try { localStorage.setItem(FRAME_KEY, JSON.stringify({ url, proxyBase })); } catch {}
+
+  currentControl = alsoAdaptTheChat(framedReceiver);
+  $('drive-note').textContent = 'Driving the page in this window (' + url + ') + this window. No agent tasks in this mode.';
+  rebuildController();
+  if (unNote) { unNote(); unNote = null; }
+  wireNotes();
+
+  // The profile follows the person onto the frame, the same way useRemote sends
+  // it on the socket's open. Guarded by identity: a frame closed or replaced
+  // before it reports ready must not receive a stale apply.
+  const myFrame = framedReceiver;
+  myFrame.ready.then(() => { if (framedReceiver === myFrame) applyProfileSettings(); });
+}
+
+function useLocal() {
+  if (remoteChannel) { remoteChannel.close(); remoteChannel = null; }
+  closeFramed();
+  currentControl = localReceiver;
+  try { localStorage.removeItem(WS_KEY); } catch {}
+  setConnStatus('hidden');
+  $('drive-note').textContent = 'Driving the demo preview + this window.';
+  rebuildController();
+  applyProfileSettings(); // a disclosure made while a remote app was driven never reached the preview
+  if (unNote) { unNote(); unNote = null; }
+  wireNotes();
+}
+function useRemote(url) {
+  if (!url) return;
+  closeFramed(); // one driver at a time
+  if (remoteChannel) remoteChannel.close();
+  remoteChannel = websocketChannel(url);
+  currentControl = remoteControl({ channel: remoteChannel });
+  try { localStorage.setItem(WS_KEY, url); } catch {}
+  $('ws-url').value = url;
+  $('drive-note').textContent = 'Driving remote receiver ' + url + ' — messages go straight through as tasks.';
+  rebuildController();
+  if (unNote) { unNote(); unNote = null; }
+  wireNotes();
+
+  // Reflect the socket lifecycle. Guard with the channel identity so a previous
+  // socket's late open/close/error can't clobber the status of a newer
+  // connection, or apply the profile to it. The profile goes out on the open
+  // transition, not here: the socket is still connecting when useRemote()
+  // returns, and a request posted now would wait in the channel's outbox with
+  // its timeout already running (see chat-connect.js).
+  setConnStatus('connecting', url);
+  const myChannel = remoteChannel, sock = remoteChannel.socket;
+  const live = () => remoteChannel === myChannel;
+  try {
+    watchConnection(sock, {
+      live,
+      onConnected: () => { setConnStatus('connected', url); applyProfileSettings(); },
+      onFailed: () => setConnStatus('failed', url),
+      onLost: () => setConnStatus('lost', url),
+    });
+  } catch {}
+}
+
+// Late results from a remote task arrive as out-of-band notes.
+let unNote = null;
+function wireNotes() {
+  if (currentControl && typeof currentControl.onNote === 'function') {
+    unNote = currentControl.onNote((text) => {
+      if (!text) return;
+      stopWaiting();
+      earconDone(); // the task finished — the "done" chime
+      addMessage('assistant', String(text));
+      speak(String(text));
+    });
+  }
+}
+
+// ── voice output ──────────────────────────────────────────────────────────────
+const VOICE_KEY = 'aa-chat-voice', SPEAK_KEY = 'aa-chat-speak', VOICEIN_KEY = 'aa-chat-voice-in';
+let speakReplies = true, chosenVoice = '', voices = [], voiceInOn = true;
+const LANG = ((navigator.language || 'en').slice(0, 2)).toLowerCase();
+try { const v = localStorage.getItem(SPEAK_KEY); if (v !== null) speakReplies = v === '1'; } catch {}
+try { chosenVoice = localStorage.getItem(VOICE_KEY) || ''; } catch {}
+try { const v = localStorage.getItem(VOICEIN_KEY); if (v !== null) voiceInOn = v === '1'; } catch {}
+
+function pickVoice() {
+  if (chosenVoice) { const v = voices.find((x) => x.name === chosenVoice); if (v) return v; }
+  return bestVoice(voices, LANG);
+}
+function speak(text) {
+  if (!TTS || !speakReplies) return;
+  const clean = forSpeech(text);
+  if (!clean) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(clean);
+    const v = pickVoice(); if (v) { u.voice = v; if (v.lang) u.lang = v.lang; }
+    window.speechSynthesis.speak(u);
+  } catch {}
+}
+function loadVoices() {
+  if (!TTS || typeof window.speechSynthesis.getVoices !== 'function') return;
+  try { voices = window.speechSynthesis.getVoices() || []; } catch { voices = []; }
+  const sel = $('voice-select'); if (!sel) return;
+  const inLang = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith(LANG));
+  const list = inLang.length ? inLang : voices;
+  sel.textContent = '';
+  sel.append(opt('', 'Automatic (best available)'));
+  for (const v of list) sel.append(opt(v.name, v.name + (v.localService === false ? ' — network' : '')));
+  sel.value = (chosenVoice && list.some((v) => v.name === chosenVoice)) ? chosenVoice : '';
+}
+function opt(value, label) { const o = document.createElement('option'); o.value = value; o.textContent = label; return o; }
+
+// ── transcript ────────────────────────────────────────────────────────────────
+function addMessage(role, text) {
+  const wrap = $('transcript');
+  const row = document.createElement('div'); row.className = 'msg ' + role;
+  const bubble = document.createElement('div'); bubble.className = 'bubble';
+  bubble.textContent = text;
+  row.append(bubble);
+  wrap.append(row);
+  wrap.scrollTop = wrap.scrollHeight;
+  return bubble;
+}
+let waitingRow = null, thinkTimer = null;
+function startWaiting() {
+  stopWaiting();
+  const wrap = $('transcript');
+  waitingRow = document.createElement('div'); waitingRow.className = 'msg assistant';
+  const b = document.createElement('div'); b.className = 'bubble waiting';
+  b.setAttribute('aria-label', 'Working…');
+  for (let i = 0; i < 3; i++) { const d = document.createElement('span'); d.className = 'dot'; b.append(d); }
+  // An icon Stop button (with tooltip) to interrupt the running task (ControlPort stop()).
+  const stop = document.createElement('button'); stop.type = 'button'; stop.className = 'waiting-stop';
+  stop.textContent = 'Stop'; stop.title = 'Stop the running task (Esc)'; stop.setAttribute('aria-label', 'Stop the running task (Escape)');
+  stop.addEventListener('click', stopTask);
+  waitingRow.append(b, stop); wrap.append(waitingRow); wrap.scrollTop = wrap.scrollHeight;
+  // A repeating "thinking" earcon while the task runs — the audio counterpart of
+  // the dots (same cue the floating Controller plays).
+  earconThinkPulse();
+  thinkTimer = setInterval(earconThinkPulse, 2400);
+}
+function stopWaiting() {
+  if (waitingRow) { waitingRow.remove(); waitingRow = null; }
+  if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null; }
+}
+// Ask the receiver to interrupt the running task, then settle the UI.
+async function stopTask() {
+  let r; try { r = await controller.stop(); } catch {}
+  stopWaiting();
+  earconDone();
+  const msg = (r && (r.detail || (r.stopped ? 'Stopped.' : 'Nothing to stop.'))) || 'Stopped.';
+  addMessage('assistant', msg); speak(msg);
+}
+
+// ── composer history (shell-style Up/Down recall) ─────────────────────────────
+// Sent messages are remembered (per browser) and recalled with the arrow keys —
+// Up walks back through older messages, Down walks forward, and Down past the
+// newest restores whatever draft you were typing.
+// The ring itself lives in chat-history.js (unit-tested); what stays here is
+// the textarea handling — caret placement and which keys recall.
+const HIST_KEY = 'aa-chat-history';
+const history = createHistory({
+  max: 100,
+  load: () => JSON.parse(localStorage.getItem(HIST_KEY) || '[]'),
+  save: (entries) => localStorage.setItem(HIST_KEY, JSON.stringify(entries)),
+});
+
+function caretToEnd(ta) { const n = ta.value.length; try { ta.setSelectionRange(n, n); } catch {} }
+function recall(ta, value) {
+  if (value === null) return;
+  ta.value = value;
+  caretToEnd(ta);
+}
+// Only recall when the caret is on the first line (Up) / last line (Down), so a
+// multi-line draft still moves the cursor normally.
+function onComposerKey(e) {
+  const ta = e.target;
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleTurn(ta.value); return; }
+  if (e.key === 'ArrowUp' && onFirstLine(ta) && history.size) { e.preventDefault(); recall(ta, history.prev(ta.value)); }
+  else if (e.key === 'ArrowDown' && onLastLine(ta) && !history.atDraft) { e.preventDefault(); recall(ta, history.next()); }
+}
+
+// ── the main turn ─────────────────────────────────────────────────────────────
+let busy = false;
+async function handleTurn(text) {
+  const u = String(text || '').trim();
+  if (!u || busy) return;
+  busy = true;
+  addMessage('user', u);
+  history.push(u); // remember for Up/Down recall
+  $('composer-input').value = '';
+  try {
+    // The precedence between a reset, a command and a self-description lives in
+    // routeTurn() (chat-turn.js, unit-tested). What stays here is what a turn
+    // DOES once it is classified.
+    const route = routeTurn(u, { isResetToProfile, detectOnboarding });
+
+    if (route.kind === 'reset') {
+      const reply = await applyResetToProfile();
+      addMessage('assistant', reply); speak(reply);
+      return;
+    }
+    if (route.kind === 'onboard') {
+      const reply = await applyOnboarding(route.onboarding);
+      addMessage('assistant', reply); speak(reply);
+      return;
+    }
+
+    const res = await controller.handle(u, { returnToController: true });
+    const outcome = classifyControllerResult(res);
+    if (outcome === 'task') {
+      addMessage('assistant', res.say); speak(res.say);
+      startWaiting(); // the real result comes back as a note
+      return;
+    }
+    if (outcome === 'unrecognized') {
+      // nothing deterministic matched → a general spoken answer (best-effort).
+      const answer = await generalAnswer(u);
+      addMessage('assistant', answer); speak(answer);
+      return;
+    }
+    addMessage('assistant', res.say); speak(res.say);
+  } catch (e) {
+    stopWaiting(); earconError();
+    const m = 'Sorry — ' + (e && e.message ? e.message : 'something went wrong') + '.';
+    addMessage('assistant', m); speak(m);
+  } finally {
+    busy = false;
+    $('composer-input').focus();
+  }
+}
+
+// A general assistant answer for anything that isn't a setting, command, or
+// self-description. Best-effort via Gemini; a helpful canned reply if no key.
+// The prompt and the no-key reply both live in chat-turn.js (unit-tested).
+// "connected" is what decides whether the fallback can honestly offer to run
+// the request: with no remote channel, nothing but this page can act.
+async function generalAnswer(u) {
+  const help = () => fallbackHelp({ connected: !!remoteChannel, framed: !!framedReceiver });
+  try {
+    return (await assistComplete(generalAnswerPrompt(u))).trim() || help();
+  } catch {
+    return help();
+  }
+}
+
+// ── voice input ───────────────────────────────────────────────────────────────
+let recog = null, listening = false, gotText = false;
+function setMic(on) {
+  listening = on;
+  const b = $('mic'); if (!b) return;
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  b.classList.toggle('listening', on);
+  b.title = on ? 'Stop listening (Ctrl+Space)' : 'Speak (Ctrl+Space)';
+}
+// Start/stop dictation. Shared by the mic button and the Ctrl+Space shortcut.
+function toggleMic() {
+  if (!recog) return;
+  if (listening) { recog.stop(); return; }
+  silenceAudioForDictation();
+  try { recog.start(); setMic(true); } catch {}
+}
+// Before listening, silence audio so the mic doesn't transcribe what's playing.
+// A page can only reach ITS OWN tab (cancel TTS + pause local media); to silence
+// OTHER tabs we ask the connected receiver (e.g. browser-harness, which controls
+// the whole browser via CDP) to muteAudio — best-effort, ignored by receivers
+// that don't implement it.
+function silenceAudioForDictation() {
+  try { if (TTS) window.speechSynthesis.cancel(); } catch {}
+  try { document.querySelectorAll('audio, video').forEach((m) => { try { m.pause(); } catch {} }); } catch {}
+  try {
+    if (remoteChannel && currentControl && typeof currentControl.performAction === 'function') {
+      currentControl.performAction('muteAudio', null, null, { returnToController: false });
+    }
+  } catch {}
+}
+// ── commands an EMBEDDER can send ────────────────────────────────────────────
+// A framed chat can't be given its keyboard shortcuts: `document` only sees a
+// press while focus is inside the chat, and a press landing in a neighbouring
+// panel can't be forwarded (a cross-origin frame refuses synthetic events, and
+// contentWindow.focus() from the embedder is ignored). The best an embedder can
+// do alone is focus the frame so the NEXT press works — a poor answer for this
+// shortcut in particular, since the person reaching for voice is often the
+// person for whom pressing twice is the friction they were avoiding.
+//
+// So: one door for every shortcut, rather than a message per key later.
+//   parent.postMessage({ kind: 'aa-chat-command', name: 'voice' }, '*')
+// Verified in Chrome that recognition starts with NO user activation once the
+// microphone permission is granted (the first grant still needs a gesture).
+const CHAT_COMMANDS = {
+  voice() {
+    if (!SR) return { ok: false, detail: 'speech recognition is unavailable in this browser' };
+    if (!voiceInOn || !recog) return { ok: false, detail: 'voice input is switched off in settings' };
+    toggleMic();
+    return { ok: true, detail: listening ? 'listening' : 'stopped' };
+  },
+  'voice-start'() {
+    if (!SR) return { ok: false, detail: 'speech recognition is unavailable in this browser' };
+    if (!voiceInOn || !recog) return { ok: false, detail: 'voice input is switched off in settings' };
+    if (listening) return { ok: true, detail: 'already listening' };
+    toggleMic();
+    return { ok: true, detail: 'listening' };
+  },
+  'voice-stop'() {
+    if (!recog || !listening) return { ok: true, detail: 'not listening' };
+    toggleMic();
+    return { ok: true, detail: 'stopped' };
+  },
+  focus() { try { $('composer-input').focus(); } catch {} return { ok: true, detail: 'focused' }; },
+  // Abort a running task. Same action as the Stop control and the Esc key.
+  stop() {
+    if (!waitingRow) return { ok: true, detail: 'nothing running' };
+    stopTask();
+    return { ok: true, detail: 'stopping' };
+  },
+};
+
+function runChatCommand(name) {
+  const fn = CHAT_COMMANDS[name];
+  if (!fn) return { ok: false, detail: `unknown command: ${name}` };
+  try { return fn(); } catch (e) { return { ok: false, detail: (e && e.message) || 'command failed' }; }
+}
+
+function initEmbedderCommands() {
+  window.addEventListener('message', (ev) => {
+    const m = ev && ev.data;
+    if (!m || m.kind !== 'aa-chat-command') return;
+    // ONLY the embedder. Any page can frame this chat (it sends no framing
+    // headers), and "start the microphone" must not be a message from any of
+    // them. The parent is the only party that can grant this frame a microphone
+    // at all, so it already holds that power — narrowing to it grants nothing
+    // new. (An origin allowlist would be firmer if the chat ever gains a way to
+    // be configured with one.)
+    if (window.parent === window || ev.source !== window.parent) return;
+    const res = runChatCommand(m.name);
+    // Tell the embedder whether it landed, so it can fall back to focusing the
+    // frame rather than silently doing nothing.
+    try { ev.source.postMessage({ kind: 'aa-chat-command-result', name: m.name, ...res }, '*'); } catch {}
+  });
+}
+
+function initVoiceInput() {
+  const b = $('mic');
+  if (!SR || !voiceInOn) { if (b) b.hidden = true; return; }
+  if (b) b.hidden = false;
+  recog = new SR(); recog.lang = 'en-US'; recog.interimResults = true; recog.maxAlternatives = 1;
+  recog.onresult = (e) => { let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript; $('composer-input').value = t.replace(/\s+/g, ' ').trim(); gotText = !!$('composer-input').value; };
+  recog.onerror = () => setMic(false);
+  recog.onend = () => { setMic(false); if (gotText) { gotText = false; handleTurn($('composer-input').value); } };
+  b.addEventListener('click', toggleMic);
+}
+
+// ── settings drawer ───────────────────────────────────────────────────────────
+function initSettings() {
+  const drawer = $('drawer'), ham = $('hamburger');
+  const toggleDrawer = (open) => { drawer.hidden = !open; ham.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+  ham.addEventListener('click', () => toggleDrawer(drawer.hidden));
+  $('drawer-close').addEventListener('click', () => { toggleDrawer(false); ham.focus(); });
+
+  // Esc aborts a running task. A driven task can run for minutes, and the Stop
+  // control is only reachable if you can see it and point at it — the shortcut
+  // is the whole point for anyone who can't. It stays inert when nothing is
+  // running, so Esc is still free for the page; an open settings drawer takes it
+  // first, since a modal that won't close on Esc is its own bug.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!drawer.hidden) { e.preventDefault(); toggleDrawer(false); ham.focus(); return; }
+    if (!waitingRow) return;               // nothing to stop — leave Esc alone
+    e.preventDefault();
+    runChatCommand('stop');
+  });
+
+  // Speak replies
+  const speakCb = $('speak-cb'); speakCb.checked = speakReplies;
+  speakCb.addEventListener('change', () => { speakReplies = speakCb.checked; try { localStorage.setItem(SPEAK_KEY, speakReplies ? '1' : '0'); } catch {} });
+  // Voice output
+  if (TTS && typeof window.speechSynthesis.getVoices === 'function') {
+    loadVoices();
+    const ss = window.speechSynthesis;
+    if (typeof ss.addEventListener === 'function') ss.addEventListener('voiceschanged', loadVoices);
+    else if ('onvoiceschanged' in ss) ss.onvoiceschanged = loadVoices;
+    $('voice-select').addEventListener('change', (e) => { chosenVoice = e.target.value; try { localStorage.setItem(VOICE_KEY, chosenVoice); } catch {} });
+  } else { $('voice-row').hidden = true; }
+  // Voice input on/off
+  const viCb = $('voicein-cb'); viCb.checked = voiceInOn && !!SR;
+  if (!SR) { viCb.checked = false; viCb.disabled = true; $('voicein-row').title = 'Speech recognition is not available in this browser.'; }
+  viCb.addEventListener('change', () => {
+    voiceInOn = viCb.checked; try { localStorage.setItem(VOICEIN_KEY, voiceInOn ? '1' : '0'); } catch {}
+    if (recog) { try { recog.abort(); } catch {} recog = null; }
+    initVoiceInput();
+  });
+  // Drive: connect a remote receiver (default is the local demo app + window).
+  $('connect-remote').addEventListener('click', () => useRemote($('ws-url').value.trim()));
+  $('use-local-harness').addEventListener('click', () => { $('ws-url').value = 'ws://127.0.0.1:9333'; useRemote('ws://127.0.0.1:9333'); });
+
+  // …or drive a page framed in this window (screen-reader-on-a-VM mode).
+  $('open-framed').addEventListener('click', () => { useFramed($('frame-url').value, $('proxy-base').value); toggleDrawer(false); });
+  $('close-framed').addEventListener('click', () => useLocal());
+  $('framed-close').addEventListener('click', () => useLocal());
+
+  // Reset profile: forget the current user and clear every applied setting — a
+  // reload gives a fresh receiver (no adaptations), an empty transcript, and no
+  // profile, i.e. starting from scratch as no specific person.
+  $('reset-profile').addEventListener('click', () => {
+    try { localStorage.removeItem('onb-uid'); localStorage.removeItem(HIST_KEY); localStorage.removeItem(WS_KEY); } catch {}
+    location.reload();
+  });
+}
+
+// ── mirror adaptations onto the chat window itself ────────────────────────────
+// The controller drives #demo-app (in the drawer). A setting the person asks for
+// should also change the UI they're actually using, so we mirror the receiver's
+// applied classes/vars from #demo-app onto #surface (the chat window). Driven by
+// a MutationObserver, so it tracks apply AND undo, however the change was made.
+const AA_CLASSES = ['aa-dark', 'aa-dyslexia', 'aa-reduce-motion', 'aa-hide-distractions', 'aa-focus-mode'];
+const AA_VARS = ['--aa-font-scale', '--aa-line-height', '--aa-letter-spacing'];
+function syncSurface() {
+  const src = $('demo-app'), dst = $('surface');
+  if (!src || !dst) return;
+  for (const c of AA_CLASSES) dst.classList.toggle(c, src.classList.contains(c));
+  for (const v of AA_VARS) { const val = src.style.getPropertyValue(v); if (val) dst.style.setProperty(v, val); else dst.style.removeProperty(v); }
+  const contrast = src.getAttribute('data-aa-contrast');
+  if (contrast) dst.setAttribute('data-aa-contrast', contrast); else dst.removeAttribute('data-aa-contrast');
+}
+
+// ── boot ──────────────────────────────────────────────────────────────────────
+const localReceiver = createDomReceiver($('demo-app'), { scrollTarget: document.scrollingElement || document.documentElement });
+currentControl = localReceiver;
+new MutationObserver(syncSurface).observe($('demo-app'), { attributes: true, attributeFilter: ['class', 'style', 'data-aa-contrast'] });
+
+async function boot() {
+  await loadProfile();
+  rebuildController();
+  await applyProfileSettings(); // a returning person's page matches their profile
+  wireNotes();
+  initSettings();
+  initVoiceInput();
+
+// Restore whatever we were driving before a refresh. A screen-reader tester
+  // reloads often, and re-typing the URL each time is the kind of friction this
+  // mode exists to remove. The two are mutually exclusive; the frame wins. The
+  // profile above went to the preview; a remote receiver gets it when its
+  // socket opens (useRemote), and a frame when it reports ready (useFramed).
+  let savedFrame = null;
+  try { savedFrame = JSON.parse(localStorage.getItem(FRAME_KEY) || 'null'); } catch {}
+  if (savedFrame && savedFrame.url) {
+    $('frame-url').value = savedFrame.url;
+    if (savedFrame.proxyBase) $('proxy-base').value = savedFrame.proxyBase;
+    useFramed(savedFrame.url, savedFrame.proxyBase);
+  } else {
+    let savedWs = ''; try { savedWs = localStorage.getItem(WS_KEY) || ''; } catch {}
+    if (savedWs) useRemote(savedWs);
+  }
+
+  $('composer-form').addEventListener('submit', (e) => { e.preventDefault(); handleTurn($('composer-input').value); });
+  $('composer-input').addEventListener('keydown', onComposerKey); // Enter to send, Up/Down to recall history
+
+  // Ctrl+Space anywhere in THIS document starts/stops voice input. The same
+  // action is reachable by an embedder as the 'voice' command (see
+  // CHAT_COMMANDS) — one door, so a framed chat isn't cut off from its own
+  // shortcuts. Note: on macOS Ctrl+Space may also be the OS input-source
+  // switcher; the toggle here fires regardless.
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && (e.code === 'Space' || e.key === ' ')) {
+      if (SR && voiceInOn && recog) { e.preventDefault(); runChatCommand('voice'); }
+    }
+  });
+  initEmbedderCommands();
+
+  addMessage('assistant', 'Hi — I set up your ability profile and adapt your connected application. Try “I’m blind”, “I need bigger text”, “dark mode”, or tell me what you need. Say “help” for more.');
+  $('composer-input').focus();
+}
+boot();

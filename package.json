@@ -23,7 +23,8 @@
     "typecheck:headway": "npm run typecheck --workspace headway",
     "check:headway": "npm run typecheck:headway && npm run test:headway && npm run build:headway",
     "test:e2e": "playwright test",
-    "check": "npm run test:shared && npm run test:extension && npm run typecheck:web && npm run typecheck:extension && npm run build:extension && npm run test:api"
+    "check": "npm run test:shared && npm run test:extension && npm run typecheck:web && npm run typecheck:extension && npm run build:extension && npm run test:api",
+    "test:e2e:cloud": "playwright test --config playwright.cloud.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

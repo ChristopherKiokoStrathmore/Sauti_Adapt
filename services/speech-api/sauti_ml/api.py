@@ -5,10 +5,10 @@ import os
 import threading
 from contextlib import asynccontextmanager
 from functools import lru_cache
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from .audio import AudioValidationError, decode_wav
-from .auth import audit, fail_pair_locked, note_auth_failure, note_ip_attempt, origin_allowed, trusted_client_ip, verify_user
+from .auth import audit, create_participant_account, fail_pair_locked, note_auth_failure, note_ip_attempt, origin_allowed, trusted_client_ip, verify_user
 from .contracts import Intent, Language, Recognition, reject
 from .prototype import PrototypeModel
 from .storage import assert_owner, canonical_uuid, delete_profile, delete_recording, profile_dir, purge_expired, purge_expired_profiles, store_enrollment
@@ -101,12 +101,80 @@ def health():
     return {'status': 'ok', 'mode': os.environ.get('SPEECH_MODE', 'mock'), 'enrollment_enabled': os.environ.get('ALLOW_ENROLLMENT') == 'true'}
 
 
+@app.post('/v1/participants', dependencies=[Depends(require_token)])
+def create_participant(
+    request: Request,
+    age: int = Body(..., ge=18, le=120),
+    consent: bool = Body(False),
+    terms_version: str = Body(''),
+):
+    """Issue an account only after explicit adult self-attestation and consent.
+
+    The age and consent are validated in both API layers, never stored here.
+    A pilot still needs genuine age verification and guardian workflows for minors.
+    """
+    from .auth import _consume, _configured_limit
+    if not consent or terms_version != os.environ.get('SAUTI_TERMS_VERSION', '2026-11-v1'):
+        raise HTTPException(status_code=403, detail='Current voice terms and consent are required.')
+    if os.environ.get('SAUTI_AUTO_PROVISION') != 'true':
+        raise HTTPException(status_code=403, detail='Automatic enrollment is not enabled.')
+    if os.environ.get('SAUTI_REQUIRE_TERMS') != 'true' or not os.environ.get('SAUTI_PRIVACY_CONTACT'):
+        raise HTTPException(status_code=503, detail='Voice privacy safeguards are not configured.')
+    _consume('provision:' + trusted_client_ip(request), _configured_limit('SAUTI_PROVISION_RATE_LIMIT_PER_MINUTE', 3))
+    try:
+        user_id, token = create_participant_account()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail='Account storage is not available.') from exc
+    from uuid import uuid4
+    audit('participant', 'created', user_id)
+    return JSONResponse({'user_id': user_id, 'token': token, 'profile_id': str(uuid4())}, headers={'cache-control': 'no-store'})
+
+
+@app.get('/v1/readiness', dependencies=[Depends(require_token)])
+def readiness():
+    """Authenticated configuration audit; never return secrets or participant data.
+
+    This is a preflight, not proof that audio uploads, model inference, or
+    retention work. A mounted path alone does not prove durable storage.
+    """
+    private_dir = os.environ.get('SAUTI_PRIVATE_DIR', '').strip()
+    storage_root = os.environ.get('RAILWAY_VOLUME_MOUNT_PATH', '').strip()
+    storage_mounted = bool(
+        private_dir and storage_root and
+        os.path.commonpath((os.path.abspath(private_dir), os.path.abspath(storage_root)))
+        == os.path.abspath(storage_root)
+    )
+    checks = {
+        'api_auth_configured': bool(os.environ.get('SAUTI_API_TOKEN', '').strip()),
+        'user_token_pepper_configured': bool(os.environ.get('SAUTI_TOKEN_PEPPER', '').strip()),
+        'encrypted_storage_key_configured': bool(os.environ.get('SAUTI_STORAGE_KEY', '').strip()),
+        'private_storage_configured': bool(private_dir),
+        'railway_volume_path_configured': storage_mounted,
+        'terms_enforced': os.environ.get('SAUTI_REQUIRE_TERMS') == 'true',
+        'privacy_contact_configured': bool(os.environ.get('SAUTI_PRIVACY_CONTACT', '').strip()),
+        'terms_version_configured': bool(os.environ.get('SAUTI_TERMS_VERSION', '').strip()),
+    }
+    ready = all(checks.values())
+    return {
+        'status': 'configured' if ready else 'configuration_incomplete',
+        'checks': checks,
+        'speech_mode': os.environ.get('SPEECH_MODE', 'mock'),
+        'enrollment_enabled': os.environ.get('ALLOW_ENROLLMENT') == 'true',
+        'comparison_enabled': os.environ.get('SAUTI_COMPARE_ENABLED') == 'true',
+        'note': 'Configuration only; run a consented test recording to verify durable storage.',
+    }
+
+
 @app.post('/v1/enroll', dependencies=[Depends(require_token)])
 async def enroll(
     audio: UploadFile = File(...), profile_id: str = Form(...),
     session_id: str = Form(...), intent: Intent = Form(...),
     language: Language = Form(...), consent: bool = Form(False),
     session_role: str | None = Form(default=None),
+    tone: str | None = Form(default=None),
+    retention_days: int | None = Form(default=None),
+    terms_version: str | None = Form(default=None),
+    improvement_consent: bool = Form(False),
     user_id: str = Depends(require_user),
 ):
     if os.environ.get('ALLOW_ENROLLMENT') != 'true':
@@ -115,13 +183,21 @@ async def enroll(
     if not consent:
         audit('enroll', 'no-consent', user_id, profile_id)
         raise HTTPException(status_code=403, detail='Explicit permission to record and retain this clip is required.')
+    if os.environ.get('SAUTI_REQUIRE_TERMS') == 'true':
+        if not os.environ.get('SAUTI_PRIVACY_CONTACT', '').strip():
+            raise HTTPException(status_code=503, detail='Pilot privacy contact is not configured.')
+        if terms_version != os.environ.get('SAUTI_TERMS_VERSION', '2026-11-v1'):
+            audit('enroll', 'invalid-terms', user_id, profile_id)
+            raise HTTPException(status_code=403, detail='Current voice-data terms must be accepted before enrollment.')
     try:
         canonical_uuid(profile_id)
         canonical_uuid(session_id)
         assert_owner(profile_id, user_id)
         purge_expired(profile_id, user_id)
         samples = await read_audio(audio)
-        recording_id = store_enrollment(profile_id, session_id, intent, language, samples, session_role or None, user_id)
+        recording_id = store_enrollment(profile_id, session_id, intent, language, samples, session_role or None, user_id,
+                                        tone=tone or None, retention_days=retention_days, terms_version=terms_version or None,
+                                        improvement_consent=improvement_consent)
     except PermissionError as exc:
         audit('enroll', 'forbidden', user_id, profile_id)
         raise HTTPException(status_code=403, detail=str(exc)) from exc
@@ -131,6 +207,44 @@ async def enroll(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     audit('enroll', 'stored', user_id, profile_id)
     return {'recording_id': recording_id, 'status': 'stored', 'profile_id': canonical_uuid(profile_id)}
+
+
+
+@app.post('/v1/compare', dependencies=[Depends(require_token)])
+async def compare_only(
+    audio: UploadFile = File(...), profile_id: str = Form(...),
+    language: str = Form('en-KE'), model: str = Form('all'),
+    expected_intent: Intent | None = Form(default=None),
+    reference: str = Form(''),
+    compare_consent: bool = Form(False),
+    user_id: str = Depends(require_user),
+):
+    """Experimental comparison: no audio persistence and NO Controller actions."""
+    if os.environ.get('SAUTI_COMPARE_ENABLED') != 'true':
+        raise HTTPException(status_code=403, detail='Cloud model comparison is not enabled.')
+    if not compare_consent:
+        raise HTTPException(status_code=403, detail='Explicit model comparison permission is required.')
+    if os.environ.get('SAUTI_REQUIRE_TERMS') == 'true' and not os.environ.get('SAUTI_PRIVACY_CONTACT', '').strip():
+        raise HTTPException(status_code=503, detail='Pilot privacy contact is not configured.')
+    if model not in ('prototype', 'english', 'swahili', 'all') or language not in ('en-KE', 'sw-KE', 'mixed'):
+        raise HTTPException(status_code=422, detail='Unknown model or language setting.')
+    if len(reference) > 280:
+        raise HTTPException(status_code=422, detail='Reference text too long.')
+    try:
+        canonical_uuid(profile_id)
+        assert_owner(profile_id, user_id)
+        samples = await read_audio(audio)
+        from fastapi.concurrency import run_in_threadpool
+        from .compare import compare_models
+        # Dedicated speech host needed. Vercel never loads model weights.
+        return await run_in_threadpool(compare_models, samples, profile_id, model,
+                                       language, expected_intent.value if expected_intent else None, reference)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail='Speech comparison service unavailable.') from exc
 
 
 @app.delete('/v1/profile/{profile_id}', dependencies=[Depends(require_token)])

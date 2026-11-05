@@ -30,7 +30,13 @@ export default defineConfig({
         SAUTI_API_TOKEN: API_TOKEN,
         SAUTI_TOKEN_PEPPER: TOKEN_PEPPER,
         SAUTI_ACCOUNTS: accounts,
-        ALLOW_ENROLLMENT: 'false',
+        ALLOW_ENROLLMENT: 'true',
+        SAUTI_AUTO_PROVISION: 'true',
+        SAUTI_PROVISION_RATE_LIMIT_PER_MINUTE: '60',
+        SAUTI_REQUIRE_TERMS: 'true',
+        SAUTI_TERMS_VERSION: '2026-11-v1',
+        SAUTI_PRIVACY_CONTACT: 'privacy@example.test',
+        SAUTI_STORAGE_KEY: 'snH3FoWORSSZahqOVEMo0LoyfGyD8JHGkMvE5KGq78E=',
         SAUTI_PRIVATE_DIR: '/tmp/sauti-e2e-private',
       },
       url: `${API_URL}/health`,
@@ -38,11 +44,12 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: `npm run dev -- --port ${WEB_PORT}`,
+      command: `npm run dev -- --hostname 127.0.0.1 --port ${WEB_PORT}`,
       cwd: 'apps/web',
       env: {
         SPEECH_API_URL: API_URL,
         SPEECH_API_TOKEN: API_TOKEN,
+        NEXT_PUBLIC_SAUTI_PRIVACY_CONTACT: 'privacy@example.test',
         NEXT_TELEMETRY_DISABLED: '1',
       },
       url: WEB_URL,
@@ -51,3 +58,4 @@ export default defineConfig({
     },
   ],
 });
+

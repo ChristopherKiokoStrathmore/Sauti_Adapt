@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import json
 import os
+from pathlib import Path
 import threading
 import time
 from datetime import datetime, timezone
@@ -51,7 +52,7 @@ def token_digest(token: str) -> str:
 
 
 def verify_user(user_id: str, token: str) -> bool:
-    expected = accounts().get(user_id)
+    expected = accounts().get(user_id) or provisioned_accounts().get(user_id)
     actual = token_digest(token)
     if not expected or not actual:
         return False
@@ -170,3 +171,45 @@ def audit(event: str, outcome: str, user_id: str | None = None, profile_id: str 
         path.chmod(0o600)
     except Exception:
         print(line, flush=True)
+
+def provisioned_accounts() -> dict[str, str]:
+    """Read durable token digests only. Never store plaintext participant tokens."""
+    from .storage import private_root
+    try:
+        path = private_root() / 'participant_accounts.json'
+    except RuntimeError:
+        return {}
+    if not path.is_file():
+        return {}
+    try:
+        parsed = json.loads(path.read_text(encoding='utf8'))
+        return parsed if isinstance(parsed, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def create_participant_account() -> tuple[str, str]:
+    """Generate independent, unpredictable credentials on durable private storage."""
+    import secrets
+    from uuid import uuid4
+    from .storage import private_root
+    root = private_root()
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path = root / 'participant_accounts.json'
+    with _lock:
+        existing = provisioned_accounts()
+        user_id = str(uuid4())
+        token = secrets.token_urlsafe(32)
+        digest = token_digest(token)
+        if not digest:
+            raise RuntimeError('Token pepper is not configured.')
+        existing[user_id] = digest
+        from .storage import write_private_bytes
+        # Account records contain only HMAC digests, but protect them with strict file permissions.
+        from tempfile import NamedTemporaryFile
+        with NamedTemporaryFile(mode='w', dir=root, prefix='.accounts-', delete=False, encoding='utf8') as temp:
+            json.dump(existing, temp)
+            temp_path = Path(temp.name)
+        temp_path.chmod(0o600)
+        os.replace(temp_path, path)
+    return user_id, token

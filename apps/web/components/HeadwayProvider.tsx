@@ -341,10 +341,11 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
         if (current !== target.current) {
           target.current?.classList.remove('hw-target', 'hw-snap-target');
           target.current = current;
-          current?.classList.add('hw-target');
           dwell.current = { element: current, since: t, fired: false };
           setProgress(0);
         }
+        // Preserve the free pointer hover ring after a React component rerenders.
+        current?.classList.add('hw-target');
       }
 
       // Dwell is an optional alternative, never the default.

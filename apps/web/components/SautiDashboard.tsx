@@ -6,6 +6,7 @@ import { isReadAloudUtterance, speakText, stopSpeaking } from '@sauti/shared/spe
 import { CONTROLLER_CSS } from '@toolkit/controller/web/ui.js';
 import { createController, createDomReceiver } from '@sauti/shared/controller';
 import { capReadPort } from '@sauti/shared/page-text';
+import { HeadwayInstallStep } from './HeadwayInstallStep';
 
 const COMMANDS: Intent[] = ['SCROLL_DOWN', 'SCROLL_UP', 'GO_BACK', 'READ_PAGE', 'UNDO'];
 /** Version of the consent text below. Bump it whenever the wording changes, so each clip records what was agreed. */
@@ -20,7 +21,7 @@ const TONES = [
 ] as const;
 type ToneId = (typeof TONES)[number]['id'];
 const ROLE_LABEL: Record<'train' | 'calibration' | 'test', string> = { train: 'Training', calibration: 'Calibration', test: 'Untouched test' };
-const STEPS = ['Your preferences', 'Your permission', 'Voice samples', 'Check recognition', 'Install Headway'] as const;
+const STEPS = ['Your preferences', 'Your permission', 'Voice samples', 'Check recognition', 'Install extension'] as const;
 const TEST_COMMANDS = [
   { utterance: 'scroll down', label: 'scroll down' },
   { utterance: 'scroll up', label: 'scroll up' },
@@ -481,15 +482,6 @@ export function SautiDashboard() {
     setStatus(body.deleted ? 'Deleted ' + body.recordings_removed + ' recording(s) and the private model for this profile.' : 'No stored recordings were found.');
   }
 
-  async function copyExtensionSetup() {
-    try {
-      await navigator.clipboard.writeText('Sauti Adapt profile: ' + profileId + '\\nPWA origin: ' + window.location.origin);
-      setStatus('Profile ID and this website address copied. Paste them into the browser extension setup.');
-    } catch {
-      setStatus('Copy was unavailable. Use the profile ID shown in Your voice, your choice.');
-    }
-  }
-
   return <main className="app-shell" data-journey={journeyVariant}>
     <style data-aa-upstream-css="">{CONTROLLER_CSS}</style>
     <header className="topbar">
@@ -529,7 +521,7 @@ export function SautiDashboard() {
         <div className="stepper-reassurance"><span className="stepper-reassurance-icon" aria-hidden="true">✳</span><div><strong>No rush.</strong><p>Take a break or try again whenever you need.</p></div></div>
       </nav>
 
-      <section className="main-card">
+      <section className={step === 5 ? "main-card hi-main-card" : "main-card"}>
         <div className="hear-step"><button type="button" className="soft-button" onClick={hearStep}>🔊 Hear this step</button><button type="button" className="text-button" disabled={!speaking} onClick={silence}>Stop speaking</button></div>
         <div hidden={step !== 1}>
           <div className="section-heading"><Icon>⚙</Icon><div><p className="step-kicker">Step 1 of 5</p><h2>Your preferences</h2></div></div>
@@ -623,21 +615,7 @@ export function SautiDashboard() {
         </div>
 
         <div hidden={step !== 5}>
-          <div className="section-heading"><Icon>✚</Icon><div><p className="step-kicker">Step 5 of 5</p><h2>Install Headway</h2></div></div>
-          <p className="lead-copy">Add head movement and mouth gesture controls to Chrome. Headway is a separate extension that complements Sauti’s voice features.</p>
-          <div className="journey-success"><span aria-hidden="true">✓</span><div><strong>Your Sauti voice profile is separate and remains private.</strong><p>You can try Headway even while your personalized speech recognition model is being prepared.</p></div></div>
-          <div className="extension-install-panel">
-            <strong>Headway · Hands free browsing</strong>
-            <p>Move the pointer with your head, aim at buttons, and click with a mouth gesture. Choose the speed and calibration that feel comfortable.</p>
-            <a href="/install" className="extension-install-link">Download and install Headway <span aria-hidden="true">→</span></a>
-            <p className="extension-install-note">Hackathon testing on desktop Chrome. Installation requires downloading a ZIP, extracting it, and choosing Load unpacked in Chrome extensions.</p>
-          </div>
-          <details className="advanced-settings"><summary>Research team: original Sauti voice extension</summary>
-            <p>Sauti’s existing voice extension remains a separate, experimental feature. It is not automatically paired with Headway.</p>
-            <ol className="extension-steps"><li>Build the original extension from <code>apps/extension</code>.</li><li>Load it unpacked in Chrome and open its side panel.</li><li>Use a separately provisioned pilot account for voice extension access. Do not share your browser session.</li><li>Enable only websites you intend to control.</li></ol>
-            <button type="button" onClick={() => void copyExtensionSetup()}>Copy Sauti extension setup</button>
-          </details>
-          <div className="card-actions"><button type="button" className="soft-button" onClick={() => goTo(3)}>Record more examples</button><button type="button" className="soft-button" onClick={() => goTo(4)}>Try the demo again</button><button className="text-button" type="button" onClick={() => goTo(1)}>Review setup</button></div>
+          <HeadwayInstallStep onBack={() => goTo(4)} onReview={() => goTo(1)} />
         </div>
       </section>
 

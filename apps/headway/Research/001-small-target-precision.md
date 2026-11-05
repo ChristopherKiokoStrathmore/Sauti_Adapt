@@ -97,7 +97,7 @@ E was deferred in round 1, then confirmed necessary; see round 2.
 
 **Next: measure with a person**
 
-1. Serve the test page: `python3 -m http.server 8765 --directory apps/extension/Research`, then open <http://localhost:8765/target-test.html>. Content scripts don't run on `file://` pages.
+1. Serve the test page: `python3 -m http.server 8765 --directory apps/headway/Research`, then open <http://localhost:8765/target-test.html>. Content scripts don't run on `file://` pages.
 2. Run 25 targets in **Open** and in **Crowded** layout, on the build before this round (`git stash`) and after it.
 3. Paste each JSON block below, with what the person said and how tired they were.
 

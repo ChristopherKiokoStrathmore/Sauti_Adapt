@@ -1,0 +1,25 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sauti Adapt</title><style>
+:root{font-family:system-ui,sans-serif;color:#201d37;background:#faf9ff}body{margin:0;padding:18px}h1{font-size:1.7rem;margin:0 0 8px}.help{color:#5c6172;font-size:.85rem}section{background:#fff;padding:16px;border:1px solid #ddd7f0;border-radius:14px;margin:12px 0}label{font-weight:600;display:block;margin:10px 0 5px}input,select{font:inherit;width:100%;padding:10px;border:1px solid #8f84b9;border-radius:8px;box-sizing:border-box}input[type=checkbox]{width:auto}button{font:inherit;background:#4d33ad;color:white;border:0;border-radius:10px;padding:11px 13px;cursor:pointer;margin:4px 0;width:100%}button:disabled{opacity:.5}button.secondary{color:#3d268b;background:#e9e5f7}.status{background:#eeeaf9;border-radius:10px;padding:13px;overflow-wrap:anywhere;white-space:pre-wrap;min-height:36px}:focus-visible{outline:3px solid #e4a716;outline-offset:2px}
+</style></head><body>
+<h1>Sauti Adapt</h1><p class="help">Kenyan English and Kiswahili commands. The app path freezes Wav2Vec2 and uses prototypes. It does not fine-tune. No accuracy is claimed.</p>
+<section><label for="api">PWA origin</label><input id="api" value="http://localhost:3000" placeholder="https://your-project.vercel.app">
+<label for="user">Personal user ID</label><input id="user" autocomplete="off" placeholder="Account UUID">
+<label for="code">Personal access token (not saved)</label><input id="code" type="password" autocomplete="off">
+<label for="profile">Private voice profile ID</label><input id="profile" placeholder="Copy the UUID from the enrollment website">
+<button id="grant" class="secondary" type="button">Enable current website</button>
+<button id="disable" class="secondary" type="button">Disable current website</button>
+<p class="help">Chrome's permission to call the speech API is separate. A website is not controlled until you enable it, including localhost and Vercel pages. Disable removes it from your list.</p>
+<ul id="enabled"></ul></section>
+<section><label for="listen">Listen control</label><select id="listen"><option value="toggle" selected>One toggle button</option><option value="separate">Separate start and stop</option></select>
+<label for="maxsec">Maximum clip length (seconds)</label><input id="maxsec" type="number" min="0.5" max="30" step="0.5" value="5">
+<label><input id="autostop" type="checkbox" checked> Stop automatically at the time limit</label>
+<p class="help">Defaults are one toggle and 5 seconds. Agree the final values with the participant. The server still rejects longer clips. The microphone stays off until you press Start.</p>
+<button id="record" type="button" aria-pressed="false">🎙 Start listening</button>
+<button id="stop" type="button" hidden disabled>■ Stop and recognize</button>
+<button id="silence" type="button" class="secondary" disabled>Stop speaking</button>
+<button id="test-scroll" type="button" class="secondary">Test scroll down</button>
+<p class="help">Test scroll down runs the canonical phrase through the official Controller. It does not use the microphone and does not call the speech model. It still requires this website to be enabled.</p>
+<div id="status" class="status" role="status" aria-live="polite">Ready. Enable the current website first.</div></section>
+<p class="help">Only recognized commands run, and only on the same page where you pressed Start. Read aloud uses speechSynthesis in this panel and is not recorded or uploaded. Undo last setting reverts a recorded display adaptation only. It does not undo clicks, scrolling, Back, or any transaction. This prototype does not run on browser-restricted pages.</p>
+<script src="sidepanel.js"></script></body></html>

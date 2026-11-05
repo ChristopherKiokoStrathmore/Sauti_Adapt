@@ -13,7 +13,7 @@ npm install            # from the repo root (this folder is the `headway` worksp
 npm run build:extension
 ```
 
-Then open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and select **this folder** (`apps/extension`). The manifest is at the root and points into `dist/`. Rebuild and press reload on the extension card after a change. `npm run watch --workspace headway` rebuilds the TypeScript on save.
+Then open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and select **this folder** (`apps/headway`). The manifest is at the root and points into `dist/`. Rebuild and press reload on the extension card after a change. `npm run watch --workspace headway` rebuilds the TypeScript on save.
 
 Summaries need Chrome's built-in AI (Gemini Nano). The side panel shows whether the Summarizer and Prompt models are ready, need downloading, or are missing on this device. Head tracking needs a camera, and Chrome asks for it per site.
 

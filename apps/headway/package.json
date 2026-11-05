@@ -1,0 +1,20 @@
+{
+  "name": "headway",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Headway: hands-free browsing with head tracking and on-device link summaries.",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@mozilla/readability": "0.6.0",
+    "@vladmandic/human": "3.3.6"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.300"
+  }
+}

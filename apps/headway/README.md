@@ -10,10 +10,10 @@ It builds on [Nutshell](https://github.com/tanhanwei/Nutshell) by Tan Han Wei, r
 
 ```bash
 npm install            # from the repo root (this folder is the `headway` workspace)
-npm run build:extension
+npm run check:headway  # typecheck, test, and build Headway
 ```
 
-Then open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and select **this folder** (`apps/headway`). The manifest is at the root and points into `dist/`. Rebuild and press reload on the extension card after a change. `npm run watch --workspace headway` rebuilds the TypeScript on save.
+Or open the Sauti website's **Install Headway** page and download the hackathon ZIP. Extract it first. Then open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and select **the extracted Headway folder** (or `apps/headway` after a local build). The manifest is at the root and points into `dist/`. Rebuild and press reload on the extension card after a change. `npm run watch --workspace headway` rebuilds the TypeScript on save.
 
 Summaries need Chrome's built-in AI (Gemini Nano). The side panel shows whether the Summarizer and Prompt models are ready, need downloading, or are missing on this device. Head tracking needs a camera, and Chrome asks for it per site.
 
@@ -51,8 +51,9 @@ Nutshell also shipped WebGazer and clmtrackr, but no code referenced them, so He
 ## Checks
 
 ```bash
-npm run typecheck:extension   # src under strict, tests with Node types
-npm run test:extension        # formatter regressions, manifest/file consistency
+npm run typecheck:headway   # src under strict, tests with Node types
+npm run test:headway        # formatter, pointing, and manifest checks
+npm run build:headway       # bundle unpacked Chrome extension
 ```
 
 ## Not verified

@@ -24,7 +24,7 @@ export default function InstallPage() {
             {storeUrl ? (
               <a className="install-primary" href={storeUrl} rel="noopener noreferrer" target="_blank" aria-label="Install Headway from Chrome Web Store">Install extension <span aria-hidden="true">↗</span></a>
             ) : (
-              <div className="install-primary install-unavailable" role="status">Chrome Web Store approval pending</div>
+              <div className="install-primary install-unavailable" role="status" aria-label="Headway Chrome Web Store approval pending">Chrome Web Store approval pending</div>
             )}
             <a className="install-secondary" href="https://github.com/ChristopherKiokoStrathmore/Sauti_Adapt/tree/main/apps/headway" target="_blank" rel="noopener noreferrer">View extension source</a>
           </div>

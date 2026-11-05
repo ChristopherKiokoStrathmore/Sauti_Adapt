@@ -48,6 +48,7 @@ jobs:
       - run: npm install
       - run: npx playwright install --with-deps chromium
       - run: npm run build:extension
+      - run: npm run build:headway
       - run: xvfb-run -a npm run test:e2e
         env:
           CI: '1'

@@ -221,10 +221,11 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
           setProgress(amount);
         }
       }
-      if (modeRef.current === 'mouth' && current && calibration.current && reading.mouth !== null) {
+      if (modeRef.current === 'mouth' && calibration.current && reading.mouth !== null) {
         const thresholds = mouthThresholds(calibration.current);
+        // Always accept release events, even after a target disappears or the pointer moves.
         const actions = mouth.current.update(reading.mouth, thresholds, t);
-        if (actions.includes('click')) {
+        if (current && actions.includes('click')) {
           if (current.matches('input')) current.focus(); else current.click();
           setMessage('Mouth gesture selected ' + (current.getAttribute('aria-label') || current.textContent?.trim().slice(0, 40) || 'item') + '.');
         }

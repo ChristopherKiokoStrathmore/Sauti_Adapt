@@ -24,7 +24,7 @@ test('Headway requests no camera permission before the user activates it', async
 test('Headway practice workspace offers safe interactive experiences without an extension', async ({ page }) => {
   await page.goto('/workspace');
   await expect(page.getByRole('heading', { name: 'Explore your way.' })).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('Headway off');
+  await expect(page.locator('.aw-status')).toContainText('Headway off');
   await page.getByRole('button', { name: 'Larger text' }).click();
   await expect(page.locator('.aw-article')).toHaveClass(/aw-large/);
   await page.getByRole('button', { name: 'High contrast' }).click();
@@ -62,6 +62,8 @@ test('Headway mock camera fixture confirms global session survives Sauti client 
       const ctx = canvas.getContext('2d')!;
       ctx.fillStyle = 'white'; ctx.fillRect(0, 0, 640, 480);
       const stream = canvas.captureStream(20);
+      const timer = window.setInterval(() => { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 640, 480); }, 150);
+      stream.getTracks().forEach(track => track.addEventListener('ended', () => clearInterval(timer), { once: true }));
       for (const track of stream.getTracks()) {
         const original = track.stop.bind(track);
         track.stop = () => { w.__HeadwayFixture!.stopped++; original(); };

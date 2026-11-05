@@ -792,6 +792,6 @@ box-shadow:inset -18px -24px 44px rgba(13,8,60,.74),0 0 70px rgba(173,76,244,.28
 
 
 .hw-panel-title button{min-height:36px;padding:8px 10px;font-size:.75rem;border-radius:10px;background:#eee6ff;color:#4f249d;box-shadow:none}
-.hw-panel.hw-panel-collapsed{padding:9px 12px;width:min(260px,calc(100vw - 32px))}
+.hw-panel.hw-panel-collapsed{padding:9px 12px;width:min(260px,calc(100vw - 32px));top:88px;bottom:auto}
 .hw-panel.hw-panel-collapsed>:not(.hw-panel-title){display:none}
 .hw-panel.hw-panel-collapsed .hw-panel-title{gap:7px;flex-wrap:wrap}

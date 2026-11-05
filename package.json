@@ -21,7 +21,7 @@
     "build:headway": "npm run build --workspace headway",
     "test:headway": "npm run test --workspace headway",
     "typecheck:headway": "npm run typecheck --workspace headway",
-    "check:headway": "npm run typecheck:headway && npm run test:headway && npm run build:headway",
+    "check:headway": "npm run typecheck:headway && npm run build:headway && npm run test:headway",
     "test:e2e": "playwright test",
     "check": "npm run test:shared && npm run test:extension && npm run typecheck:web && npm run typecheck:extension && npm run build:extension && npm run test:api",
     "test:e2e:cloud": "playwright test --config playwright.cloud.config.ts"

@@ -188,7 +188,7 @@ export function SautiDashboard() {
         : 'Step 3 of 5. Say something unrelated to any command, such as a name or a different sentence.';
     }
     if (forStep === 4) return 'Step 4 of 5. Check recognition. The voice model may not be ready yet. You can try accessible demo controls while training is being prepared.';
-    return 'Step 5 of 5. Install Headway. Download the Chrome extension, open the installation instructions, and turn on head pointer controls when you are ready.';
+    return 'Step 5 of 5. Install Headway from the Chrome Web Store when available, review permissions, then turn on head pointer controls when you are ready.';
   }
 
   function hearStep() {
@@ -636,7 +636,7 @@ export function SautiDashboard() {
           <div className="status-row"><span aria-hidden="true">●</span><strong>Recognition check</strong><span className={'state-pill ' + (prediction?.status === 'accepted' ? 'ready' : 'pending')}>{prediction?.status === 'accepted' ? 'Accepted' : 'Pending'}</span></div>
           <div className="status-row"><span aria-hidden="true">●</span><strong>Browser extension</strong><span className="state-pill neutral">Not confirmed</span></div>
           <button type="button" className="soft-button full-width" onClick={() => goTo(5)}>Install Headway</button>
-          <small>Available now for manual Chrome installation. No voice model required.</small>
+          <small>Chrome Web Store publication is required for direct installation. No voice model required.</small>
         </section>
       </details></aside>
     </div>

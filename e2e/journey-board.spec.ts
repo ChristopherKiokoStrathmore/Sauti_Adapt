@@ -38,17 +38,22 @@ async function recordOnce(page: Page) {
   await expect(page.getByRole('button', { name: /Stop recording/ })).toBeEnabled();
   await page.waitForTimeout(400);
   await page.getByRole('button', { name: /Stop recording/ }).click();
-  await expect(page.getByRole('button', { name: /Save voice sample/ })).toBeEnabled();
+  if (await page.locator('.app-shell').getAttribute('data-journey') === 'c') {
+    await expect(page.getByRole('status')).toContainText('Voice sample saved privately');
+    await expect(page.getByRole('button', { name: /Save voice sample/ })).toHaveCount(0);
+  } else {
+    await expect(page.getByRole('button', { name: /Save voice sample/ })).toBeEnabled();
+  }
 }
 
 test('A baseline exposes full preference and extension information for comparison', async ({ page }) => {
   await startOnboarding(page, 'a');
   await expect(page.getByRole('group', { name: 'Commands to practise' })).toBeVisible();
   await expect(page.locator('#listen')).toBeVisible();
-  await page.getByRole('button', { name: 'Check recognition', exact: true }).click();
+  await page.locator('.stepper-card button').nth(3).click();
   await expect(page.getByRole('heading', { name: 'Check recognition' })).toBeVisible();
   await page.getByRole('button', { name: /Continue to extension/ }).click();
-  await expect(page.getByText('Build and load the extension', { exact: false })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Download and install Headway/ })).toHaveAttribute('href', '/install');
 });
 
 test('A versus B simplifies preference decisions while keeping language and accessibility options', async ({ page }) => {
@@ -74,17 +79,15 @@ test('B versus C uses one task at a time, adjustable pace and honest readiness',
   await expect(page.getByRole('button', { name: /Stop recording/ })).toBeDisabled();
   await microphone(page);
   await recordOnce(page);
-  await expect(page.getByRole('status')).toContainText('Nothing has been uploaded');
-  await page.getByRole('button', { name: /Record again/ }).click();
-  await expect(page.getByRole('button', { name: /Save voice sample/ })).toBeDisabled();
+  await page.getByRole('button', { name: /Record another example/ }).click();
+  await expect(page.getByText('Example 2 of 3')).toBeVisible();
   await recordOnce(page);
-  await page.getByRole('button', { name: /Save voice sample/ }).click();
   await expect(page.getByRole('status')).toContainText('Voice sample saved privately');
   await expect(page.getByText('More about training progress')).toBeVisible();
   await expect(page.getByText('All three sessions are complete.')).toBeHidden();
-  await page.getByRole('button', { name: /Check recognition/ }).click();
-  await expect(page.getByText('Your voice model is not ready yet')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Try a command without speaking' })).toBeVisible();
+  await page.locator('.stepper-card button').nth(3).click();
+  await expect(page.getByText('Training and validation must finish', { exact: false })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Optional demo without speaking' })).toBeVisible();
   await page.getByRole('button', { name: 'bigger text' }).click();
   await expect(page.getByRole('status')).toHaveText('Making text bigger.');
   await page.getByRole('button', { name: /Finish this journey/ }).click();
@@ -100,8 +103,8 @@ test('inaccessible microphone shows feedback and never creates an unsaved clip',
     };
   });
   await page.getByRole('button', { name: /Start voice recording/ }).click();
-  await expect(page.getByRole('status')).toContainText('Permission denied');
-  await expect(page.getByRole('button', { name: /Save voice sample/ })).toBeDisabled();
+  await expect(page.getByRole('status')).toContainText('Microphone access is blocked');
+  await expect(page.locator('.sample-dots')).toHaveAttribute('aria-label', '0 of 3 saved');
 });
 
 test('consent, optional diagnosis, age restriction and deletion controls remain private and available', async ({ page, request }) => {
@@ -118,6 +121,7 @@ test('consent, optional diagnosis, age restriction and deletion controls remain 
   await page.locator('.permission-card input[type="checkbox"]').first().check();
   await page.getByRole('button', { name: /Continue to voice samples/ }).click();
   const profileId = await page.locator('#profile').inputValue();
+  await page.getByText('My voice and privacy').click();
   await expect(page.getByRole('button', { name: /Delete my voice data/ })).toBeDisabled();
   await page.getByText('Confirm profile deletion').click();
   await page.getByRole('button', { name: /Delete my voice data/ }).click();

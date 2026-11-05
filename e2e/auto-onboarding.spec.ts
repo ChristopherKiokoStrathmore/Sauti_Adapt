@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('new adult participant can enroll, review a clip, save and return securely', async ({ page }) => {
+test('Path C participant can enroll, automatically save a clip, and return securely', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: /Save and continue/ }).click();
   await page.locator('#participant-name').fill('Browser test participant');
@@ -35,10 +35,10 @@ test('new adult participant can enroll, review a clip, save and return securely'
   await expect(page.getByRole('button', { name: 'Stop recording' })).toBeEnabled();
   await page.waitForTimeout(400);
   await page.getByRole('button', { name: 'Stop recording' }).click();
-  await expect(page.getByRole('status')).toContainText('Nothing has been uploaded');
-  await expect(page.getByRole('button', { name: /Save voice sample/ })).toBeEnabled();
-  await page.getByRole('button', { name: /Save voice sample/ }).click();
+  // Path C autosaves after the explicit recording consent; no extra Save click.
   await expect(page.getByRole('status')).toContainText('Voice sample saved privately');
+  await expect(page.getByRole('button', { name: /Save voice sample/ })).toHaveCount(0);
+  await expect(page.getByText('Example 2 of 3')).toBeVisible();
 
   await page.reload();
   const afterRefresh = await page.request.get('/api/participant');

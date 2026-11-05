@@ -558,3 +558,123 @@ box-shadow:inset -18px -24px 44px rgba(13,8,60,.74),0 0 70px rgba(173,76,244,.28
 .install-support a{color:#4f26aa;text-underline-offset:4px}
 @media(max-width:720px){.install-steps ol,.install-options{grid-template-columns:1fr}.install-steps li{padding:18px}.install-hero{border-radius:22px}.install-header{flex-wrap:wrap}.install-header .install-back{font-size:.88rem}.install-actions>a{width:100%}.install-step-number{width:43px;height:43px}}
 @media(prefers-reduced-motion:reduce){.install-shell *{scroll-behavior:auto!important;transition:none!important}}
+
+
+/* Headway install: functional Step 5 interpretation of the approved visual concept.
+   Interface preview is illustrative and aria-hidden, not an operational extension. */
+.onboarding-layout:has(.hi-onboarding){width:min(1500px,calc(100% - 32px));grid-template-columns:245px minmax(0,1fr);gap:19px}
+.onboarding-layout:has(.hi-onboarding) .side-stack{grid-column:2;grid-template-columns:repeat(2,minmax(0,1fr))}
+.main-card.hi-main-card{padding:clamp(21px,3.1vw,45px);min-width:0}
+.hi-onboarding{color:#1e1543;width:100%;font-size:1rem}
+.hi-heading{display:flex;gap:19px;align-items:flex-start;margin-bottom:29px}
+.hi-heading-icon{display:grid;place-items:center;flex:0 0 64px;width:64px;height:64px;border-radius:19px;background:linear-gradient(150deg,#f1e7ff,#ded0ff);color:#713bd5;font-size:2.1rem;box-shadow:inset 0 1px #ffffffcc}
+.hi-heading .step-kicker{font-size:.7rem;letter-spacing:.14em;color:#7458ab;margin:0 0 3px;font-weight:820}
+.hi-heading h2{font-size:clamp(1.8rem,3.1vw,3.1rem);line-height:1.14;letter-spacing:-.055em;margin:0 0 12px;color:#1b1142;font-weight:850}
+.hi-heading .hi-intro{font-size:clamp(1rem,1.3vw,1.13rem);line-height:1.56;max-width:780px;margin:0;color:#493e70}
+.hi-feature-grid{display:grid;grid-template-columns:minmax(0,1.37fr) minmax(270px,.82fr);gap:19px;align-items:stretch}
+.hi-start-card{background:linear-gradient(142deg,#f8f5ff,#f2eafd);border-radius:27px;padding:clamp(18px,2.1vw,30px);min-width:0}
+.hi-download-row{display:grid;grid-template-columns:minmax(220px,1.2fr) minmax(145px,.7fr);gap:17px;align-items:center}
+.hi-download-button{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #6032d5;border-radius:20px;min-height:77px;padding:13px clamp(13px,1.8vw,24px);background:linear-gradient(115deg,#8744e7,#4c1cc6);box-shadow:0 8px 0 #e3d9fc,0 13px 23px #4d23b629;color:#fff!important;text-decoration:none;font-size:clamp(1rem,1.8vw,1.38rem);font-weight:840;letter-spacing:-.03em;text-align:left}
+.hi-download-button:hover{background:linear-gradient(115deg,#9455ef,#5d2cdb)}
+.hi-download-button:focus-visible,.hi-onboarding a:focus-visible,.hi-onboarding button:focus-visible,.hi-onboarding summary:focus-visible{outline:3px solid #d68c11;outline-offset:4px}
+.hi-download-arrow{font-size:1.8rem;font-weight:600}
+.hi-chrome-symbol{display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:50%;background:conic-gradient(#e8cf12 0 115deg,#2eaa56 115deg 235deg,#ef4d42 235deg 360deg);box-shadow:0 2px 7px #1a0c5e33}
+.hi-chrome-symbol>span{width:14px;height:14px;border-radius:50%;background:#3788dd;border:2.5px solid #f9fbff}
+.hi-chrome-small{width:30px;height:30px}
+.hi-chrome-small>span{width:12px;height:12px}
+.hi-quick-facts{display:grid;gap:11px;border-left:1px solid #dacef7;padding-left:18px;color:#21184a;font-size:.9rem;font-weight:730}
+.hi-quick-facts>span{display:flex;gap:8px;align-items:center;line-height:1.35}
+.hi-fact-symbol{font-size:1.4rem;color:#6030d1;line-height:1}
+.hi-flow{margin:34px 0 22px;display:grid;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr) 32px minmax(0,1fr);align-items:start;gap:4px;text-align:center}
+.hi-flow-item{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0}
+.hi-flow-icon{display:grid;place-items:center;width:59px;height:59px;border-radius:19px;background:#e8ddff;color:#6330c6;font-weight:900;font-size:2rem}
+.hi-flow-item strong{font-size:1rem;line-height:1.25;letter-spacing:-.018em;color:#24194c}
+.hi-flow-item small{font-size:.78rem;line-height:1.25;color:#6c5c85}
+.hi-flow-arrow{font-size:1.9rem;color:#c4a5f6;line-height:59px}
+.hi-install-guide{max-width:100%;margin:12px 0 0}
+.hi-install-guide summary{display:inline-flex;align-items:center;justify-content:center;gap:9px;border:2px solid #d7c2ff;border-radius:999px;padding:14px 17px;background:#fbf9ff;min-height:56px;cursor:pointer;color:#5827c3;font-weight:840;list-style:none;box-shadow:0 2px 0 #ebe2ff}
+.hi-install-guide summary::-webkit-details-marker{display:none}
+.hi-install-guide summary:hover{background:#f0e9ff}
+.hi-install-guide[open] summary{border-color:#966def}
+.hi-guide-icon{font-size:1.24rem}
+.hi-guide-chevron{font-size:1.5rem;line-height:.5}
+.hi-install-guide ol{margin:21px 0 0;padding:0 0 0 26px;color:#42365e}
+.hi-install-guide li{padding:0 0 14px 6px;line-height:1.6}
+.hi-install-guide li::marker{font-weight:800;color:#6934d0}
+.hi-install-guide code{background:#eae0fd;padding:2px 5px;border-radius:5px;color:#342052;overflow-wrap:anywhere}
+.hi-install-guide>p{line-height:1.55;color:#5c5275;font-size:.91rem;margin:3px 0 13px}
+.hi-full-guide-link{color:#5c28cd;text-underline-offset:4px;font-weight:750;min-height:44px;display:inline-flex;align-items:center;gap:6px}
+.hi-preview{position:relative;min-width:0;min-height:354px;display:grid;place-items:center;padding:24px 12px 25px;border-radius:29px;background:radial-gradient(ellipse at 56% 18%,#e8d5ff 4%,transparent 55%),linear-gradient(146deg,#f9f6ff,#eceafb)}
+.hi-preview-window{position:relative;width:min(100%,360px);border-radius:23px;border:4px solid #d6c7ee;background:#fff;overflow:hidden;box-shadow:0 14px 0 -8px #a68ccf,0 18px 35px #4e26883a;padding:0 12px 15px;z-index:1}
+.hi-preview-topbar{display:flex;align-items:center;justify-content:space-between;min-height:57px;padding:3px 3px 7px;border-bottom:1px solid #eee8f7}
+.hi-preview-brand{display:flex;align-items:center;gap:8px;font-weight:900;color:#231744;font-size:1.1rem}
+.hi-preview-logo{display:grid;place-items:center;width:34px;height:34px;color:white;background:linear-gradient(135deg,#9d60ea,#6233d2);border-radius:10px;font-size:1.2rem}
+.hi-preview-window-controls{color:#563e86;font-size:1.3rem}
+.hi-preview-line{display:flex;gap:10px;align-items:center;background:linear-gradient(115deg,#f8f5ff,#f4f1fc);padding:13px 10px;border-radius:13px;margin-top:8px}
+.hi-preview-setting-icon{display:grid;place-items:center;flex:0 0 35px;width:35px;height:35px;border-radius:11px;background:#e9e1ff;color:#652fd0;font-size:1.35rem;font-weight:900}
+.hi-preview-setting-text{flex:1;display:grid;gap:3px;min-width:0}
+.hi-preview-setting-text strong{font-size:.88rem;line-height:1.15;color:#271746;font-weight:840}
+.hi-preview-setting-text small{font-size:.7rem;line-height:1.24;color:#625977}
+.hi-preview-switch{flex:0 0 47px;width:47px;height:26px;border-radius:99px;background:#733ada;padding:3px;display:flex;justify-content:flex-end}
+.hi-preview-switch i{width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 4px #38166c44}
+.hi-preview-chevron{font-size:1.6rem;color:#9e86d8}
+.hi-preview-sensitivity{display:grid;grid-template-columns:35px minmax(0,1fr)}
+.hi-preview-range{grid-column:2;position:relative;height:7px;background:#e0d8f5;border-radius:99px;margin:11px 8px 6px}
+.hi-preview-range::before{content:"";position:absolute;left:0;top:0;bottom:0;width:64%;background:linear-gradient(90deg,#6d36db,#b27af7);border-radius:99px}
+.hi-preview-range i{position:absolute;left:64%;top:50%;transform:translate(-50%,-50%);width:21px;height:21px;border-radius:50%;background:#fff;border:2px solid #a267ee;box-shadow:0 2px 7px #4a276d30}
+.hi-preview-sparkle{position:absolute;color:#8454e5;font-size:2.4rem;z-index:2}
+.hi-preview-sparkle-a{top:10px;right:22px}
+.hi-preview-sparkle-b{bottom:10px;left:14px;color:#c69af4}
+.hi-benefits{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:17px;margin:22px 0 0}
+.hi-benefit-card{border:1px solid #e2d9f6;border-radius:24px;background:linear-gradient(145deg,#f9f6ff,#f7f4ff);padding:clamp(15px,2vw,25px);min-width:0}
+.hi-benefit-header{display:flex;gap:14px;align-items:flex-start}
+.hi-benefit-icon{display:grid;place-items:center;flex:0 0 50px;width:50px;height:50px;border-radius:16px;font-size:2rem;font-weight:800}
+.hi-benefit-purple{background:#ece3ff;color:#6232d1}
+.hi-benefit-green{background:#e0f3dd;color:#56b64e}
+.hi-benefit-card h3{margin:3px 0 7px;color:#211540;line-height:1.2;font-size:1.12rem;letter-spacing:-.025em}
+.hi-benefit-card p{margin:0;color:#544773;font-size:.9rem;line-height:1.52}
+.hi-pill-row{display:flex;gap:7px;flex-wrap:wrap;margin-top:17px}
+.hi-pill-row>span{border-radius:99px;padding:9px 11px;background:#ede6ff;color:#402370;font-weight:750;font-size:.78rem}
+.hi-benefit-card .hi-permission-note{margin:15px 0 0;font-size:.8rem;color:#665b7b}
+.hi-after-card{background:linear-gradient(145deg,#effaf3,#f8f8ff);border-color:#e3e9ed}
+.hi-benefit-list{list-style:none;padding:0;margin:12px 0 0;display:grid;gap:9px}
+.hi-benefit-list li{font-size:.9rem;color:#27213f;display:flex;gap:10px;align-items:flex-start;line-height:1.4}
+.hi-benefit-list li span{display:grid;place-items:center;flex:0 0 21px;width:21px;height:21px;background:#76ca6c;color:#fff;border-radius:50%;font-weight:800;font-size:.8rem}
+.hi-download-fallback{margin:17px 0 22px;color:#685f7b;font-size:.85rem;line-height:1.6}
+.hi-download-fallback a{color:#5727b7;font-weight:750;text-underline-offset:4px}
+.hi-bottom-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.hi-bottom-actions button{font-weight:800;box-shadow:none;min-height:55px}
+.hi-back-button{display:inline-flex;gap:10px;align-items:center;padding:12px 19px;color:#34205d;background:#ece3ff;border:1px solid #e0d4f5;border-radius:17px}
+.hi-back-button:hover:not(:disabled){background:#e3d4ff;box-shadow:none}
+.hi-back-button span{font-size:1.5rem}
+.hi-review-button{color:#592ac5;background:transparent;border:1px solid transparent;padding:12px 17px}
+.hi-review-button:hover:not(:disabled){background:#f2edfc;box-shadow:none}
+@media(max-width:1250px){.hi-feature-grid{grid-template-columns:minmax(0,1fr)}.hi-preview{min-height:280px}.hi-preview-window{width:min(100%,410px)}}
+@media(max-width:1020px){.hi-download-row{grid-template-columns:minmax(0,1fr)}.hi-quick-facts{border:0;border-top:1px solid #ded2f5;padding:12px 0 0;display:flex;flex-wrap:wrap;gap:17px}}
+@media(max-width:800px){
+ .onboarding-layout:has(.hi-onboarding){grid-template-columns:minmax(0,1fr);width:calc(100% - 24px)}
+ .onboarding-layout:has(.hi-onboarding) .side-stack{grid-column:1;grid-template-columns:1fr}
+ .main-card.hi-main-card{padding:clamp(17px,4vw,29px)}
+ .hi-feature-grid,.hi-benefits{grid-template-columns:1fr}
+ .hi-heading{gap:12px}
+ .hi-heading-icon{width:50px;height:50px;flex-basis:50px;border-radius:15px;font-size:1.7rem}
+ .hi-preview{min-height:290px}
+}
+@media(max-width:520px){
+ .hi-heading h2{font-size:1.75rem}
+ .hi-intro{font-size:1rem}
+ .hi-start-card{padding:15px}
+ .hi-download-button{width:100%;min-height:71px;font-size:1.03rem}
+ .hi-quick-facts{font-size:.85rem}
+ .hi-flow{grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr) 18px minmax(0,1fr);gap:2px;margin:23px 0}
+ .hi-flow-icon{width:48px;height:48px;border-radius:14px;font-size:1.55rem}
+ .hi-flow-item strong{font-size:.85rem}
+ .hi-flow-item small{font-size:.7rem}
+ .hi-flow-arrow{font-size:1.2rem;line-height:48px}
+ .hi-install-guide summary{width:100%;padding:12px;font-size:.95rem}
+ .hi-benefit-header{gap:10px}
+ .hi-benefit-icon{flex-basis:41px;width:41px;height:41px;font-size:1.6rem}
+ .hi-bottom-actions button{width:100%;justify-content:center}
+}
+@media(prefers-reduced-motion:reduce){.hi-onboarding,.hi-onboarding *{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+@media(prefers-contrast:more){.hi-start-card,.hi-benefit-card,.hi-preview-window{border:2px solid #41326a}.hi-download-button{border:2px solid #fff}.hi-install-guide summary{border-color:#4b2a85}}

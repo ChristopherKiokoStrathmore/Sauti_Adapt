@@ -215,7 +215,8 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
       }
 
       if (!mouth.current.frozen && center.current) {
-        const desired = cursorFromHead(reading, center.current, speedRef.current, true);
+        // Do not mirror horizontal navigation: moving the head left must move the pointer left.
+        const desired = cursorFromHead(reading, center.current, speedRef.current, false);
         const dx = (desired.x - point.current.x) * window.innerWidth;
         const dy = (desired.y - point.current.y) * window.innerHeight;
         const smoothing = adaptiveAlpha(Math.hypot(dx, dy), MOTION_PRESETS[steadyRef.current]);
@@ -271,10 +272,21 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
     if (enabled.current) return;
     const token = ++startToken.current;
     setPanelCollapsed(false);
+    point.current = { x: 0.5, y: 0.5 };
+    setCursor({ x: 0.5, y: 0.5 });
+    setProgress(0);
+    setDetected(false);
     setPhase('requesting');
     setMessage('Requesting camera permission. No video is uploaded.');
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera access is unavailable in this browser.');
+      // Start fetching and parsing the model as soon as the user activates Headway,
+      // while the camera permission prompt runs. Rejections are handled immediately
+      // so denying camera access cannot create an unhandled rejection.
+      const humanReady = ensureHuman().then(
+        ctor => ({ ctor, error: null as Error | null }),
+        reason => ({ ctor: null, error: reason instanceof Error ? reason : new Error(String(reason)) }),
+      );
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
       if (token !== startToken.current) { stream.getTracks().forEach(track => track.stop()); return; }
       media.current = stream;
@@ -283,8 +295,10 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
       await video.current.play();
       setPhase('loading');
       setMessage('Loading local Headway face tracking models.');
-      const Human = await ensureHuman();
+      const humanResult = await humanReady;
       if (token !== startToken.current) return;
+      if (humanResult.error) throw humanResult.error;
+      const Human = humanResult.ctor!;
       const instance = new Human({
         backend: 'webgl',
         modelBasePath: '/headway-demo/models/',
@@ -419,7 +433,7 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
       </>}
       <small>Web demo only. Controls safe elements on Sauti Adapt, not other browser tabs.</small>
     </section>}
-    {phase === 'active' && detected && <div aria-hidden="true" className="hw-pointer" style={{ left: (cursor.x * 100) + 'vw', top: (cursor.y * 100) + 'vh' }}>
+    {(phase === 'requesting' || phase === 'loading' || phase === 'active') && <div aria-hidden="true" className={phase === 'active' && detected ? 'hw-pointer' : 'hw-pointer hw-pointer-waiting'} style={{ left: (cursor.x * 100) + 'vw', top: (cursor.y * 100) + 'vh' }}>
       <span className="hw-pointer-progress" style={{ '--hw-progress': (progress * 360) + 'deg' } as React.CSSProperties}/>
     </div>}
   </HeadwayContext.Provider>;

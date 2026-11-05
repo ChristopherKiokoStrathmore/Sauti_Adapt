@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 const HEADWAY_ZIP = 'https://github.com/ChristopherKiokoStrathmore/Sauti_Adapt/releases/download/headway-hackathon/Headway-Chrome-Hackathon.zip';
 const HEADWAY_RELEASE = 'https://github.com/ChristopherKiokoStrathmore/Sauti_Adapt/releases/tag/headway-hackathon';
 
@@ -9,6 +11,17 @@ type Props = {
 };
 
 export function HeadwayInstallStep({ onBack, onReview }: Props) {
+  const [copyStatus, setCopyStatus] = useState('');
+
+  async function copyChromeAddress() {
+    try {
+      await navigator.clipboard.writeText('chrome://extensions');
+      setCopyStatus('Address copied. Paste it into the Chrome address bar.');
+    } catch {
+      setCopyStatus('Copy unavailable. Type chrome://extensions in Chrome’s address bar.');
+    }
+  }
+
   return (
     <div className="hi-onboarding" data-testid="headway-install-step">
       <header className="hi-heading">
@@ -63,6 +76,8 @@ export function HeadwayInstallStep({ onBack, onReview }: Props) {
               <li><strong>Pin and open Headway.</strong> Approve only the permissions you understand, enable head tracking when ready, and calibrate your movement and mouth click.</li>
             </ol>
             <p>Chrome does not allow websites to install an unpublished extension automatically. These Chrome steps are necessary for this hackathon build.</p>
+            <button type="button" className="hi-copy-chrome" onClick={() => void copyChromeAddress()}>Copy Chrome extensions address</button>
+            <p role="status" className="hi-copy-feedback">{copyStatus}</p>
             <a href="/install" className="hi-full-guide-link">Open the full installation page <span aria-hidden="true">↗</span></a>
           </details>
         </section>

@@ -407,7 +407,7 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
 export function HeadwayToggle({ compact = false }: { compact?: boolean }) {
   const { phase, start, togglePause, stop } = useHeadway();
   return <div className="hw-header-toggle" data-headway-ignore>
-    <button type="button" className={compact ? "hw-toggle-button hw-toggle-compact" : "hw-toggle-button"} disabled={phase === 'loading' || phase === 'requesting'} aria-pressed={phase === 'active'} onClick={() => phase === 'off' || phase === 'error' ? void start() : togglePause()}>
+    <button type="button" className={compact ? "hw-toggle-button hw-toggle-compact" : "hw-toggle-button"} title="Uses your camera for local head tracking after you approve access" disabled={phase === 'loading' || phase === 'requesting'} aria-pressed={phase === 'active'} onClick={() => phase === 'off' || phase === 'error' ? void start() : togglePause()}>
       <span aria-hidden="true">◉</span> {phase === 'active' ? 'Pause Headway' : phase === 'paused' ? 'Resume Headway' : phase === 'loading' || phase === 'requesting' ? 'Starting Headway…' : 'Enable Headway'}
     </button>
     {phase !== 'off' && phase !== 'error' && <button type="button" className="hw-inline-stop" aria-label="Stop Headway and release camera" onClick={stop}>×</button>}

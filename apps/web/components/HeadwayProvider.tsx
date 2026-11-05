@@ -61,9 +61,10 @@ function ensureHuman(): Promise<HumanConstructor> {
 
 function candidateAt(x: number, y: number): HTMLElement | null {
   const node = document.elementFromPoint(x, y) as HTMLElement | null;
-  const target = node?.closest<HTMLElement>('button, a, summary, [data-headway-action]');
+  const target = node?.closest<HTMLElement>('button, a, summary, [data-headway-action], .aw-radio, .aw-form input[type="text"]');
   if (!target || !target.isConnected || target.closest('[data-headway-ignore]')) return null;
   if (target.matches(':disabled, [aria-disabled="true"]')) return null;
+  if (target.matches('input') && !target.closest('.aw-form')) return null;
   if (target.closest('[hidden], [inert]')) return null;
   if (target.matches('a')) {
     const href = target.getAttribute('href');
@@ -213,7 +214,7 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
         const amount = Math.min(1, (t - dwell.current.since) / 1400);
         if (amount >= 1) {
           dwell.current.fired = true;
-          current.click();
+          if (current.matches('input')) current.focus(); else current.click();
           setMessage('Selected ' + (current.getAttribute('aria-label') || current.textContent?.trim().slice(0, 40) || 'item') + '.');
           setProgress(0);
         } else if (t - lastPaint.current >= 65) {
@@ -224,7 +225,7 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
         const thresholds = mouthThresholds(calibration.current);
         const actions = mouth.current.update(reading.mouth, thresholds, t);
         if (actions.includes('click')) {
-          current.click();
+          if (current.matches('input')) current.focus(); else current.click();
           setMessage('Mouth gesture selected ' + (current.getAttribute('aria-label') || current.textContent?.trim().slice(0, 40) || 'item') + '.');
         }
       }
@@ -244,7 +245,7 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const start = useCallback(async () => {
-    if (enabled.current || startToken.current % 1 !== 0) return;
+    if (enabled.current) return;
     const token = ++startToken.current;
     setPhase('requesting');
     setMessage('Requesting camera permission. No video is uploaded.');
@@ -403,7 +404,7 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
 export function HeadwayToggle({ compact = false }: { compact?: boolean }) {
   const { phase, start, togglePause, stop } = useHeadway();
   return <div className="hw-header-toggle" data-headway-ignore>
-    <button type="button" className="hw-toggle-button" aria-pressed={phase === 'active'} onClick={() => phase === 'off' || phase === 'error' ? void start() : togglePause()}>
+    <button type="button" className="hw-toggle-button" disabled={phase === 'loading' || phase === 'requesting'} aria-pressed={phase === 'active'} onClick={() => phase === 'off' || phase === 'error' ? void start() : togglePause()}>
       <span aria-hidden="true">◉</span> {phase === 'active' ? 'Pause Headway' : phase === 'paused' ? 'Resume Headway' : phase === 'loading' || phase === 'requesting' ? 'Starting Headway…' : compact ? 'Headway' : 'Enable Headway'}
     </button>
     {phase !== 'off' && phase !== 'error' && <button type="button" className="hw-inline-stop" aria-label="Stop Headway and release camera" onClick={stop}>×</button>}

@@ -77,6 +77,8 @@ test('Headway mock camera fixture confirms global session survives Sauti client 
   const startingX = await page.locator('.hw-pointer').evaluate(el => parseFloat((el as HTMLElement).style.left));
   await page.evaluate(() => { (window as unknown as { __HeadwayFixture: { x: number } }).__HeadwayFixture.x = 60; });
   await expect.poll(async () => page.locator('.hw-pointer').evaluate(el => parseFloat((el as HTMLElement).style.left))).not.toBe(startingX);
+  await page.getByRole('button', { name: 'Minimize' }).click();
+  await expect(page.locator('.hw-panel')).toHaveClass(/hw-panel-collapsed/);
   await page.getByRole('link', { name: /Open accessible workspace/i }).first().click();
   await expect(page).toHaveURL(/\/workspace$/);
   await expect(page.locator('.hw-panel')).toBeVisible();

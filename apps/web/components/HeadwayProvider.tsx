@@ -108,6 +108,7 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
   const [detected, setDetected] = useState(false);
   const [cursor, setCursor] = useState({ x: 0.5, y: 0.5 });
   const [progress, setProgress] = useState(0);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [clickMode, setClickModeState] = useState<ClickMode>('dwell');
   const [sensitivity, setSensitivityState] = useState(1);
   const [steadiness, setSteadinessState] = useState<Steadiness>('medium');
@@ -250,6 +251,7 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
   const start = useCallback(async () => {
     if (enabled.current) return;
     const token = ++startToken.current;
+    setPanelCollapsed(false);
     setPhase('requesting');
     setMessage('Requesting camera permission. No video is uploaded.');
     try {
@@ -371,8 +373,8 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
     <div className="hw-camera" data-headway-ignore aria-hidden={phase === 'off'}>
       <video ref={video} autoPlay muted playsInline className="hw-video" />
     </div>
-    {phase !== 'off' && <section className="hw-panel" data-headway-ignore aria-label="Headway controls">
-      <div className="hw-panel-title"><strong>✚ Headway</strong><span className="hw-phase">{phase}</span></div>
+    {phase !== 'off' && <section className={panelCollapsed ? "hw-panel hw-panel-collapsed" : "hw-panel"} data-headway-ignore aria-label="Headway controls">
+      <div className="hw-panel-title"><strong>✚ Headway</strong><button type="button" aria-expanded={!panelCollapsed} onClick={() => setPanelCollapsed(value => !value)}>{panelCollapsed ? "Show controls" : "Minimize"}</button><span className="hw-phase">{phase}</span></div>
       <p className="hw-message" role="status" aria-live="polite">{message}</p>
       <p className="hw-face-status">{detected ? '● Face detected' : '○ Awaiting one face'}</p>
       <div className="hw-panel-actions">

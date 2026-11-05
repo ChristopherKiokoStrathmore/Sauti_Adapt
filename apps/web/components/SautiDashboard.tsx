@@ -20,7 +20,7 @@ const TONES = [
 ] as const;
 type ToneId = (typeof TONES)[number]['id'];
 const ROLE_LABEL: Record<'train' | 'calibration' | 'test', string> = { train: 'Training', calibration: 'Calibration', test: 'Untouched test' };
-const STEPS = ['Your preferences', 'Your permission', 'Voice samples', 'Check recognition', 'Connect extension'] as const;
+const STEPS = ['Your preferences', 'Your permission', 'Voice samples', 'Check recognition', 'Install Headway'] as const;
 const TEST_COMMANDS = [
   { utterance: 'scroll down', label: 'scroll down' },
   { utterance: 'scroll up', label: 'scroll up' },
@@ -187,7 +187,7 @@ export function SautiDashboard() {
         : 'Step 3 of 5. Say something unrelated to any command, such as a name or a different sentence.';
     }
     if (forStep === 4) return 'Step 4 of 5. Check recognition. The voice model may not be ready yet. You can try accessible demo controls while training is being prepared.';
-    return 'Step 5 of 5. Next steps. The browser extension is experimental and needs setup by the research team.';
+    return 'Step 5 of 5. Install Headway. Download the Chrome extension, open the installation instructions, and turn on head pointer controls when you are ready.';
   }
 
   function hearStep() {
@@ -608,22 +608,20 @@ export function SautiDashboard() {
         </div>
 
         <div hidden={step !== 5}>
-          <div className="section-heading"><Icon>✚</Icon><div><p className="step-kicker">Step 5 of 5</p><h2>Connect the browser extension</h2></div></div>
-          {journeyVariant === 'a' ? <>
-          <p className="lead-copy">The extension uses the same private profile on websites you explicitly permit.</p>
-          <div className="connection-box"><div className="extension-window" aria-hidden="true"><span/><span/><span/><strong>✚</strong></div><div><strong>Profile ready to share with the extension</strong><p>Copy the profile ID and this website address, then paste them into the Sauti Adapt extension.</p></div></div>
-          <ol className="extension-steps"><li>Build and load the extension from <code>apps/extension/dist</code>.</li><li>Open its side panel and paste this PWA origin and profile ID.</li><li>Enter the pilot user ID and token supplied by the research team.</li><li>Enable only the website you want Sauti to control.</li></ol>
-          <button type="button" onClick={() => void copyExtensionSetup()}>Copy extension setup</button>
-          <p className="inline-note">The extension currently requires separate credentials supplied by the research team. Automatic browser account pairing is not yet available. Do not share your private voice session to connect an extension.</p>
-          </> : <>
-          <p className="lead-copy">Your recordings are safely linked to your voice profile. Sauti can help you explore accessible commands while your model is prepared.</p>
-          <div className="journey-success"><span aria-hidden="true">✓</span><div><strong>Your voice examples are saved.</strong><p>You can return to record more, practise the demo, or delete your voice data at any time.</p></div></div>
-          <div className="model-readiness"><strong>Browser extension installation is not available yet</strong><p>The extension must be published and securely paired before one button installation can work. The research team can configure experimental access. You do not need this to finish your voice setup.</p></div>
-          <details className="advanced-settings"><summary>Research team: technical extension setup</summary>
-            <ol className="extension-steps"><li>Build and load the extension from <code>apps/extension/dist</code>.</li><li>Open its side panel and paste this PWA origin and profile ID.</li><li>Enter a separately provisioned pilot user ID and token. Never share a participant browser session.</li><li>Enable only the website you want Sauti to control.</li></ol>
-            <button type="button" onClick={() => void copyExtensionSetup()}>Copy extension setup</button>
+          <div className="section-heading"><Icon>✚</Icon><div><p className="step-kicker">Step 5 of 5</p><h2>Install Headway</h2></div></div>
+          <p className="lead-copy">Add head movement and mouth gesture controls to Chrome. Headway is a separate extension that complements Sauti’s voice features.</p>
+          <div className="journey-success"><span aria-hidden="true">✓</span><div><strong>Your Sauti voice profile is separate and remains private.</strong><p>You can try Headway even while your personalized speech recognition model is being prepared.</p></div></div>
+          <div className="extension-install-panel">
+            <strong>Headway · Hands free browsing</strong>
+            <p>Move the pointer with your head, aim at buttons, and click with a mouth gesture. Choose the speed and calibration that feel comfortable.</p>
+            <a href="/install" className="extension-install-link">Download and install Headway <span aria-hidden="true">→</span></a>
+            <p className="extension-install-note">Hackathon testing on desktop Chrome. Installation requires downloading a ZIP, extracting it, and choosing Load unpacked in Chrome extensions.</p>
+          </div>
+          <details className="advanced-settings"><summary>Research team: original Sauti voice extension</summary>
+            <p>Sauti’s existing voice extension remains a separate, experimental feature. It is not automatically paired with Headway.</p>
+            <ol className="extension-steps"><li>Build the original extension from <code>apps/extension</code>.</li><li>Load it unpacked in Chrome and open its side panel.</li><li>Use a separately provisioned pilot account for voice extension access. Do not share your browser session.</li><li>Enable only websites you intend to control.</li></ol>
+            <button type="button" onClick={() => void copyExtensionSetup()}>Copy Sauti extension setup</button>
           </details>
-          </>}
           <div className="card-actions"><button type="button" className="soft-button" onClick={() => goTo(3)}>Record more examples</button><button type="button" className="soft-button" onClick={() => goTo(4)}>Try the demo again</button><button className="text-button" type="button" onClick={() => goTo(1)}>Review setup</button></div>
         </div>
       </section>
@@ -644,8 +642,8 @@ export function SautiDashboard() {
           <div className="status-row"><span aria-hidden="true">●</span><strong>Voice profile</strong><span className={'state-pill ' + (saved > 0 ? 'ready' : 'pending')}>{saved > 0 ? 'In progress' : 'Not started'}</span></div>
           <div className="status-row"><span aria-hidden="true">●</span><strong>Recognition check</strong><span className={'state-pill ' + (prediction?.status === 'accepted' ? 'ready' : 'pending')}>{prediction?.status === 'accepted' ? 'Accepted' : 'Pending'}</span></div>
           <div className="status-row"><span aria-hidden="true">●</span><strong>Browser extension</strong><span className="state-pill neutral">Not confirmed</span></div>
-          <button type="button" className="soft-button full-width" disabled={!prediction} onClick={() => goTo(5)}>Connect extension</button>
-          <small>Available after you run a recognition check.</small>
+          <button type="button" className="soft-button full-width" onClick={() => goTo(5)}>Install Headway</button>
+          <small>Available now for manual Chrome installation. No voice model required.</small>
         </section>
       </details></aside>
     </div>
@@ -656,7 +654,7 @@ export function SautiDashboard() {
       <div className="after-title"><span className="after-icon" aria-hidden="true">▣</span><h2 id="after-title">After onboarding</h2></div>
       <div className="flow-card"><Icon tone="blue">▰</Icon><div><strong>Personal voice profile</strong><span>Recognizes your chosen commands</span></div></div><span className="flow-arrow" aria-hidden="true">→</span>
       <div className="flow-card"><Icon>AI</Icon><div><strong>AI4A11y Toolkit</strong><span>Handles accepted commands</span></div></div><span className="flow-arrow" aria-hidden="true">→</span>
-      <div className="flow-card"><Icon>✚</Icon><div><strong>Browser extension</strong><span>Works on websites you permit</span><button type="button" className="soft-button" onClick={() => { goTo(5); setStatus("The browser extension is not published yet. See the setup instructions and current availability above."); document.getElementById("main-onboarding")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Install browser extension</button></div></div>
+      <div className="flow-card"><Icon>✚</Icon><div><strong>Headway Chrome extension</strong><span>Head pointer and mouth clicks on websites you allow</span><a className="soft-button extension-quick-link" href="/install">Install browser extension</a></div></div>
       <p className="feedback-banner">Feedback you approve can support the next validated voice profile.</p>
     </section>
     <footer><p>Sauti Adapt supports access and communication. It does not diagnose or treat cerebral palsy or another medical condition.</p></footer>

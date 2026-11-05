@@ -344,6 +344,21 @@ export function SautiDashboard() {
       setStatus('Sign-in changed while speech was processing. No action was taken.');
       return;
     }
+    // A released voice command must not execute if the secure participant
+    // session was revoked or its profile changed during model inference.
+    if (accountReady && !userId.trim()) {
+      try {
+        const response = await fetch('/api/participant', { cache: 'no-store' });
+        const session = response.ok ? await response.json() : null;
+        if (!session?.authenticated || session.profile_id !== profileId) {
+          setStatus('Session changed while speech was processing. No action was taken.');
+          return;
+        }
+      } catch {
+        setStatus('Could not verify your voice session. No action was taken.');
+        return;
+      }
+    }
     await runToolkit(utterance);
   }
 

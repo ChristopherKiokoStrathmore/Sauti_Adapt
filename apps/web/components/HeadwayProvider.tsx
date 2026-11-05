@@ -315,6 +315,9 @@ export function HeadwayProvider({ children }: { children: ReactNode }) {
         }
         current = target.current;
         if (current) {
+          // React can replace an element's className after a button changes state.
+          // Keep the magnetic target visibly locked even through such rerenders.
+          current.classList.add('hw-target', 'hw-snap-target');
           const bounds = current.getBoundingClientRect();
           point.current = {
             x: Math.min(0.98, Math.max(0.02, (bounds.left + bounds.width / 2) / window.innerWidth)),

@@ -1,5 +1,34 @@
 import { expect, test } from '@playwright/test';
 
+test('the actual bundled Human.js ESM module initializes the Headway constructor', async ({ page }) => {
+  await page.goto('/workspace');
+  const result = await page.evaluate(async () => {
+    return await new Promise<{ state: string; hasDetect: boolean; hasLoad: boolean }>((resolve) => {
+      const timeout = window.setTimeout(() => resolve({ state: 'timeout', hasDetect: false, hasLoad: false }), 30_000);
+      const ready = () => {
+        clearTimeout(timeout);
+        window.removeEventListener('headway-human-error', failed);
+        const Constructor = (window as unknown as { __HeadwayHumanConstructor?: new (config: object) => { detect?: unknown; load?: unknown } }).__HeadwayHumanConstructor;
+        const instance = Constructor ? new Constructor({ backend: 'webgl', face: { enabled: true } }) : null;
+        resolve({ state: 'ready', hasDetect: typeof instance?.detect === 'function', hasLoad: typeof instance?.load === 'function' });
+      };
+      const failed = (event: Event) => {
+        clearTimeout(timeout);
+        window.removeEventListener('headway-human-ready', ready);
+        resolve({ state: String((event as CustomEvent<string>).detail || 'failed'), hasDetect: false, hasLoad: false });
+      };
+      window.addEventListener('headway-human-ready', ready, { once: true });
+      window.addEventListener('headway-human-error', failed, { once: true });
+      const loader = document.createElement('script');
+      loader.type = 'module';
+      loader.src = '/headway-demo/loader.js';
+      loader.onerror = () => failed(new CustomEvent('headway-human-error', { detail: 'script load failed' }));
+      document.head.appendChild(loader);
+    });
+  });
+  expect(result).toEqual({ state: 'ready', hasDetect: true, hasLoad: true });
+});
+
 test('Headway requests no camera permission before the user activates it', async ({ page }) => {
   await page.addInitScript(() => {
     (window as unknown as { __cameraRequests: number }).__cameraRequests = 0;

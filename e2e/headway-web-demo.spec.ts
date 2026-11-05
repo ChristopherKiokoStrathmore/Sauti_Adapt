@@ -44,7 +44,7 @@ test('Headway pointer appears immediately while the browser camera permission is
   await expect(page.locator('.hw-pointer.hw-pointer-waiting')).toBeVisible();
   await expect(page.locator('.hw-pointer')).toHaveCSS('pointer-events', 'none');
   await expect(page.locator('.hw-panel')).toContainText('Requesting camera permission');
-  await page.getByRole('button', { name: 'Stop Headway' }).click();
+  await page.locator('.hw-panel').getByRole('button', { name: 'Stop Headway', exact: true }).click();
   await expect(page.locator('.hw-pointer')).toHaveCount(0);
 });
 
@@ -65,7 +65,7 @@ test('Headway requests no camera permission before the user activates it', async
   await page.locator('.topbar').getByRole('button', { name: /Enable Headway/ }).click();
   await expect(page.locator('.hw-panel')).toContainText('Permission denied for this test');
   expect(await page.evaluate(() => (window as unknown as { __cameraRequests: number }).__cameraRequests)).toBe(1);
-  await page.getByRole('button', { name: 'Stop Headway' }).click();
+  await page.locator('.hw-panel').getByRole('button', { name: 'Stop Headway', exact: true }).click();
   await expect(page.locator('.hw-panel')).toHaveCount(0);
 });
 

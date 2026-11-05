@@ -12,7 +12,9 @@ const require = createRequire(import.meta.url);
 const packageRoot = dirname(dirname(require.resolve('@vladmandic/human')));
 const target = join(webRoot, 'public', 'headway-demo');
 await mkdir(join(target, 'models'), { recursive: true });
-await copyFile(join(packageRoot, 'dist', 'human.js'), join(target, 'human.esm.js'));
+// IMPORTANT: use the actual ESM bundle. Copying the IIFE human.js under an ESM
+// filename makes module namespace imports empty and breaks Headway activation.
+await copyFile(join(packageRoot, 'dist', 'human.esm.js'), join(target, 'human.esm.js'));
 for (const file of ['blazeface.json', 'blazeface.bin', 'facemesh.json', 'facemesh.bin']) {
   await copyFile(join(packageRoot, 'models', file), join(target, 'models', file));
 }

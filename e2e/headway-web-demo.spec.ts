@@ -221,6 +221,7 @@ test('magnetic Headway defaults to mouth selection, snaps with head motion, and 
   await page.evaluate(() => { (window as unknown as { __SnapFixture: { x: number } }).__SnapFixture.x = 480; });
   await expect.poll(async () => page.locator('.hw-snap-target').evaluate(el => el.outerHTML)).not.toEqual(initialTarget);
   const jumped = await page.locator('.hw-snap-target').evaluate(el => el.outerHTML);
+  console.log('MAGNET TARGET BEFORE CLICK', jumped.slice(0, 250));
   // Holding the head right must not repeatedly cycle through controls.
   await page.waitForTimeout(550);
   await expect(page.locator('.hw-snap-target')).toHaveJSProperty('outerHTML', jumped);
@@ -237,12 +238,13 @@ test('magnetic Headway defaults to mouth selection, snaps with head motion, and 
     { timeout: 4_000 },
   ).toBe(startClicks + 2).then(() => true, () => false);
   if (!clickedAgain) {
-    console.log('Second mouth click investigation:', {
-      page: page.url(),
-      panel: await page.locator('.hw-panel').innerText(),
-      target: await page.locator('.hw-snap-target').first().evaluate(el => el.outerHTML).catch(() => 'none'),
-      clicks: await page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks),
-    });
+    const debug = await page.evaluate(() => ({
+      url: window.location.href,
+      panel: document.querySelector('.hw-panel')?.textContent?.slice(0, 800) || 'missing',
+      target: document.querySelector('.hw-snap-target')?.outerHTML.slice(0, 350) || 'none',
+      clicks: (window as unknown as { __SnapFixture?: { clicks: number } }).__SnapFixture?.clicks ?? -1,
+    }));
+    console.log('Second mouth click investigation:', JSON.stringify(debug));
   }
   expect(clickedAgain).toBe(true);
   await page.getByRole('button', { name: 'Stop Headway', exact: true }).click();

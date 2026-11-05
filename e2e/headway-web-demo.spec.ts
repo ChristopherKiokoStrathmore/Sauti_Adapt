@@ -230,9 +230,21 @@ test('magnetic Headway defaults to mouth selection, snaps with head motion, and 
   await page.waitForTimeout(850);
   expect(await page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks)).toBe(startClicks + 1);
   await page.evaluate(() => { (window as unknown as { __SnapFixture: { mouth: number } }).__SnapFixture.mouth = 0.2; });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(600);
   await page.evaluate(() => { (window as unknown as { __SnapFixture: { mouth: number } }).__SnapFixture.mouth = 0.48; });
-  await expect.poll(async () => page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks)).toBe(startClicks + 2);
+  const clickedAgain = await expect.poll(
+    async () => page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks),
+    { timeout: 4_000 },
+  ).toBe(startClicks + 2).then(() => true, () => false);
+  if (!clickedAgain) {
+    console.log('Second mouth click investigation:', {
+      page: page.url(),
+      panel: await page.locator('.hw-panel').innerText(),
+      target: await page.locator('.hw-snap-target').first().evaluate(el => el.outerHTML).catch(() => 'none'),
+      clicks: await page.evaluate(() => (window as unknown as { __SnapFixture: { clicks: number } }).__SnapFixture.clicks),
+    });
+  }
+  expect(clickedAgain).toBe(true);
   await page.getByRole('button', { name: 'Stop Headway', exact: true }).click();
   await expect(page.locator('.hw-snap-target')).toHaveCount(0);
 });

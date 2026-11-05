@@ -44,13 +44,14 @@ test('saving the third command example advances to recognition automatically', a
     await expect(page.getByRole('button', { name: /Stop recording/ })).toBeEnabled();
     await page.waitForTimeout(350);
     await page.getByRole('button', { name: /Stop recording/ }).click();
-    await expect(page.getByRole('button', { name: /Save voice sample/ })).toBeEnabled();
-    await page.getByRole('button', { name: /Save voice sample/ }).click();
+    // Path C automatically saves each consented sample on Stop.
     if (i < 2) {
       await expect(page.getByRole('status')).toContainText('Voice sample saved privately');
+      await expect(page.getByText('Example ' + (i + 2) + ' of 3')).toBeVisible();
     }
+    await expect(page.getByRole('button', { name: /Save voice sample/ })).toHaveCount(0);
   }
-  await expect(page.getByRole('heading', { name: 'Check recognition' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Test with your voice' })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('All three voice examples');
   await expect(page.getByText('Compare recognition models')).toHaveCount(0);
 });

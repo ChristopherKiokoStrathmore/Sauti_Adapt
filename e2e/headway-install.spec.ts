@@ -11,7 +11,7 @@ test('Headway is offered through the Chrome Web Store after onboarding, never a 
   await expect(page).toHaveURL(/\/install$/);
   await expect(page.getByRole('heading', { name: 'Meet Headway.' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Ready in four steps' })).toBeVisible();
-  await expect(page.getByText('Add to Chrome', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Add to Chrome' })).toBeVisible();
   await expect(page.getByText('debugger permission', { exact: false })).toBeVisible();
   await expect(page.getByRole('link', { name: /Download Headway/ })).toHaveCount(0);
   await expect(page.locator('a[href$=".zip"]')).toHaveCount(0);

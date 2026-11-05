@@ -678,3 +678,9 @@ box-shadow:inset -18px -24px 44px rgba(13,8,60,.74),0 0 70px rgba(173,76,244,.28
 }
 @media(prefers-reduced-motion:reduce){.hi-onboarding,.hi-onboarding *{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 @media(prefers-contrast:more){.hi-start-card,.hi-benefit-card,.hi-preview-window{border:2px solid #41326a}.hi-download-button{border:2px solid #fff}.hi-install-guide summary{border-color:#4b2a85}}
+
+
+/* One action to copy Chrome's special internal address; websites cannot open it directly. */
+.hi-copy-chrome{min-height:49px;padding:10px 15px;border-radius:13px;background:#e8ddff;color:#47209e;font-size:.91rem;border:1px solid #d9c7f9;box-shadow:none;display:inline-flex;align-items:center;margin-right:14px}
+.hi-copy-chrome:hover:not(:disabled){box-shadow:none;background:#dfceff}
+.hi-install-guide .hi-copy-feedback{font-size:.84rem;margin:9px 0;color:#443169;line-height:1.45}

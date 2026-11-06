@@ -20,6 +20,8 @@ export interface OfficialHandleResult {
 
 export interface OfficialController {
   handle(utterance: string, opts?: object): Promise<OfficialHandleResult>;
+  loadPresentation?(): Promise<unknown>;
+  refreshPresentation?(model: object): unknown;
 }
 
 export interface OfficialDomReceiver {

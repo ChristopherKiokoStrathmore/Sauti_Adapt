@@ -9,6 +9,8 @@ import { createController, createDomReceiver } from '@sauti/shared/controller';
 import { capReadPort } from '@sauti/shared/page-text';
 import { HeadwayInstallStep } from './HeadwayInstallStep';
 import { HeadwayToggle, useHeadway } from './HeadwayProvider';
+import { PortableAbilityProfile } from './PortableAbilityProfile';
+import { getBrowserToolkit } from '@/lib/ability-profile';
 
 const COMMANDS: Intent[] = ['SCROLL_DOWN', 'SCROLL_UP', 'GO_BACK', 'READ_PAGE', 'UNDO'];
 /** Version of the consent text below. Bump it whenever the wording changes, so each clip records what was agreed. */
@@ -61,7 +63,8 @@ function Icon({ children, tone = 'violet' }: { children: ReactNode; tone?: 'viol
 }
 
 export function SautiDashboard() {
-  const { phase: headwayPhase } = useHeadway();
+  const headway = useHeadway();
+  const { phase: headwayPhase } = headway;
   const [step, setStep] = useState<Step>(1);
   const [journeyVariant, setJourneyVariant] = useState<JourneyVariant>('c');
   const [speechServiceMode, setSpeechServiceMode] = useState<'mock' | 'prototype' | 'unavailable' | 'checking'>('checking');
@@ -174,7 +177,7 @@ export function SautiDashboard() {
     const root = document.getElementById('controlled-site');
     if (root) controller.current = createController({
       control: capReadPort(createDomReceiver(root, { scrollTarget: root }), root),
-      operator: { abilityModel: { supportAreas: ['motor'] } },
+      operator: { librarian: getBrowserToolkit().librarian, abilityModel: { supportAreas: [] } },
     });
     return () => { recording.current?.cancel(); stopSpeaking(); clipAudio.current?.pause(); if (clipUrl.current) URL.revokeObjectURL(clipUrl.current); controller.current = null; };
   }, []);
@@ -547,6 +550,14 @@ export function SautiDashboard() {
           }}/><span className="command-check">✓</span><span>{labelFor(command, language)}</span></label>)}</fieldset></details>
           <details className="preferences-advanced recording-preferences" open={journeyVariant === 'a' ? true : undefined}><summary>Recording accessibility options</summary><div className="settings-grid"><div className="field"><label htmlFor="listen">Recording control</label><select id="listen" value={listenMethod} onChange={event => setListenMethod(event.target.value as 'toggle' | 'separate')}><option value="toggle">One start and stop button</option><option value="separate">Separate start and stop buttons</option></select></div><div className="field"><label htmlFor="maxsec">Clip length</label><select id="maxsec" value={maxSeconds} onChange={event => setMaxSeconds(event.target.value)}><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="8">8 seconds</option><option value="15">15 seconds</option></select></div></div><p className="field-help">You can use a single large button or separate Start and Stop controls, and adjust how long a recording lasts.</p></details>
           <label className="check-row"><input type="checkbox" checked={readSteps} onChange={event => { setReadSteps(event.target.checked); if (!event.target.checked) silence(); }}/><span><strong>Read each step aloud</strong><small>Sauti speaks the instructions for every step. Nothing is recorded while it speaks.</small></span></label>
+          <PortableAbilityProfile
+            language={language}
+            spokenGuidance={readSteps}
+            clickMethod={headway.clickMode}
+            pointerSensitivity={headway.sensitivity}
+            pointerSteadiness={headway.steadiness}
+            onModelUpdated={() => { void controller.current?.loadPresentation?.(); }}
+          />
           <label className="check-row" ><input type="checkbox" checked={autoStop} onChange={event => setAutoStop(event.target.checked)}/><span><strong>Stop automatically</strong><small>Recording ends at the selected clip length.</small></span></label>
           <div className="card-actions"><button type="button" onClick={() => goTo(2)}>Save and continue <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => setStatus('Your preferences remain on this screen until you continue.')}>Pause setup</button></div>
         </div>

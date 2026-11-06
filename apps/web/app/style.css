@@ -803,3 +803,11 @@ box-shadow:inset -18px -24px 44px rgba(13,8,60,.74),0 0 70px rgba(173,76,244,.28
 .hw-pointer{transition:left 95ms ease-out,top 95ms ease-out}
 .hw-pointer-waiting{transition:none}
 @media(prefers-reduced-motion:reduce){.hw-pointer{transition:none}}
+
+.portable-ability{margin:1.2rem 0;padding:1.1rem;border:1px solid #c8b4f4;border-radius:16px;background:#f8f5ff;color:#2a194e}
+.portable-ability h3{font-size:1.05rem;margin:0 0 .45rem}
+.portable-ability p{margin:.35rem 0 .8rem;font-size:.92rem;line-height:1.45}
+.portable-ability small{display:block;margin-top:.6rem;font-size:.8rem;color:#594a7e}
+.portable-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem}
+.portable-actions strong{width:100%;font-size:.88rem}
+.portable-actions input{max-width:100%;font-size:.85rem}

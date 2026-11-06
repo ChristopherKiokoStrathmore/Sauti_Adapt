@@ -18,13 +18,23 @@ Date: 6 November 2026
 * Security workflows for Gitleaks, CodeQL, pip-audit and npm audit.
 * Dependabot updates for npm, pip, GitHub Actions and Docker.
 * Python Docker image pinned to a published multi-platform image digest.
+* Speech API cryptography version constraint raised to 50.0.2 after the
+  first measured pip-audit detected a known vulnerability in version 49.0.0.
 
 ## Run evidence
 
 Local git remote command: exit 128, DNS resolution failure.
 No complete repository checkout available in this execution environment.
 All local product test outcomes are **NOT VERIFIED**.
-New PR quality and security workflows: **NOT VERIFIED** until executed.
+Initial PR checks for the preceding revision: normal Python, JavaScript,
+Headway and Playwright quality jobs PASSED; model lab PASSED; Gitleaks,
+CodeQL Python and CodeQL JavaScript PASSED; npm audit PASSED.
+First pip-audit FAILED on cryptography 49.0.0, vulnerability
+PYSEC-2026-3552, with 50.0.0 reported as a fixed version. The new
+cryptography constraint uses 50.0.2. The full security rerun after this
+change is **NOT VERIFIED** until its own checks finish.
+The duplicate full-gates evidence workflow has not yet completed its
+report artefact, so its overall outcome is **NOT VERIFIED**.
 Do not interpret source inspection as runtime success.
 
 ## Tests added
@@ -44,6 +54,8 @@ Do not interpret source inspection as runtime success.
   regeneration must follow a reproducible dependency install.
 * Docker base image build and pull are **NOT VERIFIED** until CI or
   deployment reports a successful build.
+* The cryptography 50.0.2 migration needs a green fresh API test run and
+  repeat pip-audit; prior tests on the older constraints do not prove it.
 * Real microphone tests, co-designer benchmarking, consent and external
   GPU-hosted inference are out of Phase 0 and **NOT VERIFIED**.
 * `apps/headway/**` source is unchanged and reserved for a separately

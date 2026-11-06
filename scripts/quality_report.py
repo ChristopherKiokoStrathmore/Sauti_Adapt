@@ -50,7 +50,7 @@ def render_report(commit: str, date: str, results: dict) -> str:
         "# Sauti Adapt quality report",
         "",
         f"Generated UTC: {date}",
-        f"Source commit: \`{safe_sha}\`",
+        f"Source commit: `{safe_sha}`",
         "",
         "Only an executed command with an exit code of zero is PASS.",
         "Missing runs are NOT VERIFIED. FAIL means a command ran and exited nonzero;",
@@ -62,10 +62,10 @@ def render_report(commit: str, date: str, results: dict) -> str:
     for gate in REQUIRED_GATES:
         result = results.get(gate, {})
         code = result.get("exit_code") if isinstance(result, dict) else None
-        status = "PASS" if code == 0 else ("FAIL" if isinstance(code, int) else "NOT VERIFIED")
+        status = "PASS" if type(code) is int and code == 0 else ("FAIL" if type(code) is int else "NOT VERIFIED")
         elapsed = result.get("duration_seconds") if isinstance(result, dict) else None
         duration = f"{elapsed:.2f}" if isinstance(elapsed, (int, float)) and elapsed >= 0 else "n/a"
-        lines.append(f"| {gate} | {status} | {code if isinstance(code, int) else 'n/a'} | {duration} |")
+        lines.append(f"| {gate} | {status} | {code if type(code) is int else 'n/a'} | {duration} |")
     lines.extend([
         "",
         "## Scope and limitations",

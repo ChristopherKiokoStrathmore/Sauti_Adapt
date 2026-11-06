@@ -161,6 +161,8 @@ def readiness():
         'speech_mode': os.environ.get('SPEECH_MODE', 'mock'),
         'enrollment_enabled': os.environ.get('ALLOW_ENROLLMENT') == 'true',
         'comparison_enabled': os.environ.get('SAUTI_COMPARE_ENABLED') == 'true',
+        'modal_gpu_configured': bool(os.environ.get('SAUTI_MODAL_URL', '').strip() and os.environ.get('SAUTI_MODAL_BEARER_TOKEN', '').strip()),
+        'personalized_comparison_enabled': os.environ.get('SAUTI_PERSONALIZED_COMPARE_ENABLED') == 'true',
         'note': 'Configuration only; run a consented test recording to verify durable storage.',
     }
 

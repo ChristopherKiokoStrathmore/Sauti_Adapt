@@ -63,6 +63,26 @@ Do not interpret source inspection as runtime success.
 * CI security scanner results are **NOT VERIFIED**, and existing
   dependency findings may require distinct remediation PRs.
 
+
+## Measured PR validation and security finding
+
+GitHub Actions run 42226307377: Python, JavaScript, Headway and
+Playwright e2e jobs all PASS on the tested PR revision.
+Model lab run 42226307331: PASS.
+Security run 42226307363: Gitleaks PASS, npm audit PASS,
+CodeQL Python PASS, CodeQL JavaScript and TypeScript PASS.
+Speech API pip-audit PASS after raising the cryptography minimum.
+**ML lab pip-audit FAIL**: Transformers 4.57.6 from
+`services/speech-api/requirements-ml.txt` has nine reported advisory
+entries including PYSEC-2026-3929 and PYSEC-2026-4174. Several fixes
+require Transformers 5.x and some advisories did not list a fixed
+version in the audit output. Do not hide or waive this failure.
+
+A Transformers major upgrade requires a separate change with real
+Wav2Vec2 and Whisper inference compatibility checks. A passing unit
+test alone cannot establish compatibility with loaded model weights.
+Until then the security gate and a production-safe release remain BLOCKED.
+
 ## Release boundary
 
 This is a Phase 0 PR only. Do not merge or start Phase 1 until the

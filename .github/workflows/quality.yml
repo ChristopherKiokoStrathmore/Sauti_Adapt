@@ -8,17 +8,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: services/speech-api/requirements-dev.txt
       - run: pip install -r services/speech-api/requirements-dev.txt
-      - run: python -m pytest services/speech-api/tests -q
+      - run: python -m pytest services/speech-api/tests tests/test_quality_report.py -q
   javascript:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '22' }
+        with:
+          node-version: '22'
+          cache: npm
       - run: python scripts/bootstrap_toolkit.py
-      - run: npm install
+      - run: npm ci
       - run: npm run test:shared
       - run: npm run test:extension
       - run: npm run typecheck:web
@@ -32,7 +37,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '22' }
+        with:
+          node-version: '22'
+          cache: npm
       - run: npm ci
       - run: npm run check:headway
   e2e:
@@ -40,12 +47,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: services/speech-api/requirements-dev.txt
       - uses: actions/setup-node@v4
-        with: { node-version: '22' }
+        with:
+          node-version: '22'
+          cache: npm
       - run: python scripts/bootstrap_toolkit.py
       - run: pip install -r services/speech-api/requirements-dev.txt
-      - run: npm install
+      - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build:extension
       - run: npm run build:headway

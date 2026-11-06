@@ -37,3 +37,20 @@ Build co-designed personalized voice accessibility for Kenyan English and Kiswah
 - Browser integration with 2 permitted unrelated websites.
 - A co-designer led evaluation on separate speech recordings, unknown phrases, fatigue and latency.
 - No overstated claims or fabricated metrics.
+
+
+## Hardening programme governance
+
+These constraints apply to every phase of the security and ML hardening programme:
+
+1. Fail closed. Unknown, uncertain, uncalibrated or unapproved speech must never execute a command. Only the allowlisted intent contract may reach the pinned real AI4A11y Controller.
+2. Never invent accuracy, confidence, latency, coverage or other results. Mark any unexecuted gate and any unmeasured research claim **NOT VERIFIED**. Keep provenance, commands, timestamps and the exact Git SHA with measured evidence.
+3. Do not reimplement, upgrade or silently replace the AI4A11y Controller. Retain toolkit pin `7cf5006dbab9e328fadf54b654147c6bca44113d`.
+4. No participant recordings, personal model weights, identifying information, API tokens or private credentials in Git, logs, build artefacts or unapproved third party APIs.
+5. `apps/headway` is teammate maintained. Do not modify it in a general Sauti phase PR. Headway changes belong in a separate PR explicitly flagged for teammate review.
+6. **Ask the project owner first** before choosing a project licence, drafting legal wording, using gated CDLI datasets, or sending any participant data to an external service. Do not infer permission from source code or earlier experiments.
+7. Use one branch and one PR for each phase, named `feature/phase-N-name`. Add characterisation tests before refactoring and preserve observable behaviour unless a separate change is approved.
+8. After each phase, report files changed, actual commands with exit codes and verifiable output summaries, tests added, a **NOT VERIFIED** inventory and unresolved risks. Stop and wait for owner approval before starting the next phase.
+9. Every phase must attempt the full gates: Python pytest, `test:shared`, `test:extension`, `typecheck:web`, `typecheck:extension`, application and extension builds, and Playwright e2e. Also run Headway tests, typecheck and build without changing its source. Bootstrap the pinned toolkit first wherever required. If a gate cannot run, show **NOT VERIFIED** rather than PASS.
+10. Write documentation and comments in British English. Do not use em dashes in comments, documentation or commit messages.
+11. The personal LoRA Whisper models are research-only until their command acceptance safety gate is separately calibrated and verified on consented, held-out, real participant commands. A transcript comparison is never an implicit Controller action.

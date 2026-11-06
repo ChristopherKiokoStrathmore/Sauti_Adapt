@@ -130,6 +130,20 @@ def create_participant(
     return JSONResponse({'user_id': user_id, 'token': token, 'profile_id': str(uuid4())}, headers={'cache-control': 'no-store'})
 
 
+@app.post('/v1/session/revoke', dependencies=[Depends(require_token)])
+def revoke_session(user_id: str = Depends(require_user)):
+    """Revoke a participant token in durable private storage."""
+    from .auth import revoke_user
+    try:
+        changed = revoke_user(user_id)
+    except (RuntimeError, OSError):
+        raise HTTPException(status_code=503, detail='Unable to revoke participant access.')
+    if not changed:
+        raise HTTPException(status_code=404, detail='Participant account not found.')
+    audit('session', 'revoked', user_id)
+    return {'status': 'revoked'}
+
+
 @app.get('/v1/readiness', dependencies=[Depends(require_token)])
 def readiness():
     """Authenticated configuration audit; never return secrets or participant data.

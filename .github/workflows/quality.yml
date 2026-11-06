@@ -10,7 +10,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
       - run: pip install -r services/speech-api/requirements-dev.txt
-      - run: python -m pytest services/speech-api/tests tests/test_deployment_smoke.py -q
+      - run: python -m pytest services/speech-api/tests ml/bench/tests tests/test_deployment_smoke.py -q
   javascript:
     runs-on: ubuntu-latest
     steps:

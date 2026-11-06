@@ -235,6 +235,9 @@ def test_validated_model_dispatches_only_known_command(monkeypatch, tmp_path):
     (folder / 'owner').write_text(USER_ID + '\n', encoding='utf8')
     (folder / 'evaluation.json').write_text(json.dumps({
         'status': 'pilot-validation-passed', 'model_version': model.version, 'accuracy_claim': False,
+        'release_evidence': {'status':'pilot-validation-passed', 'executable': True,
+                             'unknown_total': 30, 'unknown_false_accepts': 0,
+                             'unknown_false_accept_upper_bound': 0.095},
     }), encoding='utf8')
     monkeypatch.setattr(module, 'model_encoder', lambda: FakeEncoder())
     resp = client.post('/v1/recognize', data={'profile_id':pid,'language':'en-KE'},
@@ -304,6 +307,20 @@ def test_default_save_is_rejected(monkeypatch, tmp_path):
     assert resp.status_code == 200, resp.text
     assert resp.json()['status'] == 'rejected'
     assert resp.json()['reason'] == 'UNAVAILABLE_OR_INVALID_MODEL'
+
+
+def test_legacy_release_without_unknown_bound_stays_rejected(monkeypatch, tmp_path):
+    monkeypatch.setenv('SAUTI_API_TOKEN', 'test-secret')
+    monkeypatch.setenv('SAUTI_PRIVATE_DIR', str(tmp_path))
+    monkeypatch.setenv('SPEECH_MODE', 'prototype')
+    model = _released_prototype()
+    pid = _prepare_profile(tmp_path, model, json.dumps({
+        'status': 'pilot-validation-passed', 'model_version': model.content_version(),
+    }))
+    response = _recognize(pid)
+    assert response.status_code == 200
+    assert response.json()['status'] == 'rejected'
+    assert response.json()['intent'] == 'UNKNOWN'
 
 
 def test_bad_release_status_is_rejected(monkeypatch, tmp_path):

@@ -1,0 +1,20 @@
+{
+  "review_status": "NOT VERIFIED: native Kiswahili speaker review required",
+  "locale": "sw-KE",
+  "strings": {
+    "record_start": "Anza kurekodi sauti",
+    "record_stop": "Simamisha kurekodi",
+    "consent_heading": "Ruhusa yako",
+    "accept_terms": "Nimeelewa na ninakubali",
+    "language_english": "Kiingereza",
+    "language_kiswahili": "Kiswahili",
+    "unknown_command": "Amri haijatambuliwa",
+    "no_action": "Hakuna kitendo kilichofanywa",
+    "delete_voice_data": "Futa data yangu ya sauti",
+    "scroll_down": "Shuka chini",
+    "scroll_up": "Panda juu",
+    "go_back": "Rudi nyuma",
+    "read_page": "Soma ukurasa kwa sauti",
+    "undo": "Tengua mpangilio"
+  }
+}

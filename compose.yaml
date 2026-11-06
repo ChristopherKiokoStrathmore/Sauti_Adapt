@@ -1,0 +1,48 @@
+name: sauti-local
+services:
+  speech-api:
+    build:
+      context: ./services/speech-api
+      dockerfile: Dockerfile.dev
+    environment:
+      SAUTI_API_TOKEN: ${SAUTI_API_TOKEN:?Set in a local ignored .env}
+      SAUTI_TOKEN_PEPPER: ${SAUTI_TOKEN_PEPPER:?Set in a local ignored .env}
+      SAUTI_STORAGE_KEY: ${SAUTI_STORAGE_KEY:?Set in a local ignored .env}
+      SAUTI_PRIVATE_DIR: /data
+      SAUTI_ALLOWED_ORIGINS: http://localhost:3000
+      SPEECH_MODE: mock
+      ALLOW_ENROLLMENT: "false"
+      SAUTI_AUTO_PROVISION: "false"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - speech_private:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  web:
+    image: node:22-bookworm-slim
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - node_modules:/workspace/node_modules
+    command: sh -c "npm ci && npm run dev:web -- --hostname 0.0.0.0"
+    environment:
+      SPEECH_API_URL: http://speech-api:8000
+      SPEECH_API_TOKEN: ${SAUTI_API_TOKEN:?Set in a local ignored .env}
+      SAUTI_SESSION_KEY: ${SAUTI_SESSION_KEY:?Set in a local ignored .env}
+      SAUTI_SESSION_KID: v1
+      SAUTI_ALLOWED_ORIGINS: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      speech-api:
+        condition: service_healthy
+
+volumes:
+  speech_private:
+  node_modules:

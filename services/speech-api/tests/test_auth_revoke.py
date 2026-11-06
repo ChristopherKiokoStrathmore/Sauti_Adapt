@@ -33,7 +33,7 @@ def test_revocation_survives_legacy_json_fallback(monkeypatch, tmp_path):
     from sauti_ml.auth import token_digest
     monkeypatch.setenv("SAUTI_PRIVATE_DIR", str(tmp_path))
     monkeypatch.setenv("SAUTI_TOKEN_PEPPER", "pepper")
-    user = "11111111-1111-4111-8111-111111111111"
+    user = "22222222-2222-4222-8222-222222222222"
     token = "legacy-test-token"
     (tmp_path / "participant_accounts.json").write_text(
         json.dumps({user: token_digest(token)}), encoding="utf8"

@@ -49,6 +49,8 @@ export default defineConfig({
       env: {
         SPEECH_API_URL: API_URL,
         SPEECH_API_TOKEN: API_TOKEN,
+        SAUTI_SESSION_KID: 'e2e',
+        SAUTI_SESSION_KEY: Buffer.alloc(32, 42).toString('base64url'),
         NEXT_PUBLIC_SAUTI_PRIVACY_CONTACT: 'privacy@example.test',
         NEXT_TELEMETRY_DISABLED: '1',
       },

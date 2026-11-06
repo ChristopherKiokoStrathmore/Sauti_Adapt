@@ -557,6 +557,13 @@ export function SautiDashboard() {
             pointerSensitivity={headway.sensitivity}
             pointerSteadiness={headway.steadiness}
             onModelUpdated={() => { void controller.current?.loadPresentation?.(); }}
+            onPreferencesImported={p => {
+              setLanguage(p.language);
+              setReadSteps(p.spokenGuidance);
+              headway.setClickMode(p.clickMethod);
+              headway.setSensitivity(p.pointerSensitivity);
+              headway.setSteadiness(p.pointerSteadiness);
+            }}
           />
           <label className="check-row" ><input type="checkbox" checked={autoStop} onChange={event => setAutoStop(event.target.checked)}/><span><strong>Stop automatically</strong><small>Recording ends at the selected clip length.</small></span></label>
           <div className="card-actions"><button type="button" onClick={() => goTo(2)}>Save and continue <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => setStatus('Your preferences remain on this screen until you continue.')}>Pause setup</button></div>

@@ -135,7 +135,7 @@ export async function importPreferences(json: string): Promise<PortableModel> {
   if (json.length > 12000) throw new Error('Profile file is too large');
   let parsed: Record<string, unknown>;
   try { parsed = JSON.parse(json) as Record<string, unknown>; } catch { throw new Error('Invalid JSON profile'); }
-  if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.needs) || parsed.supportAreas?.length) {
+  if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.needs) || (parsed.supportAreas !== undefined && (!Array.isArray(parsed.supportAreas) || parsed.supportAreas.length > 0))) {
     throw new Error('Only Sauti preference-only AbilityModel files can be imported');
   }
   const values = Object.fromEntries(parsed.needs.filter((n): n is Need =>
@@ -164,4 +164,19 @@ export function withdrawAbilityConsent() {
   }
   singleton = undefined;
   initialized = undefined;
+}
+
+/** Sanitize a portable model before translating preferences into live UI state. */
+export function preferencesFromModel(m: PortableModel): ShareablePreferences {
+  const items = new Map(m.needs.map(n => [n.dimension, n.value]));
+  const method = items.get('selectionGesture');
+  const sensitivity = items.get('pointerSensitivity');
+  const steady = items.get('pointerSteadiness');
+  return safePreferences({
+    language: m.language === 'sw-KE' ? 'sw-KE' : 'en-KE',
+    spokenGuidance: items.get('spokenGuidance') === true,
+    clickMethod: method === 'dwell' ? 'dwell' : 'mouth',
+    pointerSensitivity: typeof sensitivity === 'number' ? sensitivity : 1,
+    pointerSteadiness: steady === 'low' || steady === 'high' ? steady : 'medium',
+  });
 }

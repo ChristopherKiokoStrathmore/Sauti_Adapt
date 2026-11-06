@@ -1,23 +1,30 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { enableAbilityConsent, hasAbilityConsent, importPreferences, model, sharePreferences, withdrawAbilityConsent,
+import { enableAbilityConsent, hasAbilityConsent, importPreferences, model, preferencesFromModel, sharePreferences, withdrawAbilityConsent,
   type PortableModel, type ShareablePreferences } from '@/lib/ability-profile';
 
-type Props = ShareablePreferences & { onModelUpdated: () => void };
+type Props = ShareablePreferences & { onModelUpdated: () => void; onPreferencesImported: (p: ShareablePreferences) => void };
 
-export function PortableAbilityProfile({ onModelUpdated, ...preferences }: Props) {
+export function PortableAbilityProfile({ onModelUpdated, onPreferencesImported, ...preferences }: Props) {
   const [enabled, setEnabled] = useState(false);
   const [shared, setShared] = useState<PortableModel | null>(null);
   const [message, setMessage] = useState('Nothing has been shared with the toolkit.');
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const skipFirst = useRef(true);
+  const [pendingImport, setPendingImport] = useState<ShareablePreferences | null>(null);
 
   useEffect(() => {
     const consent = hasAbilityConsent();
     setEnabled(consent);
     if (!consent) return;
-    void model().then(m => { setShared(m); onModelUpdated(); }).catch(() => setMessage('Saved preferences could not be loaded.'));
+    void model().then(m => {
+      setShared(m);
+      const restored = preferencesFromModel(m);
+      setPendingImport(restored);
+      onPreferencesImported(restored);
+      onModelUpdated();
+    }).catch(() => setMessage('Saved preferences could not be loaded.'));
   // Read stored approval once; subsequent updates are handled separately.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -25,6 +32,15 @@ export function PortableAbilityProfile({ onModelUpdated, ...preferences }: Props
   useEffect(() => {
     if (skipFirst.current) { skipFirst.current = false; return; }
     if (!enabled) return;
+    if (pendingImport) {
+      const same = pendingImport.language === preferences.language &&
+        pendingImport.spokenGuidance === preferences.spokenGuidance &&
+        pendingImport.clickMethod === preferences.clickMethod &&
+        pendingImport.pointerSensitivity === preferences.pointerSensitivity &&
+        pendingImport.pointerSteadiness === preferences.pointerSteadiness;
+      if (same) setPendingImport(null);
+      return;
+    }
     let active = true;
     void sharePreferences(preferences).then(m => {
       if (!active) return;
@@ -35,7 +51,7 @@ export function PortableAbilityProfile({ onModelUpdated, ...preferences }: Props
     return () => { active = false; };
   // These are intentionally the *only* values copied; never spread a participant object.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, preferences.language, preferences.spokenGuidance, preferences.clickMethod, preferences.pointerSensitivity, preferences.pointerSteadiness]);
+  }, [enabled, pendingImport, preferences.language, preferences.spokenGuidance, preferences.clickMethod, preferences.pointerSensitivity, preferences.pointerSteadiness]);
 
   async function activate() {
     setBusy(true);
@@ -56,6 +72,7 @@ export function PortableAbilityProfile({ onModelUpdated, ...preferences }: Props
     withdrawAbilityConsent();
     setEnabled(false);
     setShared(null);
+    setPendingImport(null);
     setMessage('Sharing withdrawn. Local toolkit preferences have been deleted.');
     onModelUpdated();
   }
@@ -78,7 +95,10 @@ export function PortableAbilityProfile({ onModelUpdated, ...preferences }: Props
       if (file.size > 12000) throw new Error('The profile file must be smaller than 12 KB.');
       const updated = await importPreferences(await file.text());
       setShared(updated);
-      setMessage('Approved portable preferences imported into the official toolkit Librarian.');
+      const restored = preferencesFromModel(updated);
+      setPendingImport(restored);
+      onPreferencesImported(restored);
+      setMessage('Approved portable preferences imported and applied to the Sauti controls.');
       onModelUpdated();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Import failed');

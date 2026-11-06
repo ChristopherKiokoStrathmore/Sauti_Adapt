@@ -6,7 +6,7 @@ Sauti Adapt now includes an **optional Headway control** on the homepage and thr
 
 This is **not** an installed Chrome extension: browser controls are limited to safe interactions on Sauti Adapt itself. To reach unrelated external sites, Headway must be installed separately with Chrome permissions. The future Chrome Web Store path remains available at `/install`.
 
-The teammate maintained extension under `apps/headway/**` is untouched. Web integration imports its compatible pure mouth gesture and pointer motion modules but cannot automatically execute extension specific Chrome API changes. See [Headway Web Demo architecture and validation](docs/HEADWAY_WEB_DEMO.md) for the exact compatibility boundary, tests, and real webcam acceptance checklist.
+The teammate maintained Headway extension lives under `apps/headway/**`. It was previously moved and modified, as documented in `CHANGELOG.md`; it is not untouched historically. This Phase 0 PR does not change its source. Future Headway changes require a separate PR and teammate review. Web integration imports compatible pure mouth gesture and pointer motion modules but cannot automatically execute extension specific Chrome API changes. See [Headway Web Demo architecture and validation](docs/HEADWAY_WEB_DEMO.md) for the exact compatibility boundary, tests, and real webcam acceptance checklist.
 
 **Research prototype, not a completed accessibility product.** One personalized speech understanding core, two client surfaces (Next.js PWA and Chrome extension), a real upstream AI4A11y Controller, and a private Python inference service. Future Android adapter is intentionally NOT claimed as implemented.
 
@@ -51,7 +51,7 @@ are in the lab guide. Real speech performance is not established by software tes
 ```bash
 # Start in this repository root
 python scripts/bootstrap_toolkit.py
-npm install
+npm ci
 ```
 
 The bootstrap script clones and verifies revision `7cf5006dbab9e328fadf54b654147c6bca44113d` of https://github.com/AI-for-Accessibility-Collective/AI-for-Accessibility-Toolkit. A different revision should be treated as a dependency change requiring rerunning integration tests.

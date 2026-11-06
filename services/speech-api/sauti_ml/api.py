@@ -317,6 +317,18 @@ async def recognize(
         release = json.loads(release_path.read_text(encoding='utf8'))
         if not isinstance(release, dict):
             raise ValueError('Model release record is invalid.')
+        gate = release.get('release_evidence')
+        if not isinstance(gate, dict):
+            raise ValueError('Missing conservative command evidence gate.')
+        min_negative = max(30, int(os.environ.get('SAUTI_MIN_UNKNOWN_COUNT', '30')))
+        max_upper = min(0.10, float(os.environ.get('SAUTI_MAX_UNKNOWN_FAR_UPPER', '0.10')))
+        if (gate.get('status') != 'pilot-validation-passed'
+                or gate.get('executable') is not True
+                or gate.get('unknown_total', 0) < min_negative
+                or gate.get('unknown_false_accepts') != 0
+                or not isinstance(gate.get('unknown_false_accept_upper_bound'), (int, float))
+                or not 0 <= gate['unknown_false_accept_upper_bound'] <= max_upper):
+            raise ValueError('Insufficient unknown speech evidence to authorise commands.')
         expected = model.content_version()
         if (release.get('status') != 'pilot-validation-passed'
                 or release.get('model_version') != expected

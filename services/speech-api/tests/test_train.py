@@ -29,7 +29,7 @@ def test_training_produces_validated_artifact_only_with_holdout(monkeypatch, tmp
                 phase = {train_id:0.0, cal_id:0.6, test_id:1.2}[sid] + .08 * ix
                 x = (.1*np.sin(2*np.pi*frequency*np.arange(16000)/16000+phase)).astype(np.float32)
                 store_enrollment(pid, sid, intent, Language.KENYAN_ENGLISH, x, user_id='11111111-1111-4111-8111-111111111111')
-    for ix in range(5):
+    for ix in range(15):
         x=(.1*np.sin(2*np.pi*720*np.arange(16000)/16000+.11*ix)).astype(np.float32)
         y=(.1*np.sin(2*np.pi*720*np.arange(16000)/16000+1.0+.11*ix)).astype(np.float32)
         store_enrollment(pid,cal_id,Intent.UNKNOWN,Language.KENYAN_ENGLISH,x, user_id='11111111-1111-4111-8111-111111111111')
@@ -82,7 +82,7 @@ def test_release_requires_each_enrolled_language(monkeypatch, tmp_path):
                     store_enrollment(pid, sid, intent, language, _tone(heard, phase), user_id='11111111-1111-4111-8111-111111111111')
     for language in (Language.KENYAN_ENGLISH, Language.KISWAHILI):
         for sid in (cal_id, test_id):
-            for ix in range(5):
+            for ix in range(15):
                 store_enrollment(pid, sid, Intent.UNKNOWN, language, _tone(720, .11 * ix + (0 if sid == cal_id else 1)), user_id='11111111-1111-4111-8111-111111111111')
     try:
         run(pid, cal_id, test_id, encoder=FakeEncoder())

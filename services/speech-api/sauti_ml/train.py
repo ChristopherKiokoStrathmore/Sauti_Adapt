@@ -20,11 +20,13 @@ from .audio import decode_wav
 from .storage import canonical_uuid, load_manifest, profile_dir, read_private_bytes, write_private_bytes
 from .prototype import PrototypeModel, model_content_version
 from .encoder import SpeechEncoder
+from .release_gate import GatePolicy, assess_release
 
 MIN_TRAIN_PER_CLASS = 3
 MIN_VALID_PER_CLASS = 2
 MIN_UNKNOWN_VALID = 5
-MARGIN = 0.05
+# Margins are selected using calibration data, not fixed in the source.
+MARGIN_CANDIDATES = (0.01, 0.03, 0.05, 0.08, 0.10, 0.15, 0.20)
 
 
 def _language_bucket():
@@ -165,18 +167,22 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
     # Calibration chooses the policy. Test is NEVER used to pick thresholds.
     candidates = []
     best_safe = None
-    for threshold in np.arange(0.40, 0.995, 0.005):
-        version = model_content_version(centroids, labels, languages, float(threshold), MARGIN, encoder.model_id)
-        model = PrototypeModel(centroids, labels, languages, float(threshold), MARGIN,
-                               version, encoder.model_id)
-        metrics = test_predictions(model, positive, negatives)
-        if metrics['unknown_false_accepts'] or metrics['known_wrong_accepted']:
-            continue
-        row = (metrics['correct_accepted'], float(threshold), metrics, model)
-        if best_safe is None or row[0] > best_safe[0] or (row[0] == best_safe[0] and row[1] > best_safe[1]):
-            best_safe = row
-        if not _unenrolled_activations(metrics, enrolled):
-            candidates.append(row)
+    for margin in MARGIN_CANDIDATES:
+        for threshold in np.arange(0.40, 0.995, 0.005):
+            version = model_content_version(centroids, labels, languages,
+                                            float(threshold), margin, encoder.model_id)
+            model = PrototypeModel(centroids, labels, languages, float(threshold),
+                                   margin, version, encoder.model_id)
+            metrics = test_predictions(model, positive, negatives)
+            if metrics['unknown_false_accepts'] or metrics['known_wrong_accepted']:
+                continue
+            # Prefer coverage, then conservative threshold and margin.
+            row = (metrics['correct_accepted'], float(threshold), metrics, model)
+            if (best_safe is None or row[0] > best_safe[0]
+                    or (row[0] == best_safe[0] and row[1] > best_safe[1])):
+                best_safe = row
+            if not _unenrolled_activations(metrics, enrolled):
+                candidates.append(row)
     if not candidates:
         if best_safe is None:
             raise RuntimeError('No validation threshold prevented false activations; model NOT released.')
@@ -188,16 +194,31 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
     test_positive = [(e['intent'], e['language'], feature(e)) for e in test if e['intent'] != 'UNKNOWN']
     test_negatives = [(e['language'], feature(e)) for e in test if e['intent'] == 'UNKNOWN']
     test_metrics = test_predictions(model, test_positive, test_negatives)
-    if test_metrics['unknown_false_accepts'] or test_metrics['known_wrong_accepted']:
-        raise RuntimeError('Final untouched test detected false command activation; model NOT released.')
+    # Minimum evidence is enforced across calibration and untouched test.
+    # No held-out test labels participate in threshold or margin selection.
+    import os
+    policy = GatePolicy(
+        minimum_unknown_count=int(os.environ.get('SAUTI_MIN_UNKNOWN_COUNT', '30')),
+        maximum_upper_false_accept_rate=float(os.environ.get('SAUTI_MAX_UNKNOWN_FAR_UPPER', '0.10')),
+        weak_evidence=os.environ.get('SAUTI_ALLOW_WEAK_EVIDENCE', '').lower() == 'true',
+    )
     missing = _unenrolled_activations(test_metrics, enrolled)
-    if missing:
-        raise RuntimeError('No correct untouched-test activation for ' + ', '.join(missing) + '; model NOT released.')
-    model.save(folder, released=True)
+    decision = assess_release(
+        len(negatives), metrics['unknown_false_accepts'],
+        len(test_negatives), test_metrics['unknown_false_accepts'],
+        known_wrong=metrics['known_wrong_accepted'] + test_metrics['known_wrong_accepted'],
+        missing_commands=missing, policy=policy,
+    )
+    if decision.status == 'blocked':
+        raise RuntimeError('Voice command evidence gate blocked: ' + decision.reason + ' Model NOT released.')
+    # Weak evidence is written for review but never executable by the API.
+    model.save(folder, released=decision.executable)
     report = {
-        'status': 'pilot-validation-passed', 'model_version': model.version,
+        'status': decision.status, 'model_version': model.version,
+        'command_execution_authorised': decision.executable,
+        'release_evidence': decision.as_dict(),
         'profile_id': profile_id, 'encoder_id': encoder.model_id,
-        'threshold': threshold, 'margin': MARGIN,
+        'threshold': threshold, 'margin': model.margin,
         'calibration_session': calibration_session, 'test_session': test_session,
         'evaluated_at': datetime.now(timezone.utc).isoformat(),
         'training_examples': len(training), 'calibration_examples': len(calibration), 'test_examples': len(test),
@@ -205,7 +226,7 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
         'latency_seconds': round(time.perf_counter() - started, 3),
         'result_kind': result_kind,
         'accuracy_claim': False,
-        'warning': 'Small test sets cannot establish a low real-world false activation rate. Per-language confusion counts and false-activation counts are not an accuracy claim. Requires co-designer usability evaluation.'
+        'warning': 'Small test sets cannot establish a low real-world false activation rate. The Clopper-Pearson upper bound applies only to collected unknown clips. Requires independent co-designer testing.'
     }
     (folder / 'evaluation.json').write_text(json.dumps(report, indent=2), encoding='utf8')
     return report

@@ -1,0 +1,8 @@
+FROM python:3.11.18-slim
+WORKDIR /app
+ENV PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY requirements.txt requirements-dev.txt ./
+RUN python -m pip install -r requirements-dev.txt
+COPY sauti_ml ./sauti_ml
+EXPOSE 8000
+CMD ["uvicorn", "sauti_ml.api:app", "--host", "0.0.0.0", "--port", "8000"]

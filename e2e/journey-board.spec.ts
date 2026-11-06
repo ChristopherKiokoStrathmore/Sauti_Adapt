@@ -52,13 +52,8 @@ test('A baseline exposes full preference and extension information for compariso
   await expect(page.locator('#listen')).toBeVisible();
   await page.locator('.stepper-card button').nth(3).click();
   await expect(page.getByRole('heading', { name: 'Check recognition' })).toBeVisible();
-  await page.getByRole('button', { name: /Continue to extension/ }).click();
-  if (process.env.NEXT_PUBLIC_HEADWAY_CHROME_WEB_STORE_URL) {
-    await expect(page.getByRole('link', { name: 'Install Headway from Chrome Web Store' }))
-      .toHaveAttribute('href', process.env.NEXT_PUBLIC_HEADWAY_CHROME_WEB_STORE_URL);
-  } else {
-    await expect(page.getByRole('status', { name: /Headway Chrome Web Store approval pending/i })).toBeVisible();
-  }
+  await page.getByRole('button', { name: /Finish this journey/ }).click();
+  await expect(page.getByRole('link', { name: /Launch My Accessible Workspace/ })).toHaveAttribute('href', '/workspace');
 });
 
 test('A versus B simplifies preference decisions while keeping language and accessibility options', async ({ page }) => {
@@ -96,15 +91,10 @@ test('B versus C uses one task at a time, adjustable pace and honest readiness',
   await page.getByRole('button', { name: 'bigger text' }).click();
   await expect(page.getByRole('status')).toHaveText('Making text bigger.');
   await page.getByRole('button', { name: /Finish this journey/ }).click();
-  await expect(page.getByRole('heading', { name: 'Install Headway extension' })).toBeVisible();
-  await expect(page.getByText('Headway works alongside Sauti.', { exact: false })).toBeVisible();
-  if (process.env.NEXT_PUBLIC_HEADWAY_CHROME_WEB_STORE_URL) {
-    await expect(page.getByRole('link', { name: 'Install Headway from Chrome Web Store' }))
-      .toHaveAttribute('href', process.env.NEXT_PUBLIC_HEADWAY_CHROME_WEB_STORE_URL);
-  } else {
-    await expect(page.getByRole('status', { name: /Headway Chrome Web Store approval pending/i })).toBeVisible();
-  }
-  await expect(page.getByText('Build and load the extension', { exact: false })).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Your personalized experience' })).toBeVisible();
+  await expect(page.getByText('Headway can start at any step')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Launch My Accessible Workspace/ })).toHaveAttribute('href', '/workspace');
+  await expect(page.locator('a[href$=".zip"]')).toHaveCount(0);
 });
 
 test('inaccessible microphone shows feedback and never creates an unsaved clip', async ({ page }) => {

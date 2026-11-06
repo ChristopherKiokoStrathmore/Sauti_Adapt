@@ -132,7 +132,7 @@ test('mock-mode audio is rejected and does not move the demo DOM', async ({ page
   const before = {
     scroll: await site.evaluate((element) => element.scrollTop),
     scale: await fontScale(page),
-    status: await page.getByRole('status').innerText(),
+    status: await page.locator('.global-status').innerText(),
   };
 
   const result = await page.evaluate(async ({ user, token, profileId, wav }) => {
@@ -155,7 +155,7 @@ test('mock-mode audio is rejected and does not move the demo DOM', async ({ page
   expect(String(result.body.reason)).toContain('MODEL_NOT_READY');
   expect(await site.evaluate((element) => element.scrollTop)).toBe(before.scroll);
   expect(await fontScale(page)).toBe(before.scale);
-  expect(await page.getByRole('status').innerText()).toBe(before.status);
+  expect(await page.locator('.global-status').innerText()).toBe(before.status);
 });
 
 test('read aloud and outline skip hidden headings in Chromium', async ({ page }) => {

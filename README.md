@@ -1,5 +1,13 @@
 # Sauti Adapt | Team 4 | End-to-end engineering starter
 
+## Headway hackathon website demo
+
+Sauti Adapt now includes an **optional Headway control** on the homepage and through voice onboarding. Participants can explicitly enable their camera to try a head controlled virtual pointer, dwell clicking, and calibrated mouth gesture selection. The final onboarding stage launches the practice workspace at `/workspace`, with reading, simulated shopping, and form experiences.
+
+This is **not** an installed Chrome extension: browser controls are limited to safe interactions on Sauti Adapt itself. To reach unrelated external sites, Headway must be installed separately with Chrome permissions. The future Chrome Web Store path remains available at `/install`.
+
+The teammate maintained extension under `apps/headway/**` is untouched. Web integration imports its compatible pure mouth gesture and pointer motion modules but cannot automatically execute extension specific Chrome API changes. See [Headway Web Demo architecture and validation](docs/HEADWAY_WEB_DEMO.md) for the exact compatibility boundary, tests, and real webcam acceptance checklist.
+
 **Research prototype, not a completed accessibility product.** One personalized speech understanding core, two client surfaces (Next.js PWA and Chrome extension), a real upstream AI4A11y Controller, and a private Python inference service. Future Android adapter is intentionally NOT claimed as implemented.
 
 ## 1. What is already in this repository?

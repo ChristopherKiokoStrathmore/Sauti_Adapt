@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { COMMAND_LABELS, commandToUtterance, validRecognition, type Intent, type Language, type Recognition } from '@sauti/shared';
 import { clampClipMs, startRecording, type RecordingSession } from '@sauti/shared/audio';
@@ -7,6 +8,9 @@ import { CONTROLLER_CSS } from '@toolkit/controller/web/ui.js';
 import { createController, createDomReceiver } from '@sauti/shared/controller';
 import { capReadPort } from '@sauti/shared/page-text';
 import { HeadwayInstallStep } from './HeadwayInstallStep';
+import { HeadwayToggle, useHeadway } from './HeadwayProvider';
+import { PortableAbilityProfile } from './PortableAbilityProfile';
+import { getBrowserToolkit } from '@/lib/ability-profile';
 
 const COMMANDS: Intent[] = ['SCROLL_DOWN', 'SCROLL_UP', 'GO_BACK', 'READ_PAGE', 'UNDO'];
 /** Version of the consent text below. Bump it whenever the wording changes, so each clip records what was agreed. */
@@ -21,7 +25,7 @@ const TONES = [
 ] as const;
 type ToneId = (typeof TONES)[number]['id'];
 const ROLE_LABEL: Record<'train' | 'calibration' | 'test', string> = { train: 'Training', calibration: 'Calibration', test: 'Untouched test' };
-const STEPS = ['Your preferences', 'Your permission', 'Voice samples', 'Check recognition', 'Install extension'] as const;
+const STEPS = ['Your preferences', 'Your permission', 'Voice samples', 'Check recognition', 'Your workspace'] as const;
 const TEST_COMMANDS = [
   { utterance: 'scroll down', label: 'scroll down' },
   { utterance: 'scroll up', label: 'scroll up' },
@@ -59,6 +63,8 @@ function Icon({ children, tone = 'violet' }: { children: ReactNode; tone?: 'viol
 }
 
 export function SautiDashboard() {
+  const headway = useHeadway();
+  const { phase: headwayPhase } = headway;
   const [step, setStep] = useState<Step>(1);
   const [journeyVariant, setJourneyVariant] = useState<JourneyVariant>('c');
   const [speechServiceMode, setSpeechServiceMode] = useState<'mock' | 'prototype' | 'unavailable' | 'checking'>('checking');
@@ -69,6 +75,7 @@ export function SautiDashboard() {
   const [userToken, setUserToken] = useState('');
   const [accountBusy, setAccountBusy] = useState(false);
   const [accountReady, setAccountReady] = useState(false);
+  const [accountError, setAccountError] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [age, setAge] = useState('');
   const [speechCondition, setSpeechCondition] = useState('prefer-not-to-say');
@@ -170,7 +177,7 @@ export function SautiDashboard() {
     const root = document.getElementById('controlled-site');
     if (root) controller.current = createController({
       control: capReadPort(createDomReceiver(root, { scrollTarget: root }), root),
-      operator: { abilityModel: { supportAreas: ['motor'] } },
+      operator: { librarian: getBrowserToolkit().librarian, abilityModel: { supportAreas: [] } },
     });
     return () => { recording.current?.cancel(); stopSpeaking(); clipAudio.current?.pause(); if (clipUrl.current) URL.revokeObjectURL(clipUrl.current); controller.current = null; };
   }, []);
@@ -188,7 +195,7 @@ export function SautiDashboard() {
         : 'Step 3 of 5. Say something unrelated to any command, such as a name or a different sentence.';
     }
     if (forStep === 4) return 'Step 4 of 5. Check recognition. The voice model may not be ready yet. You can try accessible demo controls while training is being prepared.';
-    return 'Step 5 of 5. Install Headway from the Chrome Web Store when available, review permissions, then turn on head pointer controls when you are ready.';
+    return 'Step 5 of 5. Launch your accessible workspace. Headway can be enabled at any point, and voice recognition may still require training and validation.';
   }
 
   function hearStep() {
@@ -233,6 +240,7 @@ export function SautiDashboard() {
     if (!eligibleAge) { goTo(3); return; }
     if (accountReady || (userId.trim() && userToken.trim())) { goTo(3); return; }
     setAccountBusy(true);
+    setAccountError('');
     setStatus('Creating your private voice profile securely…');
     try {
       const response = await fetch('/api/participant', {
@@ -242,7 +250,12 @@ export function SautiDashboard() {
         cache: 'no-store',
       });
       const result = await response.json();
-      if (!response.ok || result.status !== 'ready') throw new Error(result.detail || result.error || 'Could not create account.');
+      if (!response.ok || result.status !== 'ready') {
+        if (response.status === 503) {
+          throw new Error('The speech service is not configured or available. For local voice enrollment, start the speech API and configure apps/web/.env.local.');
+        }
+        throw new Error(result.detail || result.error || 'Could not create account.');
+      }
       if (typeof result.profile_id !== 'string') throw new Error('Private profile was not created.');
       window.localStorage.setItem('sauti-demo-profile', result.profile_id);
       setProfileId(result.profile_id);
@@ -252,7 +265,9 @@ export function SautiDashboard() {
       setStatus('Your private voice profile is ready. You can start recording.');
       goTo(3);
     } catch (error) {
-      setStatus('Could not set up recording: ' + (error instanceof Error ? error.message : 'Please try again.'));
+      const message = error instanceof Error ? error.message : 'Please try again.';
+      setAccountError(message);
+      setStatus('Could not set up recording: ' + message);
     } finally { setAccountBusy(false); }
   }
 
@@ -487,6 +502,7 @@ export function SautiDashboard() {
     <header className="topbar">
       <a href="#main-onboarding" className="brand" aria-label="Sauti Adapt home"><span className="brand-mark" aria-hidden="true">✚</span><span>Sauti Adapt</span></a>
       <span className="concept-badge">Early access · Research prototype</span>
+      <HeadwayToggle compact />
       <button className="profile-button" type="button" onClick={() => goTo(2)}><span aria-hidden="true">◉</span> My voice profile</button>
     </header>
 
@@ -496,6 +512,7 @@ export function SautiDashboard() {
         <h1 id="page-title">Your voice.<br/><em>Your way.</em></h1>
         <p className="hero-description">Meet Sauti. A more personal way to navigate the digital world, designed to understand how you speak.</p>
         <button type="button" className="hero-primary-action" onClick={beginJourney}>Get started <span aria-hidden="true">→</span></button>
+        <div className="intro-headway"><HeadwayToggle /><span>Optional head control before voice onboarding</span></div>
         <div className="hero-assurances" aria-label="What to expect">
           <span><span aria-hidden="true">✳</span> At your own pace</span>
           <span><span aria-hidden="true">◉</span> Your voice stays yours</span>
@@ -533,6 +550,21 @@ export function SautiDashboard() {
           }}/><span className="command-check">✓</span><span>{labelFor(command, language)}</span></label>)}</fieldset></details>
           <details className="preferences-advanced recording-preferences" open={journeyVariant === 'a' ? true : undefined}><summary>Recording accessibility options</summary><div className="settings-grid"><div className="field"><label htmlFor="listen">Recording control</label><select id="listen" value={listenMethod} onChange={event => setListenMethod(event.target.value as 'toggle' | 'separate')}><option value="toggle">One start and stop button</option><option value="separate">Separate start and stop buttons</option></select></div><div className="field"><label htmlFor="maxsec">Clip length</label><select id="maxsec" value={maxSeconds} onChange={event => setMaxSeconds(event.target.value)}><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="8">8 seconds</option><option value="15">15 seconds</option></select></div></div><p className="field-help">You can use a single large button or separate Start and Stop controls, and adjust how long a recording lasts.</p></details>
           <label className="check-row"><input type="checkbox" checked={readSteps} onChange={event => { setReadSteps(event.target.checked); if (!event.target.checked) silence(); }}/><span><strong>Read each step aloud</strong><small>Sauti speaks the instructions for every step. Nothing is recorded while it speaks.</small></span></label>
+          <PortableAbilityProfile
+            language={language}
+            spokenGuidance={readSteps}
+            clickMethod={headway.clickMode}
+            pointerSensitivity={headway.sensitivity}
+            pointerSteadiness={headway.steadiness}
+            onModelUpdated={() => { void controller.current?.loadPresentation?.(); }}
+            onPreferencesImported={p => {
+              setLanguage(p.language);
+              setReadSteps(p.spokenGuidance);
+              headway.setClickMode(p.clickMethod);
+              headway.setSensitivity(p.pointerSensitivity);
+              headway.setSteadiness(p.pointerSteadiness);
+            }}
+          />
           <label className="check-row" ><input type="checkbox" checked={autoStop} onChange={event => setAutoStop(event.target.checked)}/><span><strong>Stop automatically</strong><small>Recording ends at the selected clip length.</small></span></label>
           <div className="card-actions"><button type="button" onClick={() => goTo(2)}>Save and continue <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => setStatus('Your preferences remain on this screen until you continue.')}>Pause setup</button></div>
         </div>
@@ -565,6 +597,8 @@ export function SautiDashboard() {
           <details className="advanced-settings"><summary>Optional future model improvement consent</summary><label className="check-row"><input type="checkbox" checked={improvementConsent} onChange={event => setImprovementConsent(event.target.checked)}/><span><strong>Consider my approved recordings for a future model update</strong><small>Optional. No model changes automatically.</small></span></label></details>
           {age && !eligibleAge && <p className="inline-note">Under 18? You can explore the next step, but recording requires verified parent or guardian consent. This is not yet available in the pilot.</p>}
           {!canContinue && <p className="inline-note">Enter your name and age, then agree to the voice data terms to continue.</p>}
+          {backendConfigured === false && !accountReady && <p className="inline-note" role="status">Voice enrollment needs a running speech API. For local testing, configure apps/web/.env.local and start the local speech service. You can still test Headway independently in the accessible workspace.</p>}
+          {accountError && <p className="inline-note" role="alert"><strong>Voice profile setup unavailable.</strong> {accountError} <Link href="/workspace">Test Headway without voice enrollment</Link>.</p>}
           <div className="card-actions"><button type="button" disabled={!canContinue || accountBusy} onClick={() => void continueToVoiceSamples()}>{accountBusy ? 'Setting up your profile…' : 'Continue to voice samples'} <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => goTo(1)}>Back</button></div>
         </div>
 
@@ -611,11 +645,11 @@ export function SautiDashboard() {
             <button type="button" className="text-button" disabled={!speaking} onClick={silence}>Stop speaking</button>
             <div id="controlled-site" className="content" aria-label="Demo article under toolkit control"><h3>Welcome to the accessible demo</h3><p>Here is a real application surface. The official toolkit Controller is responsible for actions here.</p><h3>Our goal</h3><p>The co-designer uses preferred speech to navigate in Kenyan English or Kiswahili.</p><h3>Accessibility matters</h3><p>The person chooses commands. Uncertain predictions are rejected and feedback stays available to screen readers.</p><h3>A longer page</h3><p>This section gives scroll commands a real distance to move inside the article.</p><p>Text size, contrast, and motion settings are applied here by the toolkit DOM receiver.</p><p>The end of the demo article is below this line.</p></div>
           </div>
-          <div className="card-actions"><button type="button" onClick={() => goTo(5)}>{journeyVariant === 'a' ? 'Continue to extension' : 'Finish this journey'} <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => goTo(3)}>Back to samples</button></div>
+          <div className="card-actions"><button type="button" onClick={() => goTo(5)}>Finish this journey <span aria-hidden="true">→</span></button><button className="text-button" type="button" onClick={() => goTo(3)}>Back to samples</button></div>
         </div>
 
         <div hidden={step !== 5}>
-          <HeadwayInstallStep onBack={() => goTo(4)} onReview={() => goTo(1)} />
+          <HeadwayInstallStep onBack={() => goTo(4)} onReview={() => goTo(1)} savedSamples={saved} recognitionAccepted={prediction?.status === 'accepted'} />
         </div>
       </section>
 
@@ -634,9 +668,9 @@ export function SautiDashboard() {
           <div className="status-row"><span aria-hidden="true">●</span><strong>Speech service</strong><span className={'state-pill ' + (backendConfigured ? 'ready' : 'pending')}>{backendConfigured === null ? 'Checking' : backendConfigured ? 'Configured' : 'Preview only'}</span></div>
           <div className="status-row"><span aria-hidden="true">●</span><strong>Voice profile</strong><span className={'state-pill ' + (saved > 0 ? 'ready' : 'pending')}>{saved > 0 ? 'In progress' : 'Not started'}</span></div>
           <div className="status-row"><span aria-hidden="true">●</span><strong>Recognition check</strong><span className={'state-pill ' + (prediction?.status === 'accepted' ? 'ready' : 'pending')}>{prediction?.status === 'accepted' ? 'Accepted' : 'Pending'}</span></div>
-          <div className="status-row"><span aria-hidden="true">●</span><strong>Browser extension</strong><span className="state-pill neutral">Not confirmed</span></div>
-          <button type="button" className="soft-button full-width" onClick={() => goTo(5)}>Install Headway</button>
-          <small>Chrome Web Store publication is required for direct installation. No voice model required.</small>
+          <div className="status-row"><span aria-hidden="true">●</span><strong>Headway website demo</strong><span className="state-pill neutral">{headwayPhase}</span></div>
+          <Link className="soft-button full-width" href="/workspace">Open accessible workspace</Link>
+          <small>Optional Headway controls are available throughout onboarding and the workspace.</small>
         </section>
       </details></aside>
     </div>
@@ -647,7 +681,7 @@ export function SautiDashboard() {
       <div className="after-title"><span className="after-icon" aria-hidden="true">▣</span><h2 id="after-title">After onboarding</h2></div>
       <div className="flow-card"><Icon tone="blue">▰</Icon><div><strong>Personal voice profile</strong><span>Recognizes your chosen commands</span></div></div><span className="flow-arrow" aria-hidden="true">→</span>
       <div className="flow-card"><Icon>AI</Icon><div><strong>AI4A11y Toolkit</strong><span>Handles accepted commands</span></div></div><span className="flow-arrow" aria-hidden="true">→</span>
-      <div className="flow-card"><Icon>✚</Icon><div><strong>Headway Chrome extension</strong><span>Head pointer and mouth clicks on websites you allow</span><a className="soft-button extension-quick-link" href="/install">Install browser extension</a></div></div>
+      <div className="flow-card"><Icon>✚</Icon><div><strong>Headway website demo</strong><span>Head controlled navigation on Sauti Adapt</span><Link className="soft-button extension-quick-link" href="/workspace">Open accessible workspace</Link></div></div>
       <p className="feedback-banner">Feedback you approve can support the next validated voice profile.</p>
     </section>
     <footer><p>Sauti Adapt supports access and communication. It does not diagnose or treat cerebral palsy or another medical condition.</p></footer>

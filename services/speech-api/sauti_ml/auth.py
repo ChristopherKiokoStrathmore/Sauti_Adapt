@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import sqlite3
 import threading
+from contextlib import contextmanager
 import time
 from datetime import datetime, timezone
 from fastapi import HTTPException, Request
@@ -175,6 +176,7 @@ def audit(event: str, outcome: str, user_id: str | None = None, profile_id: str 
     except Exception:
         print(line, flush=True)
 
+@contextmanager
 def _database():
     """Use a private SQLite database with WAL for concurrent provisioning."""
     from .storage import private_root
@@ -200,7 +202,10 @@ def _database():
         ''')
         connection.commit()
         path.chmod(0o600)
-        return connection
+        try:
+            yield connection
+        finally:
+            connection.close()
     except Exception:
         connection.close()
         raise

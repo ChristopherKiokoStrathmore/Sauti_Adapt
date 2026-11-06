@@ -41,3 +41,25 @@ def test_revocation_survives_legacy_json_fallback(monkeypatch, tmp_path):
     assert verify_user(user, token)
     assert revoke_user(user)
     assert verify_user(user, token) is False
+
+
+
+def test_revoke_http_route_requires_active_user_token(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from sauti_ml.api import app
+    monkeypatch.setenv("SAUTI_PRIVATE_DIR", str(tmp_path))
+    monkeypatch.setenv("SAUTI_API_TOKEN", "private-service-auth")
+    monkeypatch.setenv("SAUTI_TOKEN_PEPPER", "http-test-pepper")
+    user, token = create_participant_account()
+    headers = {
+        "x-api-key": "private-service-auth",
+        "x-sauti-user": user,
+        "x-sauti-user-token": token,
+    }
+    client = TestClient(app)
+    assert client.post("/v1/session/revoke").status_code == 401
+    response = client.post("/v1/session/revoke", headers=headers)
+    assert response.status_code == 200
+    assert response.json() == {"status": "revoked"}
+    assert not verify_user(user, token)
+    assert client.post("/v1/session/revoke", headers=headers).status_code == 401

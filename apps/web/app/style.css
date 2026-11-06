@@ -811,3 +811,14 @@ box-shadow:inset -18px -24px 44px rgba(13,8,60,.74),0 0 70px rgba(173,76,244,.28
 .portable-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem}
 .portable-actions strong{width:100%;font-size:.88rem}
 .portable-actions input{max-width:100%;font-size:.85rem}
+
+/* Respect reduced motion across the Sauti workspace and onboarding views. */
+@media (prefers-reduced-motion: reduce) {
+  .app-shell *, .app-shell *::before, .app-shell *::after,
+  .aw-shell *, .aw-shell *::before, .aw-shell *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+  }
+}

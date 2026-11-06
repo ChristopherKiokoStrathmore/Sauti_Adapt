@@ -3,7 +3,7 @@ from scripts.evidence_report import extract_claims, render_evidence
 
 
 def test_claim_extraction_ignores_code_and_keeps_visible_claims():
-    markdown = "# Heading\n\nThis capability works.\n\n\`\`\`python\nprint('code')\n\`\`\`\n\n* Speech may be rejected.\n"
+    markdown = "# Heading\n\nThis capability works.\n\n```python\nprint('code')\n```\n\n* Speech may be rejected.\n"
     claims = extract_claims(markdown)
     assert len(claims) == 2
     assert all("print(" not in claim["text"] for claim in claims)

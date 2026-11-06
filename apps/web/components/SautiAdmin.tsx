@@ -144,6 +144,8 @@ export function SautiAdmin() {
           <div className="field"><label htmlFor="lab-model">Model</label><select id="lab-model" value={model} onChange={e => setModel(e.target.value)}>
             <option value="all">Compare all three</option><option value="prototype">Personalized Wav2Vec2</option>
             <option value="english">CDLI Kenyan English Whisper</option><option value="swahili">CDLI Kenyan Kiswahili Whisper</option>
+            <option value="personalized_english">Pilot personalized English LoRA (research only)</option>
+            <option value="personalized_swahili">Pilot personalized Kiswahili LoRA (research only)</option>
           </select></div>
           <div className="field"><label htmlFor="lab-language">Spoken language</label><select id="lab-language" value={language} onChange={e => setLanguage(e.target.value)}>
             <option value="en-KE">English</option><option value="sw-KE">Kiswahili</option><option value="mixed">English and Kiswahili mixed</option>
@@ -155,6 +157,7 @@ export function SautiAdmin() {
           </select></div>
           <div className="field"><label htmlFor="lab-transcript">Correct transcript (optional)</label><input id="lab-transcript" value={reference} maxLength={280} onChange={e => setReference(e.target.value)} placeholder="What was spoken?"/></div>
         </div>
+        {(model === 'personalized_english' || model === 'personalized_swahili') && <p className="inline-note" role="note">Private pilot adapter. Available only to the authorized participant profile after deployment. The selected language must match, and no browser actions are executed.</p>}
         <label className="permission-card"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}/><span><strong>I agree to a one time model comparison of my recording</strong><small>The recording is processed only for comparison, not retained or used to execute commands.</small></span></label>
         {!profileId && <p className="inline-note">Open the <a href="/">participant onboarding</a> on this device to create a private voice profile before trying the model lab.</p>}
         {overview && !overview.comparisonEnabled && <p className="inline-note">The cloud comparison service is not enabled. Model selection is visible for research planning, but requests cannot run until the backend models are deployed and approved.</p>}

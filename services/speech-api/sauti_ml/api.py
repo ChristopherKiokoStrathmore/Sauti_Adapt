@@ -226,8 +226,10 @@ async def compare_only(
         raise HTTPException(status_code=403, detail='Explicit model comparison permission is required.')
     if os.environ.get('SAUTI_REQUIRE_TERMS') == 'true' and not os.environ.get('SAUTI_PRIVACY_CONTACT', '').strip():
         raise HTTPException(status_code=503, detail='Pilot privacy contact is not configured.')
-    if model not in ('prototype', 'english', 'swahili', 'all') or language not in ('en-KE', 'sw-KE', 'mixed'):
+    if model not in ('prototype', 'english', 'swahili', 'personalized_english', 'personalized_swahili', 'all') or language not in ('en-KE', 'sw-KE', 'mixed'):
         raise HTTPException(status_code=422, detail='Unknown model or language setting.')
+    if (model == 'personalized_english' and language != 'en-KE') or (model == 'personalized_swahili' and language != 'sw-KE'):
+        raise HTTPException(status_code=422, detail='The personalized model requires its matching language.')
     if len(reference) > 280:
         raise HTTPException(status_code=422, detail='Reference text too long.')
     try:

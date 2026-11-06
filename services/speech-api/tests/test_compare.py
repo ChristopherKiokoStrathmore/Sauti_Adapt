@@ -92,3 +92,60 @@ def test_compare_endpoint_safe_no_controller_action(monkeypatch, tmp_path):
     assert res.status_code == 200, res.text
     assert res.json()['executed_action'] is False
     assert not list(tmp_path.rglob('*.wav'))
+
+def test_pilot_adapter_is_restricted_to_explicit_profile(monkeypatch):
+    import sauti_ml.compare as cmp
+    pilot = str(uuid4())
+    another = str(uuid4())
+    monkeypatch.setenv('SAUTI_PILOT_PROFILE_ID', pilot)
+    monkeypatch.setenv('SAUTI_PERSONALIZED_COMPARE_ENABLED', 'true')
+    calls = []
+
+    def fake_whisper(samples, key):
+        calls.append(key)
+        return {'status': 'rejected', 'intent': 'UNKNOWN', 'transcript': ''}
+
+    monkeypatch.setattr(cmp, 'whisper_prediction', fake_whisper)
+    outcome = cmp.infer_one(np.zeros(20, dtype=np.float32), another, 'personalized_english')
+    assert outcome['status'] == 'unavailable'
+    assert not calls
+
+    outcome = cmp.infer_one(np.zeros(20, dtype=np.float32), pilot, 'personalized_english')
+    assert outcome['status'] == 'rejected'
+    assert calls == ['personalized_english']
+
+    monkeypatch.delenv('SAUTI_PERSONALIZED_COMPARE_ENABLED')
+    outcome = cmp.infer_one(np.zeros(20, dtype=np.float32), pilot, 'personalized_swahili')
+    assert outcome['status'] == 'unavailable'
+    assert calls == ['personalized_english']
+
+
+def test_pilot_comparison_cannot_execute_actions(monkeypatch):
+    import sauti_ml.compare as cmp
+    pilot = str(uuid4())
+    monkeypatch.setenv('SAUTI_PILOT_PROFILE_ID', pilot)
+    monkeypatch.setenv('SAUTI_PERSONALIZED_COMPARE_ENABLED', 'true')
+    monkeypatch.setattr(
+        cmp, 'whisper_prediction',
+        lambda samples, key: {'status': 'accepted', 'intent': 'SCROLL_DOWN',
+                              'transcript': 'scroll down'}
+    )
+    result = cmp.compare_models(
+        np.zeros(20, dtype=np.float32), pilot, 'personalized_english', 'en-KE'
+    )
+    assert result['results'][0]['model'] == 'personalized_english'
+    assert result['results'][0]['status'] == 'accepted'
+    assert result['executed_action'] is False
+
+
+def test_default_comparison_excludes_pilot_models(monkeypatch):
+    import sauti_ml.compare as cmp
+    called = []
+
+    def fake_infer(samples, profile_id, key):
+        called.append(key)
+        return {'status': 'unavailable', 'intent': None}
+
+    monkeypatch.setattr(cmp, 'infer_one', fake_infer)
+    cmp.compare_models(np.zeros(20, dtype=np.float32), str(uuid4()), 'all', 'en-KE')
+    assert called == ['prototype', 'english', 'swahili']

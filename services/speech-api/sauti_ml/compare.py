@@ -6,6 +6,7 @@ user, explicit per-request consent and SAUTI_COMPARE_ENABLED=true.
 from __future__ import annotations
 
 import gc
+import hmac
 import json
 import os
 import re
@@ -22,7 +23,11 @@ MODEL_IDS = {
     'prototype': 'facebook/wav2vec2-base',
     'english': 'cdli/whisper-large-v3_finetuned_kenyan_english_nonstandard_speech_v1.0',
     'swahili': 'cdli/whisper-large-v3_finetuned_kenyan_swahili_nonstandard_speech_v1.0',
+    'personalized_english': 'cdli/whisper-large-v3_finetuned_kenyan_english_nonstandard_speech_v1.0',
+    'personalized_swahili': 'cdli/whisper-large-v3_finetuned_kenyan_swahili_nonstandard_speech_v1.0',
 }
+BASE_MODEL_KEYS = ('prototype', 'english', 'swahili')
+PILOT_MODEL_KEYS = ('personalized_english', 'personalized_swahili')
 PHRASES = {
     'scroll down': 'SCROLL_DOWN', 'move down': 'SCROLL_DOWN',
     'scroll up': 'SCROLL_UP', 'move up': 'SCROLL_UP',
@@ -136,11 +141,19 @@ def whisper_prediction(samples, key: str) -> dict:
     intent = mapped_intent(transcript)
     return {'status': 'rejected' if intent == 'UNKNOWN' else 'accepted',
             'intent': intent, 'transcript': transcript,
-            'revision': data.get('revision'), 'device': data.get('device')}
+            'revision': data.get('revision'), 'device': data.get('device'),
+            'personalized': data.get('personalized') is True}
 
 def infer_one(samples, profile_id: str, key: str) -> dict:
     if key == 'prototype':
         return personal_prediction(samples, profile_id)
+    if key in PILOT_MODEL_KEYS:
+        pilot_profile = os.environ.get('SAUTI_PILOT_PROFILE_ID', '').strip()
+        if (os.environ.get('SAUTI_PERSONALIZED_COMPARE_ENABLED') != 'true'
+                or not pilot_profile
+                or not hmac.compare_digest(profile_id, pilot_profile)):
+            return {'status': 'unavailable', 'intent': None,
+                    'error': 'This personalized model is not enabled for this profile.'}
     return whisper_prediction(samples, key)
 
 
@@ -154,7 +167,8 @@ def compare_models(samples, profile_id: str, selection: str, language: str,
         Intent(expected_intent)
     if len(reference) > 280:
         raise ValueError('Reference transcript is too long.')
-    keys = list(MODEL_IDS) if selection == 'all' else [selection]
+    # The default comparison never includes a participant-specific model.
+    keys = list(BASE_MODEL_KEYS) if selection == 'all' else [selection]
     rows = []
     # Lock prevents simultaneous GPU model loads within this process.
     # Use a dedicated single-worker GPU service in the pilot.

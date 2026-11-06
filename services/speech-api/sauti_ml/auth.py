@@ -14,6 +14,7 @@ import hmac
 import json
 import os
 from pathlib import Path
+import sqlite3
 import threading
 import time
 from datetime import datetime, timezone
@@ -52,6 +53,8 @@ def token_digest(token: str) -> str:
 
 
 def verify_user(user_id: str, token: str) -> bool:
+    if is_revoked(user_id):
+        return False
     expected = accounts().get(user_id) or provisioned_accounts().get(user_id)
     actual = token_digest(token)
     if not expected or not actual:
@@ -172,8 +175,39 @@ def audit(event: str, outcome: str, user_id: str | None = None, profile_id: str 
     except Exception:
         print(line, flush=True)
 
-def provisioned_accounts() -> dict[str, str]:
-    """Read durable token digests only. Never store plaintext participant tokens."""
+def _database():
+    """Use a private SQLite database with WAL for concurrent provisioning."""
+    from .storage import private_root
+    root = private_root()
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path = root / 'participant_accounts.sqlite3'
+    connection = sqlite3.connect(path, timeout=30.0)
+    try:
+        connection.execute('PRAGMA journal_mode=WAL')
+        connection.execute('PRAGMA busy_timeout=30000')
+        connection.execute('''
+            CREATE TABLE IF NOT EXISTS accounts (
+                user_id TEXT PRIMARY KEY,
+                digest TEXT NOT NULL,
+                revoked INTEGER NOT NULL DEFAULT 0
+            )
+        ''')
+        connection.execute('''
+            CREATE TABLE IF NOT EXISTS revocations (
+                user_id TEXT PRIMARY KEY,
+                revoked_at TEXT NOT NULL
+            )
+        ''')
+        connection.commit()
+        path.chmod(0o600)
+        return connection
+    except Exception:
+        connection.close()
+        raise
+
+
+def _legacy_accounts() -> dict[str, str]:
+    """Read existing accounts for migration; never rewrite the legacy JSON."""
     from .storage import private_root
     try:
         path = private_root() / 'participant_accounts.json'
@@ -188,28 +222,76 @@ def provisioned_accounts() -> dict[str, str]:
         return {}
 
 
+def is_revoked(user_id: str) -> bool:
+    try:
+        with _database() as connection:
+            if connection.execute(
+                'SELECT 1 FROM revocations WHERE user_id = ?', (user_id,)
+            ).fetchone():
+                return True
+            row = connection.execute(
+                'SELECT revoked FROM accounts WHERE user_id = ?', (user_id,)
+            ).fetchone()
+            return bool(row and row[0])
+    except RuntimeError:
+        return False
+
+
+def provisioned_accounts() -> dict[str, str]:
+    """Read active SQLite account digests with read-only legacy compatibility."""
+    try:
+        with _database() as connection:
+            active = dict(connection.execute(
+                'SELECT user_id, digest FROM accounts WHERE revoked = 0 '
+                'AND user_id NOT IN (SELECT user_id FROM revocations)'
+            ).fetchall())
+            revoked = {row[0] for row in connection.execute(
+                'SELECT user_id FROM revocations'
+            ).fetchall()}
+        legacy = _legacy_accounts()
+        return {**{k: v for k, v in legacy.items() if k not in revoked}, **active}
+    except RuntimeError:
+        return {}
+
+
+def revoke_user(user_id: str) -> bool:
+    """Invalidate tokens for this account, including legacy and env accounts."""
+    from .storage import canonical_uuid
+    user_id = canonical_uuid(user_id)
+    with _database() as connection:
+        if connection.execute(
+            'SELECT 1 FROM revocations WHERE user_id = ?', (user_id,)
+        ).fetchone():
+            return False
+        stored = connection.execute(
+            'SELECT 1 FROM accounts WHERE user_id = ?', (user_id,)
+        ).fetchone()
+        if not stored and user_id not in _legacy_accounts() and user_id not in accounts():
+            return False
+        connection.execute(
+            'INSERT INTO revocations (user_id, revoked_at) VALUES (?, ?)',
+            (user_id, datetime.now(timezone.utc).isoformat()),
+        )
+        connection.execute(
+            'UPDATE accounts SET revoked = 1 WHERE user_id = ?', (user_id,)
+        )
+        connection.commit()
+    return True
+
+
 def create_participant_account() -> tuple[str, str]:
-    """Generate independent, unpredictable credentials on durable private storage."""
+    """Provision a random token digest in SQLite without whole-file rewriting."""
     import secrets
     from uuid import uuid4
-    from .storage import private_root
-    root = private_root()
-    root.mkdir(mode=0o700, parents=True, exist_ok=True)
-    path = root / 'participant_accounts.json'
-    with _lock:
-        existing = provisioned_accounts()
-        user_id = str(uuid4())
-        token = secrets.token_urlsafe(32)
-        digest = token_digest(token)
-        if not digest:
-            raise RuntimeError('Token pepper is not configured.')
-        existing[user_id] = digest
-        from .storage import write_private_bytes
-        # Account records contain only HMAC digests, but protect them with strict file permissions.
-        from tempfile import NamedTemporaryFile
-        with NamedTemporaryFile(mode='w', dir=root, prefix='.accounts-', delete=False, encoding='utf8') as temp:
-            json.dump(existing, temp)
-            temp_path = Path(temp.name)
-        temp_path.chmod(0o600)
-        os.replace(temp_path, path)
+    user_id = str(uuid4())
+    token = secrets.token_urlsafe(32)
+    digest = token_digest(token)
+    if not digest:
+        raise RuntimeError('Token pepper is not configured.')
+    with _database() as connection:
+        connection.execute(
+            'INSERT INTO accounts (user_id, digest, revoked) VALUES (?, ?, 0)',
+            (user_id, digest),
+        )
+        connection.commit()
     return user_id, token

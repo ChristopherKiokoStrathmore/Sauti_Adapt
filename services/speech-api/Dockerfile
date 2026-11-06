@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# Multi-platform python 3.11.18 slim index digest, recorded from Docker Hub on 2026-11-06.
+FROM python:3.11-slim@sha256:db20d8506e2f15b6db39b40b6015ca46bae855dec6dd326d462cfe79ae972893
 WORKDIR /app
 RUN useradd -u 10001 -m sauti
 ENV PIP_NO_CACHE_DIR=1 HF_HOME=/opt/hf-cache TOKENIZERS_PARALLELISM=false

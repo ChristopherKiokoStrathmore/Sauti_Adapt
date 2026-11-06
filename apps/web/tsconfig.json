@@ -29,7 +29,8 @@
       "@toolkit/*": [
         "../../vendor/ai4a11y-toolkit/*"
       ]
-    }
+    },
+    "allowImportingTsExtensions": true
   },
   "include": [
     "next-env.d.ts",

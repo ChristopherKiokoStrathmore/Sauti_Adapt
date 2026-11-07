@@ -511,3 +511,63 @@ def plan_browser_action(payload: AgentPlanRequest, user_id: str = Depends(requir
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {'plan': plan, 'requires_confirmation': True, 'executed_action': False}
+
+
+@app.post('/v1/extension/compare')
+async def compare_from_headway_extension(
+    audio: UploadFile = File(...),
+    profile_id: str = Form(...),
+    language: str = Form('en-KE'),
+    model: str = Form('english'),
+    compare_consent: bool = Form(False),
+    user_id: str = Depends(require_user),
+):
+    """Headway pilot audio comparison with personal authentication, not a shared key.
+
+    This extension route never executes a command. No recording is persisted by
+    this API. Only specifically selected English/Swahili GPU models are accepted.
+    """
+    if os.environ.get('SAUTI_COMPARE_ENABLED') != 'true':
+        raise HTTPException(status_code=403, detail='Cloud model comparison is disabled.')
+    if not compare_consent:
+        raise HTTPException(status_code=403, detail='Explicit audio comparison consent is required.')
+    if os.environ.get('SAUTI_REQUIRE_TERMS') == 'true' and not os.environ.get('SAUTI_PRIVACY_CONTACT', '').strip():
+        raise HTTPException(status_code=503, detail='Pilot privacy safeguards are not configured.')
+    if (model, language) not in (('english', 'en-KE'), ('swahili', 'sw-KE')):
+        raise HTTPException(status_code=422, detail='Choose an English or Kiswahili model with matching language.')
+    from .auth import _consume, _configured_limit
+    _consume('ext-comparison:' + user_id, _configured_limit('SAUTI_EXTENSION_COMPARE_RATE_LIMIT_PER_MINUTE', 6))
+    try:
+        profile_id = canonical_uuid(profile_id)
+        assert_owner(profile_id, user_id)
+        samples = await read_audio(audio)
+        from fastapi.concurrency import run_in_threadpool
+        from .compare import compare_models
+        return await run_in_threadpool(compare_models, samples, profile_id, model, language)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail='Speech service unavailable.') from exc
+
+
+@app.post('/v1/extension/agent/plan')
+def plan_for_headway_extension(payload: AgentPlanRequest, user_id: str = Depends(require_user)):
+    """Gemini never gets a server action tool; browser execution is local and confirmed.
+
+    Only the participant's personal token is accepted in the extension.
+    The Gemini API key stays solely in Railway environment variables.
+    """
+    if not 1 <= len(payload.instruction.strip()) <= 400 or len(payload.page_url) > 2048:
+        raise HTTPException(status_code=422, detail='Invalid agent instruction.')
+    from .auth import _consume, _configured_limit
+    _consume('agent:' + user_id, _configured_limit('SAUTI_AGENT_RATE_LIMIT_PER_MINUTE', 12))
+    from .agent import AgentPlanError, plan_action
+    try:
+        plan = plan_action(payload.instruction, payload.page_url)
+    except AgentPlanError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {'plan': plan, 'requires_confirmation': True, 'executed_action': False}

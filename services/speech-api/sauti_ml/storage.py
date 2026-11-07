@@ -56,8 +56,8 @@ def discard_clip_derivatives(folder: Path, raw: bytes) -> None:
     cache = folder / 'feature-cache'
     if not cache.is_dir() or not raw:
         return
-    model_id = os.environ.get('SAUTI_ENCODER_ID', 'facebook/wav2vec2-base').strip() or 'facebook/wav2vec2-base'
-    name = hashlib.sha256((model_id + '|').encode() + raw).hexdigest() + '.npy'
+    from .encoder_config import encoder_signature
+    name = hashlib.sha256((encoder_signature() + '|').encode() + raw).hexdigest() + '.npy'
     path = cache / name
     if path.is_file():
         path.unlink()

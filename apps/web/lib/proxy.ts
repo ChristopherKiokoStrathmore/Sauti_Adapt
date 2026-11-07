@@ -68,3 +68,35 @@ export async function proxyForm(request: NextRequest, endpoint: '/v1/recognize' 
     return Response.json({ error: 'Speech backend unavailable or request timed out.' }, { status: 502 });
   }
 }
+
+/** JSON proxy for the training endpoints. Same origin, credential and timeout rules as proxyForm. */
+export async function proxyJson(request: NextRequest, path: string, method: 'GET' | 'POST', body?: unknown): Promise<Response> {
+  if (!originAllowed(request)) return Response.json({ error: 'Origin is not allowed.' }, { status: 403 });
+  const creds = userCredentials(request);
+  if (!creds) return Response.json({ error: 'Personal access token required.' }, { status: 401 });
+  const base = process.env.SPEECH_API_URL;
+  const token = process.env.SPEECH_API_TOKEN;
+  if (!base || !token) return Response.json({ error: 'Speech backend not configured.' }, { status: 503 });
+  try {
+    const clientIp = forwardedClientIp(request.headers.get('x-forwarded-for'), request.headers.get('x-real-ip'));
+    const response = await fetch(new URL(path, base), {
+      method,
+      headers: {
+        'x-api-key': token,
+        'x-sauti-user': creds.user,
+        'x-sauti-user-token': creds.token,
+        ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
+        ...(clientIp ? { 'x-sauti-client-ip': clientIp } : {}),
+      },
+      body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(20000),
+    });
+    return new Response(await response.text(), {
+      status: response.status,
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+    });
+  } catch {
+    return Response.json({ error: 'Speech backend unavailable or request timed out.' }, { status: 502 });
+  }
+}

@@ -9,7 +9,7 @@ test('research dashboard is public and never returns credentials or participant 
   const response = await request.get('/api/admin/status');
   expect(response.status()).toBe(200);
   const status = await response.json();
-  expect(Object.keys(status).sort()).toEqual(['apiConfigured', 'comparisonEnabled', 'enrollmentEnabled', 'mode', 'online']);
+  expect(Object.keys(status).sort()).toEqual(['apiConfigured', 'comparisonEnabled', 'demoMode', 'enrollmentEnabled', 'mode', 'online']);
   expect(JSON.stringify(status)).not.toContain('test-secret');
   expect(JSON.stringify(status)).not.toContain('participant_accounts');
 });

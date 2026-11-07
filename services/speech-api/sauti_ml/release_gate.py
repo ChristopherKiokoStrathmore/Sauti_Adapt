@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import math
+import os
 from scipy.stats import beta
 
 
@@ -97,3 +98,36 @@ def assess_release(calibration_unknown: int, calibration_false_accepts: int,
                           "Uncertainty upper bound exceeds pilot limit. No actions.")
         return result("blocked", "Unknown false-accept upper bound exceeds limit.")
     return result("pilot-validation-passed", "Pilot evidence gate passed.", True)
+
+
+DEMO_STATUS = "demo-validation-passed"
+PILOT_STATUS = "pilot-validation-passed"
+
+
+def demo_mode() -> bool:
+    """Demo-grade mode for supervised demonstrations. Never a validated release."""
+    return os.environ.get("SAUTI_DEMO_MODE", "").strip().lower() == "true"
+
+
+def training_policy() -> GatePolicy:
+    if demo_mode():
+        return GatePolicy(
+            minimum_unknown_count=int(os.environ.get("SAUTI_DEMO_MIN_UNKNOWN", "10")),
+            maximum_upper_false_accept_rate=float(os.environ.get("SAUTI_DEMO_MAX_UNKNOWN_FAR_UPPER", "0.30")),
+        )
+    return GatePolicy(
+        minimum_unknown_count=int(os.environ.get("SAUTI_MIN_UNKNOWN_COUNT", "30")),
+        maximum_upper_false_accept_rate=float(os.environ.get("SAUTI_MAX_UNKNOWN_FAR_UPPER", "0.10")),
+        weak_evidence=os.environ.get("SAUTI_ALLOW_WEAK_EVIDENCE", "").lower() == "true",
+    )
+
+
+def recognition_requirements() -> tuple[int, float, frozenset]:
+    """Evidence the API demands at recognition time: (min unknown clips, max FAR upper bound, statuses)."""
+    if demo_mode():
+        return (max(5, int(os.environ.get("SAUTI_DEMO_MIN_UNKNOWN", "10"))),
+                min(0.40, float(os.environ.get("SAUTI_DEMO_MAX_UNKNOWN_FAR_UPPER", "0.30"))),
+                frozenset({PILOT_STATUS, DEMO_STATUS}))
+    return (max(30, int(os.environ.get("SAUTI_MIN_UNKNOWN_COUNT", "30"))),
+            min(0.10, float(os.environ.get("SAUTI_MAX_UNKNOWN_FAR_UPPER", "0.10"))),
+            frozenset({PILOT_STATUS}))

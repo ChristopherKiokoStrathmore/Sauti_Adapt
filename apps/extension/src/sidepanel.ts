@@ -1,3 +1,4 @@
+import { initBrowserAgent } from './agent';
 import { commandToUtterance, validRecognition } from '@sauti/shared';
 import { clampClipMs, startRecording, type RecordingSession } from '@sauti/shared/audio';
 import { isReadAloudUtterance, speakText, stopSpeaking } from '@sauti/shared/speak';
@@ -200,3 +201,5 @@ void loadSavedSettings();
 void renderEnabled();
 input('profile').addEventListener('change', () => { void chrome.storage.local.set({ profileId: input('profile').value.trim() }); });
 input('api').addEventListener('change', () => { void chrome.storage.local.set({ apiOrigin: input('api').value.trim() }); });
+
+initBrowserAgent();

@@ -71,3 +71,31 @@ def decode_wav(payload: bytes) -> np.ndarray:
 
 def encode_private_wav(samples: np.ndarray, path) -> None:
     sf.write(path, samples, SAMPLE_RATE, subtype='PCM_16', format='WAV')
+
+
+def trim_silence(samples: np.ndarray, *, frame_ms: int = 20, pad_ms: int = 120,
+                 min_keep_seconds: float = 0.3) -> np.ndarray:
+    """Cut leading and trailing silence so mean pooling is not dominated by it.
+
+    Energy based and deliberately conservative: if no clear speech region is found,
+    or the result would be shorter than min_keep_seconds, the input is returned.
+    """
+    frame = max(1, SAMPLE_RATE * frame_ms // 1000)
+    if samples.ndim != 1 or samples.size < frame * 4:
+        return samples
+    usable = samples[: samples.size // frame * frame].reshape(-1, frame)
+    rms = np.sqrt(np.mean(np.square(usable.astype(np.float64)), axis=1))
+    peak = float(rms.max())
+    if peak < MIN_RMS:
+        return samples
+    floor = float(np.percentile(rms, 10))
+    threshold = max(floor * 3.0, peak * 0.08, MIN_RMS)
+    active = np.flatnonzero(rms >= threshold)
+    if active.size == 0:
+        return samples
+    pad = SAMPLE_RATE * pad_ms // 1000
+    start = max(0, int(active[0]) * frame - pad)
+    end = min(samples.size, (int(active[-1]) + 1) * frame + pad)
+    if end - start < int(min_keep_seconds * SAMPLE_RATE):
+        return samples
+    return samples[start:end]

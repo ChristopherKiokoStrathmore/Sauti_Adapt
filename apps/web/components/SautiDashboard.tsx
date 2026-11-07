@@ -49,7 +49,9 @@ function labelFor(intent: Intent, language: Language) {
   return COMMAND_LABELS[intent][language === 'sw-KE' ? 'sw' : 'en'];
 }
 
-function sampleTarget(role: SessionRole, intent: Intent) {
+// Demo-grade mode pools every clip in one session: the server splits it into train, calibration and test.
+function sampleTarget(role: SessionRole, intent: Intent, demo = false) {
+  if (demo) return role === 'train' ? (intent === 'UNKNOWN' ? 10 : 5) : 0;
   if (intent === 'UNKNOWN') return role === 'train' ? 0 : 5;
   return role === 'train' ? 3 : 2;
 }
@@ -66,6 +68,8 @@ export function SautiDashboard() {
   const headway = useHeadway();
   const { phase: headwayPhase } = headway;
   const [step, setStep] = useState<Step>(1);
+  const [demoMode, setDemoMode] = useState(false);
+  const [train, setTrain] = useState<{ state: string; reason?: string; demo_grade?: boolean; test_known_count?: number; test_correct_accepted?: number } | null>(null);
   const [journeyVariant, setJourneyVariant] = useState<JourneyVariant>('c');
   const [speechServiceMode, setSpeechServiceMode] = useState<'mock' | 'prototype' | 'unavailable' | 'checking'>('checking');
   const [modelStatusChecked, setModelStatusChecked] = useState(false);
@@ -114,17 +118,47 @@ export function SautiDashboard() {
   liveCreds.current = { userId, token: userToken };
 
   const intentOptions = useMemo(() => [...chosen, 'UNKNOWN' as Intent], [chosen]);
-  const target = sampleTarget(sessionRole, intent);
+  const target = sampleTarget(sessionRole, intent, demoMode);
   const saved = counts[sampleKey(sessionRole, language, intent)] || 0;
   function roleProgress(role: SessionRole) {
-    const rows = chosen.map(command => ({ command, have: counts[sampleKey(role, language, command)] || 0, need: sampleTarget(role, command) }));
-    const unknownNeed = sampleTarget(role, 'UNKNOWN');
+    const rows = chosen.map(command => ({ command, have: counts[sampleKey(role, language, command)] || 0, need: sampleTarget(role, command, demoMode) }));
+    const unknownNeed = sampleTarget(role, 'UNKNOWN', demoMode);
     const unknownHave = counts[sampleKey(role, language, 'UNKNOWN')] || 0;
     const done = chosen.length >= 3 && rows.every(row => row.have >= row.need) && unknownHave >= unknownNeed;
     return { rows, unknownHave, unknownNeed, done };
   }
   const progress = { train: roleProgress('train'), calibration: roleProgress('calibration'), test: roleProgress('test') };
   const readyToTrain = progress.train.done && progress.calibration.done && progress.test.done;
+  // Demo-grade flow: once every command and the unrelated speech are recorded, move on to training.
+  useEffect(() => {
+    if (demoMode && step === 3 && progress.train.done) goTo(4);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoMode, step, progress.train.done]);
+  // Display label only: first name plus the start of the private ID. Computed in the browser, never stored or sent,
+  // and never a credential. The full profile ID stays the identifier the server checks.
+  const nameSlug = (displayName.trim().split(/\s+/)[0] || '').normalize('NFD').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 12);
+  const sautiId = profileId ? (nameSlug || 'SAUTI') + '-' + profileId.replace(/-/g, '').slice(0, 4).toUpperCase() : '';
+  const labEnv = profileId ? 'SAUTI_PERSONALIZED_COMPARE_ENABLED=true\nSAUTI_PILOT_PROFILE_ID=' + profileId : '';
+  const credHeaders = () => ({ 'x-sauti-user': userId.trim(), 'x-sauti-user-token': userToken });
+  async function pollTraining() {
+    for (let i = 0; i < 90; i++) {
+      const response = await fetch('/api/train?profile_id=' + encodeURIComponent(profileId), { headers: credHeaders(), cache: 'no-store' });
+      const body = await response.json();
+      if (!response.ok) { setTrain({ state: 'blocked', reason: body.detail || body.error || 'Could not read training status.' }); return; }
+      setTrain(body);
+      if (body.state !== 'running') return;
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+  async function startTraining() {
+    setTrain({ state: 'running' });
+    try {
+      const response = await fetch('/api/train', { method: 'POST', headers: { ...credHeaders(), 'content-type': 'application/json' }, body: JSON.stringify({ profile_id: profileId }), cache: 'no-store' });
+      const body = await response.json();
+      if (!response.ok) { setTrain({ state: 'blocked', reason: body.detail || body.error || 'Training could not start.' }); return; }
+      await pollTraining();
+    } catch { setTrain({ state: 'blocked', reason: 'Could not reach the speech service.' }); }
+  }
   const trainCommand = 'python -m sauti_ml.train --profile-id ' + profileId + ' --calibration-session ' + roleSessions.calibration + ' --test-session ' + roleSessions.test;
   const nextTone = TONES[saved % TONES.length];
   const ageNumber = Number(age);
@@ -170,6 +204,7 @@ export function SautiDashboard() {
       .then(response => response.json())
       .then(body => {
         setSpeechServiceMode(body.online && body.mode === 'prototype' ? 'prototype' : body.online ? 'mock' : 'unavailable');
+        setDemoMode(body.demoMode === true);
         setModelStatusChecked(true);
       })
       .catch(() => { setSpeechServiceMode('unavailable'); setModelStatusChecked(true); });
@@ -336,7 +371,7 @@ export function SautiDashboard() {
     if (mode === 'enroll') {
       const key = sampleKey(sessionRole, language, intent);
       setCounts(current => ({ ...current, [key]: (current[key] || 0) + 1 }));
-      if (sessionRole === 'train' && intent !== 'UNKNOWN' && target > 0 && saved + 1 >= target) {
+      if (!demoMode && sessionRole === 'train' && intent !== 'UNKNOWN' && target > 0 && saved + 1 >= target) {
         setStatus('All three voice examples for ' + labelFor(intent, language) + ' are saved. You can now try recognition. Your full personal model still needs separate training and evaluation.');
         goTo(4);
         requestAnimationFrame(() => document.getElementById('main-onboarding')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
@@ -637,6 +672,14 @@ export function SautiDashboard() {
           <div className="section-heading"><Icon tone="blue">✓</Icon><div><p className="step-kicker">Step 4 of 5</p><h2>{journeyVariant === 'c' ? 'Test with your voice' : 'Check recognition'}</h2></div></div>
           <p className="lead-copy">Explore how Sauti can respond. A personalized voice model must be trained and validated before it can recognize your commands.</p>
           {journeyVariant === 'c' && <div className="model-readiness" aria-label="Voice recognition readiness"><strong>{!modelStatusChecked ? 'Checking personalization status' : speechServiceMode === 'prototype' ? 'Experimental speech recognition available' : 'Personalizing your experience'}</strong><p>{speechServiceMode === 'prototype' ? 'The speech service can attempt recognition, but it may reject your voice until your profile is validated.' : 'Your voice samples have been saved. Training and validation must finish before your personal model can be marked ready. This status does not represent a timed progress estimate.'}</p></div>}
+          {speechServiceMode === 'prototype' && <div className="model-readiness" aria-live="polite">
+            <strong>{train?.state === 'ready' ? 'Your voice model is ready' : train?.state === 'running' ? 'Building your voice model…' : 'Build your voice model'}</strong>
+            <p>{train?.state === 'ready'
+              ? (train.demo_grade ? 'Demo-grade: checked on a few of your own clips. It is not a validated release.' : 'Checked on held-out clips of your own voice.') + (typeof train.test_known_count === 'number' ? ' Held-out command clips accepted correctly: ' + train.test_correct_accepted + ' of ' + train.test_known_count + '. This is not an accuracy claim.' : '')
+              : train?.state === 'blocked' ? 'Not activated. ' + (train.reason || 'More recordings are needed.') + ' Nothing will run until this passes.'
+              : 'This trains on the clips you recorded and checks it on some you held back. It takes about a minute.'}</p>
+            <button type="button" className="soft-button" disabled={train?.state === 'running' || !profileId} onClick={() => void startTraining()}>{train?.state === 'ready' ? 'Rebuild my model' : 'Build my voice model'}</button>
+          </div>}
           <RecordingButtons mode="recognize"/>
           {prediction && <div className={'prediction-card ' + prediction.status}><span className="prediction-icon">{prediction.status === 'accepted' ? '✓' : '!'}</span><div><strong>{prediction.status === 'accepted' ? labelFor(prediction.intent, language) : 'Command rejected safely'}</strong><small>{prediction.reason || 'Accepted by the active personal model.'}</small></div></div>}
           <div className="toolkit-check">
@@ -658,6 +701,8 @@ export function SautiDashboard() {
           <h2>Your voice, your choice</h2>
           <div className="privacy-summary"><Icon>▰</Icon><p>Private recordings linked to your profile</p></div>
           <div className="field compact"><label htmlFor="profile">Private profile ID</label><div className="copy-field"><input id="profile" readOnly value={profileId}/><button type="button" aria-label="Copy profile ID" onClick={() => void navigator.clipboard.writeText(profileId).then(() => setStatus('Profile ID copied.')).catch(() => setStatus('Copy was unavailable.'))}>⧉</button></div></div>
+          <div className="field compact"><label htmlFor="sauti-id">Sauti ID (for your name)</label><div className="copy-field"><input id="sauti-id" readOnly value={sautiId}/><button type="button" aria-label="Copy Sauti ID" onClick={() => void navigator.clipboard.writeText(sautiId).then(() => setStatus('Sauti ID copied.')).catch(() => setStatus('Copy was unavailable.'))}>⧉</button></div></div>
+          <details className="advanced-settings"><summary>Model lab settings (operator only)</summary><p className="privacy-note">Paste these two lines into the speech service variables, only for this person and only after they agree to the external model lab. Keep the bearer token out of this page.</p><pre aria-label="Model lab settings">{labEnv}</pre><button type="button" className="soft-button" disabled={!labEnv} onClick={() => void navigator.clipboard.writeText(labEnv).then(() => setStatus('Model lab settings copied.')).catch(() => setStatus('Copy was unavailable.'))}>Copy settings</button></details>
           <p className="privacy-note">{improvementConsent ? 'Approved recordings may support the next validated profile.' : 'Future model improvement is off until you choose it.'}</p>
           <p className="validation-note">New model versions must be tested before activation.</p>
           <label className="delete-check"><input type="checkbox" checked={deleteArmed} onChange={event => setDeleteArmed(event.target.checked)}/> Confirm profile deletion</label>

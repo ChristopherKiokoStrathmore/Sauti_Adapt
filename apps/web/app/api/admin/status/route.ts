@@ -23,6 +23,7 @@ export async function GET() {
       online: health.status === 'ok',
       mode: typeof health.mode === 'string' ? health.mode : 'unknown',
       enrollmentEnabled: health.enrollment_enabled === true,
+      demoMode: health.demo_mode === true,
       comparisonEnabled: readiness.comparison_enabled === true,
       apiConfigured: true,
     }, { headers: { 'cache-control': 'no-store' } });

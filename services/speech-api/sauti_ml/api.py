@@ -7,10 +7,12 @@ from contextlib import asynccontextmanager
 from functools import lru_cache
 from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from .audio import AudioValidationError, decode_wav
 from .auth import audit, create_participant_account, fail_pair_locked, note_auth_failure, note_ip_attempt, origin_allowed, trusted_client_ip, verify_user
 from .contracts import Intent, Language, Recognition, reject
 from .prototype import PrototypeModel
+from .release_gate import demo_mode, recognition_requirements
 from .storage import assert_owner, canonical_uuid, delete_profile, delete_recording, profile_dir, purge_expired, purge_expired_profiles, store_enrollment
 
 _retention_stop = threading.Event()
@@ -98,7 +100,32 @@ async def read_audio(audio: UploadFile):
 
 @app.get('/health')
 def health():
-    return {'status': 'ok', 'mode': os.environ.get('SPEECH_MODE', 'mock'), 'enrollment_enabled': os.environ.get('ALLOW_ENROLLMENT') == 'true'}
+    return {'status': 'ok', 'mode': os.environ.get('SPEECH_MODE', 'mock'), 'enrollment_enabled': os.environ.get('ALLOW_ENROLLMENT') == 'true', 'demo_mode': demo_mode()}
+
+
+_pilot_issued: set[str] = set()
+_pilot_lock = threading.Lock()
+
+
+def _issue_profile_id() -> str:
+    """A new profile ID. The first account to be created gets the configured pilot profile.
+
+    Only while that profile is unclaimed and has not already been handed out by this process.
+    Every later account gets a random ID, so one person's private adapter is never shared.
+    Unset SAUTI_PILOT_PROFILE_ID once the pilot participant has onboarded.
+    """
+    from uuid import uuid4
+    pilot = os.environ.get('SAUTI_PILOT_PROFILE_ID', '').strip()
+    if pilot:
+        try:
+            pilot = canonical_uuid(pilot)
+            with _pilot_lock:
+                if pilot not in _pilot_issued and not (profile_dir(pilot) / 'owner').exists():
+                    _pilot_issued.add(pilot)
+                    return pilot
+        except (ValueError, RuntimeError):
+            pass
+    return str(uuid4())
 
 
 @app.post('/v1/participants', dependencies=[Depends(require_token)])
@@ -127,7 +154,7 @@ def create_participant(
         raise HTTPException(status_code=503, detail='Account storage is not available.') from exc
     from uuid import uuid4
     audit('participant', 'created', user_id)
-    return JSONResponse({'user_id': user_id, 'token': token, 'profile_id': str(uuid4())}, headers={'cache-control': 'no-store'})
+    return JSONResponse({'user_id': user_id, 'token': token, 'profile_id': _issue_profile_id()}, headers={'cache-control': 'no-store'})
 
 
 @app.get('/v1/readiness', dependencies=[Depends(require_token)])
@@ -159,8 +186,12 @@ def readiness():
         'status': 'configured' if ready else 'configuration_incomplete',
         'checks': checks,
         'speech_mode': os.environ.get('SPEECH_MODE', 'mock'),
+        'demo_mode': demo_mode(),
+        'encoder_signature': __import__('sauti_ml.encoder_config', fromlist=['x']).encoder_signature(),
         'enrollment_enabled': os.environ.get('ALLOW_ENROLLMENT') == 'true',
         'comparison_enabled': os.environ.get('SAUTI_COMPARE_ENABLED') == 'true',
+        'modal_gpu_configured': bool(os.environ.get('SAUTI_MODAL_URL', '').strip() and os.environ.get('SAUTI_MODAL_BEARER_TOKEN', '').strip()),
+        'personalized_comparison_enabled': os.environ.get('SAUTI_PERSONALIZED_COMPARE_ENABLED') == 'true',
         'note': 'Configuration only; run a consented test recording to verify durable storage.',
     }
 
@@ -320,9 +351,8 @@ async def recognize(
         gate = release.get('release_evidence')
         if not isinstance(gate, dict):
             raise ValueError('Missing conservative command evidence gate.')
-        min_negative = max(30, int(os.environ.get('SAUTI_MIN_UNKNOWN_COUNT', '30')))
-        max_upper = min(0.10, float(os.environ.get('SAUTI_MAX_UNKNOWN_FAR_UPPER', '0.10')))
-        if (gate.get('status') != 'pilot-validation-passed'
+        min_negative, max_upper, allowed = recognition_requirements()
+        if (gate.get('status') not in allowed
                 or gate.get('executable') is not True
                 or gate.get('unknown_total', 0) < min_negative
                 or gate.get('unknown_false_accepts') != 0
@@ -330,7 +360,7 @@ async def recognize(
                 or not 0 <= gate['unknown_false_accept_upper_bound'] <= max_upper):
             raise ValueError('Insufficient unknown speech evidence to authorise commands.')
         expected = model.content_version()
-        if (release.get('status') != 'pilot-validation-passed'
+        if (release.get('status') not in allowed
                 or release.get('model_version') != expected
                 or model.version != expected):
             raise ValueError('Model was not released by training.')
@@ -344,3 +374,92 @@ async def recognize(
         return reject('UNAVAILABLE_OR_INVALID_MODEL')
     audit('recognize', result.status, user_id, profile_id)
     return result
+
+
+# ---------------------------------------------------------------- training
+
+class TrainRequest(BaseModel):
+    profile_id: str
+
+
+_train_jobs: dict[str, dict] = {}
+_train_lock = threading.Lock()
+
+
+def _summarise_release(profile_id: str) -> dict | None:
+    path = profile_dir(profile_id) / 'evaluation.json'
+    if not path.is_file():
+        return None
+    try:
+        report = json.loads(path.read_text(encoding='utf8'))
+        test = report.get('metrics', {}).get('test', {})
+        evidence = report.get('release_evidence', {})
+        return {
+            'state': 'ready' if evidence.get('executable') is True else 'blocked',
+            'status': report.get('status'), 'demo_grade': bool(report.get('demo_grade')),
+            'unknown_total': evidence.get('unknown_total'),
+            'unknown_false_accepts': evidence.get('unknown_false_accepts'),
+            'test_known_count': test.get('known_count'), 'test_correct_accepted': test.get('correct_accepted'),
+            'evaluated_at': report.get('evaluated_at'), 'accuracy_claim': False,
+        }
+    except (ValueError, OSError):
+        return None
+
+
+def _train_worker(profile_id: str, user_id: str) -> None:
+    from . import train
+    try:
+        train.run_auto(profile_id, encoder=model_encoder())
+        outcome = _summarise_release(profile_id) or {'state': 'blocked', 'reason': 'No release record was written.'}
+        audit('train', outcome.get('state', 'blocked'), user_id, profile_id)
+    except (ValueError, RuntimeError) as exc:
+        # These messages name commands and counts only, never audio or tokens.
+        outcome = {'state': 'blocked', 'reason': str(exc)[:400]}
+        audit('train', 'blocked', user_id, profile_id)
+    except Exception:
+        outcome = {'state': 'blocked', 'reason': 'Training failed on the server. Nothing was activated.'}
+        audit('train', 'error', user_id, profile_id)
+    with _train_lock:
+        _train_jobs[profile_id] = outcome
+
+
+@app.post('/v1/train', status_code=202, dependencies=[Depends(require_token)])
+def start_training(request: TrainRequest, user_id: str = Depends(require_user)):
+    """Train and validate this person's prototype from clips already enrolled. Runs in the background."""
+    if os.environ.get('SPEECH_MODE', 'mock') != 'prototype':
+        raise HTTPException(status_code=409, detail='Speech service is in mock mode, so no model can be trained.')
+    try:
+        profile_id = canonical_uuid(request.profile_id)
+        assert_owner(profile_id, user_id)
+    except PermissionError as exc:
+        audit('train', 'forbidden', user_id, request.profile_id)
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    with _train_lock:
+        if _train_jobs.get(profile_id, {}).get('state') == 'running':
+            return {'state': 'running'}
+        _train_jobs[profile_id] = {'state': 'running'}
+    threading.Thread(target=_train_worker, args=(profile_id, user_id), daemon=True).start()
+    audit('train', 'started', user_id, profile_id)
+    return {'state': 'running'}
+
+
+@app.get('/v1/train/{profile_id}', dependencies=[Depends(require_token)])
+def training_status(profile_id: str, user_id: str = Depends(require_user)):
+    try:
+        profile_id = canonical_uuid(profile_id)
+        assert_owner(profile_id, user_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    with _train_lock:
+        job = _train_jobs.get(profile_id)
+    if job and job.get('state') == 'running':
+        return job
+    # A finished job, or a model released in an earlier process, is described by its release record.
+    released = _summarise_release(profile_id)
+    if job and job.get('state') == 'blocked' and (released is None or released.get('state') != 'ready'):
+        return job
+    return released or {'state': 'idle'}

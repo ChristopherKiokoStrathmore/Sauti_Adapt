@@ -5,7 +5,7 @@ import { loadVoiceProfile } from '../voice/store.ts';
 import { getLibrarian } from '../voice/toolkit-host.ts';
 
 type Page = { tabId: number; url: string; origin: string; nonce: string; user: string; token: string };
-const API = 'https://sauti-adapt.vercel.app';
+const API = 'https://speech-api-production-038d.up.railway.app';
 const KEY = 'headwayAgentOrigins';
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const value = (id: string): string => el<HTMLInputElement>(id).value.trim();
@@ -47,7 +47,7 @@ async function propose(text: string, page: Page) {
   clear();
   if (!text || text.length > 400) throw new Error('Provide a browser instruction under 400 characters.');
   say('Gemini is planning one safe action…');
-  const response = await fetch(API + '/api/agent/plan', {
+  const response = await fetch(API + '/v1/extension/agent/plan', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-sauti-user': page.user, 'x-sauti-user-token': page.token },
     body: JSON.stringify({ instruction: text, page_url: page.url }),
@@ -72,7 +72,7 @@ async function voiceTranscript(audio: Blob, page: Page): Promise<string> {
   form.append('model', model);
   form.append('language', model === 'swahili' ? 'sw-KE' : 'en-KE');
   form.append('compare_consent', 'true');
-  const response = await fetch(API + '/api/compare', {
+  const response = await fetch(API + '/v1/extension/compare', {
     method: 'POST', headers: { 'x-sauti-user': page.user, 'x-sauti-user-token': page.token }, body: form,
   });
   const result = await response.json();

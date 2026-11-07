@@ -1855,3 +1855,14 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
 });
 
 export {};
+
+// Voice: her key (manifest "commands", default Alt+Shift+H) works from any page. The
+// worker only relays it; whichever Headway page is listening (onboarding today,
+// the listening panel later) decides what it means.
+chrome.commands.onCommand.addListener((command) => {
+  if (command === 'voice-trigger') {
+    chrome.runtime.sendMessage({ type: 'HEADWAY_VOICE_TRIGGER' }).catch(() => {
+      // No Headway page is open to hear it.
+    });
+  }
+});

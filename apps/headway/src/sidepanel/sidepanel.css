@@ -237,3 +237,10 @@ kbd {
 }
 
 .footnote { margin: 0; font-size: 12px; color: var(--faint); line-height: 1.5; }
+
+/* Your voice */
+.voice-lines { margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.voice-lines li { padding: 10px 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.voice-lines li:first-child { border-top: 0; }
+.voice-lines b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.voice-manage { display: grid; gap: 8px; }

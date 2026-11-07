@@ -1,10 +1,14 @@
 // Headway side panel: settings and summary display only. No AI logic lives here;
 // the worker writes summaries and this view renders what it is sent.
 import type { ApiChoice, ApiStatus, ApiStatusResponse, DisplayMode, RuntimeMessage } from '../shared/types';
-import { SUMMARIES_ENABLED } from '../shared/features';
+import { HEAD_POINTER_ENABLED, SUMMARIES_ENABLED } from '../shared/features';
 import { asSteadiness, clampSpeed } from '../gaze/motion';
+import { initVoicePanel } from './voice-panel.ts';
 
 // Summaries are switched off for now (shared/features.ts): hide everything that belongs to them.
+if (!HEAD_POINTER_ENABLED) {
+  for (const el of document.querySelectorAll<HTMLElement>('[data-feature="head-pointer"]')) el.hidden = true;
+}
 if (!SUMMARIES_ENABLED) {
   for (const el of document.querySelectorAll<HTMLElement>('[data-feature="summaries"]')) el.hidden = true;
 }
@@ -347,6 +351,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 void (async () => {
+  initVoicePanel();
   await loadSettings();
   bindEvents();
   showOutput('empty');

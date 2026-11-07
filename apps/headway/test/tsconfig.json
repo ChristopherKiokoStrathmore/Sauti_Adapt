@@ -1,5 +1,5 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": { "types": ["node", "chrome"] },
-  "include": ["./**/*.ts", "../src/shared/**/*.ts", "../src/types/**/*.d.ts"]
+  "include": ["./**/*.ts", "../src/shared/**/*.ts", "../src/voice/**/*.ts", "../src/types/**/*.d.ts"]
 }

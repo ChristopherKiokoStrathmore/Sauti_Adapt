@@ -21,13 +21,30 @@
       <svg class="brand-mark" aria-hidden="true"><use href="#hw-mark"/></svg>
       <span class="brand-word">headway<span class="brand-stop" aria-hidden="true">.</span></span>
     </p>
-    <p class="top-status" id="top-status" aria-live="polite"><span class="glyph" aria-hidden="true">○</span><span class="word">Off</span></p>
+    <p class="top-status" id="top-status" aria-live="polite" data-feature="head-pointer"><span class="glyph" aria-hidden="true">○</span><span class="word">Off</span></p>
   </header>
 
   <main>
-    <!-- 01 Pointer -->
-    <section class="panel" aria-labelledby="pointer-title">
-      <header class="panel-head"><span class="panel-index">01</span><h2 id="pointer-title">Pointer</h2></header>
+    <!-- 01 Voice -->
+    <section class="panel" aria-labelledby="voice-title">
+      <header class="panel-head"><span class="panel-index">01</span><h2 id="voice-title">Your voice</h2></header>
+      <div class="panel-body">
+        <p class="status" id="voice-status" aria-live="polite">
+          <span class="glyph" aria-hidden="true">○</span><span class="word" id="voice-status-text">Not set up yet</span>
+        </p>
+        <ul class="voice-lines" id="voice-lines" hidden></ul>
+        <button type="button" id="voice-calibrate-btn" class="btn btn-primary">Teach Headway my voice</button>
+        <p class="hint" id="voice-hint">Choose how you start, your commands and how Headway answers. It learns your pauses, pace and voice as you go.</p>
+        <div class="voice-manage" id="voice-manage" hidden>
+          <button type="button" id="voice-forget-btn" class="btn btn-secondary">Forget my voice profile</button>
+          <button type="button" id="voice-delete-takes-btn" class="btn btn-secondary">Delete my recordings</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 Pointer -->
+    <section class="panel" aria-labelledby="pointer-title" data-feature="head-pointer">
+      <header class="panel-head"><span class="panel-index">02</span><h2 id="pointer-title">Pointer</h2></header>
       <div class="panel-body">
         <label class="switch-row">
           <span class="switch-text">
@@ -75,8 +92,8 @@
     </section>
 
     <!-- 02 Click -->
-    <section class="panel" aria-labelledby="click-title">
-      <header class="panel-head"><span class="panel-index">02</span><h2 id="click-title">Click</h2></header>
+    <section class="panel" aria-labelledby="click-title" data-feature="head-pointer">
+      <header class="panel-head"><span class="panel-index">03</span><h2 id="click-title">Click</h2></header>
       <div class="panel-body">
         <label class="switch-row">
           <span class="switch-text">
@@ -102,7 +119,7 @@
 
     <!-- 03 Summaries -->
     <section class="panel" aria-labelledby="summary-title" data-feature="summaries">
-      <header class="panel-head"><span class="panel-index">03</span><h2 id="summary-title">Summaries</h2></header>
+      <header class="panel-head"><span class="panel-index">04</span><h2 id="summary-title">Summaries</h2></header>
       <div class="panel-body">
         <fieldset class="field">
           <legend class="field-label">Show summaries in</legend>
@@ -152,7 +169,7 @@
       </article>
     </section>
 
-    <details class="shortcuts">
+    <details class="shortcuts" data-feature="head-pointer">
       <summary>Keyboard shortcuts</summary>
       <dl>
         <div><dt><kbd>Alt</kbd><kbd>H</kbd></dt><dd>Calibrate head pointer</dd></div>
@@ -165,7 +182,7 @@
       </dl>
     </details>
 
-    <p class="footnote">Head tracking runs in your browser with Human.js.<span data-feature="summaries"> Summaries are written on this device by Chrome’s built-in Gemini Nano; no page text is sent to an AI service.</span></p>
+    <p class="footnote"><span data-feature="head-pointer">Head tracking runs in your browser with Human.js.</span><span data-feature="summaries"> Summaries are written on this device by Chrome’s built-in Gemini Nano; no page text is sent to an AI service.</span></p>
   </main>
 
   <script src="sidepanel.js"></script>

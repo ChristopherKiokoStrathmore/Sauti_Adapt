@@ -199,7 +199,9 @@ class CDLIWhisper:
 
         if model_key not in ALL_KEYS:
             raise ValueError("Unknown CDLI checkpoint.")
-        if not audio_bytes or len(audio_bytes) > MAX_BYTES or len(audio_bytes) % 4:
+        # float32 samples are 4 bytes; drop a trailing partial sample (1-3 bytes).
+        audio_bytes = audio_bytes[: len(audio_bytes) - len(audio_bytes) % 4]
+        if not audio_bytes or len(audio_bytes) > MAX_BYTES:
             raise ValueError("Invalid audio payload.")
         audio = np.frombuffer(audio_bytes, dtype="<f4")
         if not (MIN_SAMPLES <= audio.size <= MAX_SAMPLES) or not np.isfinite(audio).all():
@@ -272,7 +274,10 @@ async def transcribe(request: Request):
     if request.headers.get("content-type", "").split(";")[0] != "application/octet-stream":
         raise HTTPException(status_code=415, detail="Expected 16 kHz float32 mono audio.")
     audio = await request.body()
-    if len(audio) > MAX_BYTES or not audio or len(audio) % 4:
+    # float32 samples are 4 bytes; drop a trailing partial sample (1-3 bytes)
+    # instead of rejecting the request.
+    audio = audio[: len(audio) - len(audio) % 4]
+    if len(audio) > MAX_BYTES or not audio:
         raise HTTPException(status_code=413, detail="Invalid audio size.")
     # One container pool serves every model key, so switching between base and
     # personalized models never triggers another cold start. Comparison

@@ -148,7 +148,7 @@ curl -sS -L --max-time 300 "$URL" \
 |---|---|
 | 200 | Transcribed (silence gives an empty transcript) |
 | 401 | Missing or wrong bearer token |
-| 413 | Audio empty, over 120 s, or not float32 |
+| 413 | Audio empty or over 120 s (a trailing partial float32 sample of 1-3 bytes is dropped, not rejected) |
 | 415 | `Content-Type` is not `application/octet-stream` |
 | 422 | Unknown `X-Sauti-Model` |
 | 503 | Personalized adapter not installed |

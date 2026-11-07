@@ -5,7 +5,17 @@ import { loadVoiceProfile } from '../voice/store.ts';
 import { getLibrarian } from '../voice/toolkit-host.ts';
 
 type Page = { tabId: number; url: string; origin: string; nonce: string; user: string; token: string };
-const API = 'https://speech-api-production-038d.up.railway.app';
+// The speech API. Local single-user pilot: the FastAPI server on this laptop.
+// Override with chrome.storage.local.headwayApiBase (e.g. the Railway URL).
+const RAILWAY_API = 'https://speech-api-production-038d.up.railway.app';
+let API = 'http://127.0.0.1:8000';
+// Set from GET /v1/extension/config: on a local single-user server no personal
+// credentials are sent, and the server's fixed pilot profile is used.
+let singleUser = false;
+let localProfile = '';
+function authHeaders(page: Page): Record<string, string> {
+  return singleUser ? {} : { 'x-sauti-user': page.user, 'x-sauti-user-token': page.token };
+}
 const KEY = 'headwayAgentOrigins';
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const value = (id: string): string => el<HTMLInputElement>(id).value.trim();
@@ -14,6 +24,7 @@ let pending: { page: Page; plan: BrowserPlan } | null = null;
 let recording: RecordingSession | null = null;
 let recordedPage: Page | null = null;
 let busy = false;
+let lastModelId = '';
 function clear() { pending = null; el<HTMLButtonElement>('agent-confirm').disabled = true; }
 
 async function granted(): Promise<string[]> {
@@ -30,7 +41,7 @@ async function capture(): Promise<Page> {
   const origin = new URL(tab.url).origin;
   if (!(await granted()).includes(origin)) throw new Error('Enable this website for Headway Agent first.');
   const user = value('agent-user'), token = value('agent-token');
-  if (!user || !token) throw new Error('Enter the personal user ID and access token.');
+  if (!singleUser && (!user || !token)) throw new Error('Enter the personal user ID and access token.');
   const id = await identity(tab.id);
   if (!id?.ok || id.url !== tab.url || typeof id.nonce !== 'string') throw new Error('Page identity changed.');
   return { tabId: tab.id, url: tab.url, origin, nonce: id.nonce, user, token };
@@ -49,7 +60,7 @@ async function propose(text: string, page: Page) {
   say('Gemini is planning one safe action…');
   const response = await fetch(API + '/v1/extension/agent/plan', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-sauti-user': page.user, 'x-sauti-user-token': page.token },
+    headers: { 'content-type': 'application/json', ...authHeaders(page) },
     body: JSON.stringify({ instruction: text, page_url: page.url }),
   });
   const data = await response.json();
@@ -64,7 +75,7 @@ async function propose(text: string, page: Page) {
 }
 async function voiceTranscript(audio: Blob, page: Page): Promise<string> {
   const model = el<HTMLSelectElement>('agent-model').value;
-  const profile = value('agent-profile');
+  const profile = singleUser ? localProfile : value('agent-profile');
   if (!profile) throw new Error('Enter the participant profile ID.');
   const form = new FormData();
   form.append('audio', audio, 'headway-voice.wav');
@@ -73,14 +84,18 @@ async function voiceTranscript(audio: Blob, page: Page): Promise<string> {
   form.append('language', model === 'swahili' ? 'sw-KE' : 'en-KE');
   form.append('compare_consent', 'true');
   const response = await fetch(API + '/v1/extension/compare', {
-    method: 'POST', headers: { 'x-sauti-user': page.user, 'x-sauti-user-token': page.token }, body: form,
+    method: 'POST', headers: authHeaders(page), body: form,
   });
   const result = await response.json();
   if (!response.ok) throw new Error(String(result.detail || result.error || 'Speech comparison unavailable.'));
   const row = result.results?.find((r: {model?: string}) => r.model === model);
-  if (row?.model_id !== 'sauti-adapt-finetuned-model/' + model) {
-    throw new Error('Fine tuned speech model is not verified on Modal GPU.');
+  // Accept the fine-tuned upload or the CDLI model the endpoint currently serves,
+  // and always say which one answered.
+  const modelId = typeof row?.model_id === 'string' ? row.model_id : '';
+  if (modelId !== 'sauti-adapt-finetuned-model/' + model && !modelId.startsWith('cdli/')) {
+    throw new Error('The speech model that answered could not be identified.');
   }
+  lastModelId = modelId;
   if (typeof row.transcript !== 'string' || !row.transcript.trim()) throw new Error('No speech transcript recognized.');
   return row.transcript.trim();
 }
@@ -93,6 +108,7 @@ async function finishVoice() {
   try {
     say('Transcribing through the private speech model…');
     const text = await voiceTranscript(await session.stop(), page);
+    say('Heard (' + lastModelId + '): ' + text);
     if (!(await samePage(page))) throw new Error('Page changed during transcription.');
     el<HTMLTextAreaElement>('agent-instruction').value = text;
     await propose(text, page);
@@ -123,7 +139,30 @@ async function execute() {
     speechSynthesis.cancel(); speechSynthesis.speak(phrase);
   }
 }
+async function connectServer(): Promise<void> {
+  const stored = (await chrome.storage.local.get('headwayApiBase')).headwayApiBase;
+  if (typeof stored === 'string' && /^https?:\/\//.test(stored)) API = stored.replace(/\/$/, '');
+  try {
+    const res = await fetch(API + '/v1/extension/config', { signal: AbortSignal.timeout(3000) });
+    const cfg = await res.json() as { single_user?: boolean; profile_id?: string | null };
+    singleUser = res.ok && cfg.single_user === true;
+    localProfile = singleUser && typeof cfg.profile_id === 'string' ? cfg.profile_id : '';
+  } catch {
+    singleUser = false;
+  }
+  for (const id of ['agent-user', 'agent-token', 'agent-profile']) {
+    const input = document.getElementById(id);
+    const label = document.querySelector('label[for="' + id + '"]');
+    if (input) (input as HTMLElement).hidden = singleUser;
+    if (label) (label as HTMLElement).hidden = singleUser;
+  }
+  say(singleUser ? 'Connected to the speech server on this laptop. Enable your website first.'
+    : API === RAILWAY_API ? 'Using the Railway server. Enter your personal ID and token.'
+    : 'Speech server not reachable at ' + API + '.');
+}
+
 export function initHeadwayAgent(): void {
+  void connectServer();
   el('agent-enable').addEventListener('click', () => { void (async () => {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -157,11 +196,13 @@ export function initHeadwayAgent(): void {
     void (async () => {
       try {
         if (!el<HTMLInputElement>('agent-consent').checked) throw new Error('Give voice and transcript processing consent first.');
-        if (!value('agent-profile')) throw new Error('Enter the participant profile ID.');
+        if (!singleUser && !value('agent-profile')) throw new Error('Enter the participant profile ID.');
         const page = await capture();
         clear();
         const profile = await loadVoiceProfile(await getLibrarian()).catch(() => null);
-        const milliseconds = Math.min(profile?.listening?.maxUtteranceMs || 5000, 5000);
+        // Her own longest utterance from voice onboarding; never a short fixed cut-off.
+        // The speech API accepts up to 30 s (SAUTI_MAX_CLIP_SECONDS); she can always press Stop sooner.
+        const milliseconds = Math.min(profile?.listening?.maxUtteranceMs || 30000, 30000);
         recordedPage = page;
         recording = await startRecording({ maxDurationMs: milliseconds, onAutoStop: () => void finishVoice() });
         el<HTMLButtonElement>('agent-record').textContent = 'Stop and transcribe';

@@ -90,12 +90,28 @@ def require_token(x_api_key: str | None = Header(default=None)):
         raise HTTPException(status_code=401, detail='Authentication failed.')
 
 
+# Local single-user pilot (one participant, on one laptop). Off unless
+# SAUTI_LOCAL_SINGLE_USER=true, and even then only for requests whose direct
+# peer is this machine, so a deployed server (Railway) keeps personal-token auth.
+LOCAL_USER_ID = '00000000-0000-4000-8000-000000000001'
+LOCAL_PROFILE_ID = '00000000-0000-4000-8000-000000000002'
+
+
+def local_single_user(request: Request) -> bool:
+    if os.environ.get('SAUTI_LOCAL_SINGLE_USER') != 'true':
+        return False
+    peer = request.client.host if request.client else ''
+    return peer in ('127.0.0.1', '::1')
+
+
 def require_user(
     request: Request,
     x_sauti_user: str | None = Header(default=None),
     x_sauti_user_token: str | None = Header(default=None),
 ) -> str:
     origin_allowed(request)
+    if local_single_user(request):
+        return LOCAL_USER_ID
     claimed = (x_sauti_user or '').strip()
     token = x_sauti_user_token or ''
     peer = trusted_client_ip(request)
@@ -511,6 +527,14 @@ def plan_browser_action(payload: AgentPlanRequest, user_id: str = Depends(requir
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {'plan': plan, 'requires_confirmation': True, 'executed_action': False}
+
+
+@app.get('/v1/extension/config')
+def headway_extension_config(request: Request):
+    """Tells the extension whether it must send personal credentials."""
+    origin_allowed(request)
+    single = local_single_user(request)
+    return {'single_user': single, 'profile_id': LOCAL_PROFILE_ID if single else None}
 
 
 @app.post('/v1/extension/compare')

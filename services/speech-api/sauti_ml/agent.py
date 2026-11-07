@@ -98,9 +98,16 @@ def plan_action(instruction: str, page_url: str = "") -> dict[str, str]:
         "contents": [{"role": "user", "parts": [{"text": json.dumps({
             "instruction": instruction.strip(), "current_page_url": context
         })}]}],
-        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": 320},
+        # Thinking models spend part of maxOutputTokens on reasoning before the JSON;
+        # 320 left gemini-3.8-flash cut off mid-URL. The reply itself stays tiny.
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1, "maxOutputTokens": 2048},
     }
-    url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent"
+    # Google's API by default; GEMINI_API_BASE points at a Gemini-compatible proxy
+    # such as the AI4A11y team proxy (https://ai4a11y.lovable.app/api/public/gemini).
+    base = os.environ.get("GEMINI_API_BASE", "https://generativelanguage.googleapis.com").strip().rstrip("/")
+    if not base.startswith("https://"):
+        raise AgentPlanError("Invalid Gemini endpoint configuration.")
+    url = base + "/v1beta/models/" + model + ":generateContent"
     request = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),

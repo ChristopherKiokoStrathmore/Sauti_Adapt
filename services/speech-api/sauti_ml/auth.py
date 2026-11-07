@@ -151,6 +151,7 @@ EXTENSION_ORIGIN_PATTERN = re.compile(r"^chrome-extension://[a-p]{32}$")
 EXTENSION_API_PATHS = frozenset({
     '/v1/extension/agent/plan',
     '/v1/extension/compare',
+    '/v1/extension/config',
 })
 
 

@@ -3,6 +3,7 @@
  */
 import { createController, createDomReceiver } from '../../../../packages/shared/src/controller.ts';
 import { capReadPort } from '../../../../packages/shared/src/page-text.ts';
+import { snapshot, click, focus, type, choose, chooseOption, showBadges, clearBadges, type PageResult } from '../harness/page.ts';
 
 type AgentWindow = typeof globalThis & { __HEADWAY_AGENT_LOADED__?: boolean };
 const w = globalThis as AgentWindow;
@@ -27,6 +28,34 @@ if (!w.__HEADWAY_AGENT_LOADED__) {
     if (message?.kind === 'HEADWAY_AGENT_IDENTITY') {
       respond({ ok: true, nonce: documentNonce, url: location.href });
       return false;
+    }
+    if (message?.kind === 'HEADWAY_AGENT_PAGE') {
+      // Harness page operations (docs/harness/AGENT_V2_CONTRACT.md). Same guards as actions:
+      // this exact document, and only on a website she enabled.
+      if (message.documentNonce !== documentNonce) {
+        respond({ ok: false, reason: 'Page identity changed.' });
+        return false;
+      }
+      chrome.storage.local.get(enabledKey).then((result) => {
+        const origins = result[enabledKey];
+        if (!Array.isArray(origins) || !origins.includes(location.origin)) {
+          respond({ ok: false, reason: 'This website is not enabled for the agent.' });
+          return;
+        }
+        const op = String(message.op || '');
+        let out: PageResult | ({ ok: true } & ReturnType<typeof snapshot>);
+        if (op === 'snapshot') out = { ok: true, ...snapshot() };
+        else if (op === 'click') out = click(String(message.id));
+        else if (op === 'focus') out = focus(String(message.id));
+        else if (op === 'type') out = type(String(message.text ?? ''), message.id ? String(message.id) : undefined);
+        else if (op === 'choose') out = choose(String(message.id), message.option ? String(message.option) : undefined, typeof message.check === 'boolean' ? message.check : undefined);
+        else if (op === 'chooseOption') out = chooseOption(String(message.option ?? ''));
+        else if (op === 'badges') out = showBadges(Array.isArray(message.ids) ? message.ids.map(String).slice(0, 3) : []);
+        else if (op === 'clear') out = clearBadges();
+        else out = { ok: false, reason: 'Unknown page operation.' };
+        respond(out);
+      }).catch(() => respond({ ok: false, reason: 'Page operation unavailable.' }));
+      return true;
     }
     if (message?.kind !== 'HEADWAY_AGENT_ACTION') return false;
     if (message.documentNonce !== documentNonce || !utterances.includes(message.utterance)) {

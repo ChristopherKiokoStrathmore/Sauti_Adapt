@@ -7,11 +7,11 @@ Status: **Todo** · **Claimed** · **In review** · **Done**
 
 | WP | What | Depends on | Owner | Branch / PR | Status |
 |---|---|---|---|---|---|
-| 0 | Foundations: fixture sites + e2e runner | – | | | Todo |
-| 1 | ChromeControlPort v2 + affordance map | 0 | | | Todo |
-| 2 | Safety: risk, confirmation, secrets, numbers | 1 | | | Todo |
-| 3 | Understanding: grammar v2 + Gemini lane v2 | 1 | | | Todo |
-| 4 | Listening runtime + panel in use | 0 | | | Todo |
+| 0 | Foundations: fixture sites + e2e runner | – | Brian (agent) | feature/headway-voice | Done (22 e2e; CI not wired) |
+| 1 | ChromeControlPort v2 + affordance map | 0 | Brian | feature/headway-voice | Partly done: page snapshot, click/focus/type/choose, badges (`src/harness/page.ts`); no tabs/zoom/trusted click yet |
+| 2 | Safety: risk, confirmation, secrets, numbers | 1 | Brian | feature/headway-voice | Mostly done: submit always asks, secrets never to Gemini, numbers en/sw, masked read-back; saved-password spike open |
+| 3 | Understanding: grammar v2 + Gemini lane v2 | 1 | Brian | feature/headway-voice | Mostly done: local en/sw grammar, known sites, Gemini click/focus/clarify (AGENT_V2_CONTRACT.md); no multi-step plans yet |
+| 4 | Listening runtime + panel in use | 0 | Brian | feature/headway-voice | Partly done: her end-of-speech wait, Alt+Shift+H, cancel; panel only (no offscreen) |
 | 5 | Learning loop: corrections → Librarian | 3, 4 | | | Todo |
 | 6 | Eval harness on her recordings | 1, 3, 4 | | | Todo |
 | 7 | Upstream PRs to the AI4A11y toolkit | 1, 3, voice (#29) | | | Todo |

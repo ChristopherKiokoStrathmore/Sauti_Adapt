@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home · Government Services (TEST FIXTURE — not a real government site)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="fixture-banner" role="note">TEST FIXTURE for Headway end-to-end tests. Not a real government site.</div>
+<header class="site">
+  <div class="inner">
+    <a class="brand" href="index.html"><span class="flag" aria-hidden="true"></span>Government Services</a>
+    <nav aria-label="Account">
+      <a class="btn btn-outline" href="login.html" role="button">Sign in</a>
+      <button type="button" class="btn btn-primary" id="register">Register</button>
+    </nav>
+  </div>
+</header>
+<main>
+  <h1>Access government services online</h1>
+  <p class="lede">Choose a service to begin. You will be asked to sign in before you apply.</p>
+
+  <nav class="tiles" aria-label="Popular services">
+    <a class="tile" href="login.html?next=passport">Apply for a Passport<small>Immigration Services</small></a>
+    <a class="tile" href="login.html?next=driving">Apply for a Driving License<small>National Transport and Safety</small></a>
+    <a class="tile" href="login.html?next=kra">KRA Services<small>PIN registration, returns and compliance</small></a>
+    <a class="tile" href="login.html?next=birth">Apply for a Birth Certificate<small>Civil Registration Services</small></a>
+    <a class="tile" href="good-conduct.html">Apply for Certificate of Good Conduct<small>Directorate of Criminal Investigations</small></a>
+    <a class="tile" href="login.html?next=housing">Save for Affordable Housing<small>Housing Fund</small></a>
+    <a class="tile" href="login.html?next=business">Register a Business<small>Business Registration Service</small></a>
+    <a class="tile" href="login.html?next=marriage">Apply for a Marriage Certificate<small>Registrar of Marriages</small></a>
+  </nav>
+
+  <section class="agencies" aria-labelledby="agencies-title">
+    <h2 id="agencies-title">Agencies on this platform</h2>
+    <ul>
+      <li>Immigration Services<span>Passports, visas and permits</span></li>
+      <li>Civil Registration Services<span>Births and deaths</span></li>
+      <li>Directorate of Criminal Investigations<span>Certificate of Good Conduct</span></li>
+      <li>National Transport and Safety<span>Driving licences and vehicle records</span></li>
+      <li>Revenue Authority<span>PIN, returns and tax compliance</span></li>
+      <li>Business Registration Service<span>Business names and companies</span></li>
+      <li>Registrar of Marriages<span>Marriage certificates and notices</span></li>
+      <li>Housing Fund<span>Affordable housing savings</span></li>
+      <li>Lands and Physical Planning<span>Searches and transfers</span></li>
+      <li>Higher Education Loans<span>Student loans and clearance</span></li>
+      <li>National Health Insurance<span>Registration and contributions</span></li>
+      <li>County Services<span>Single business permits and rates</span></li>
+      <li>Social Protection<span>Cash transfer programmes</span></li>
+      <li>Persons with Disabilities Council<span>Registration and support</span></li>
+      <li>National Registration Bureau<span>Identity cards</span></li>
+      <li>Public Service Commission<span>Recruitment</span></li>
+      <li>Energy Regulatory Authority<span>Licences</span></li>
+      <li>Agriculture and Food Authority<span>Permits</span></li>
+      <li>Water Resources Authority<span>Permits</span></li>
+      <li>Tourism Regulatory Authority<span>Licences</span></li>
+    </ul>
+  </section>
+
+  <section class="notes" aria-labelledby="help-title">
+    <h2 id="help-title">Help and support</h2>
+    <p>Most services need an account. Sign in with your email address or ID number, a one-time code, or your digital ID.</p>
+    <p>Payments are made after you review your application. Keep your receipt number for follow-up.</p>
+    <p>For assistance, visit any Huduma centre near you or use the help desk during working hours.</p>
+  </section>
+</main>
+<footer class="site">
+  <div class="inner">
+    <p><strong>TEST FIXTURE — not a real government site.</strong> Served on localhost by the Headway e2e runner. Nothing here is sent anywhere.</p>
+  </div>
+</footer>
+<script>
+  document.getElementById('register').addEventListener('click', () => { document.title = 'Register clicked · ' + document.title; });
+</script>
+</body>
+</html>

@@ -256,3 +256,8 @@ kbd {
 #agent-status { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px;
   border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 #agent-consent { margin-right: 8px; }
+
+/* Agent: what she hears, and numbered choices */
+.agent-status { font-size: 15px; color: var(--fg); min-height: 2.6em; white-space: pre-line; }
+.agent-choices { display: grid; gap: 8px; }
+.agent-choices .choice-btn { justify-content: flex-start; min-height: 52px; font-size: 15px; text-align: left; }

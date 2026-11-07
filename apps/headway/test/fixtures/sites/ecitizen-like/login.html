@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · Government Services (TEST FIXTURE — not a real government site)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="fixture-banner" role="note">TEST FIXTURE for Headway end-to-end tests. Not a real government site.</div>
+<header class="site">
+  <div class="inner">
+    <a class="brand" href="index.html"><span class="flag" aria-hidden="true"></span>Government Services</a>
+  </div>
+</header>
+<main>
+  <div class="card">
+    <h1>Sign in</h1>
+    <p class="lede">Use your account to continue.</p>
+    <form action="result.html" method="get" id="login-form">
+      <input type="hidden" name="form" value="login">
+      <label class="field" for="username">Email address or ID number</label>
+      <input type="text" id="username" name="username" autocomplete="username">
+      <label class="field" for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password">
+      <div class="row">
+        <label class="check"><input type="checkbox" id="remember" name="remember" value="yes"> Remember for 30 days</label>
+        <a href="#forgot" id="forgot-link">Forgot Password</a>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%">Sign In</button>
+    </form>
+    <p class="divider">or</p>
+    <div class="stack">
+      <button type="button" class="btn btn-outline" id="otp">Login with OTP</button>
+      <button type="button" class="btn btn-outline" id="digital-id">Sign in with Digital ID</button>
+    </div>
+    <p id="login-note" role="status" class="lede" style="margin-top:16px"></p>
+  </div>
+
+  <!-- Enough help text to make the page scroll at 1100x800, like the real flow's long legal footer. -->
+  <section class="notes" id="forgot" aria-labelledby="forgot-title">
+    <h2 id="forgot-title">Forgot your password?</h2>
+    <p>Choose "Login with OTP" to receive a one-time code on your registered phone number, or use your digital ID.</p>
+    <p>If you no longer use the phone number on your account, visit a Huduma centre with your ID card.</p>
+    <h2>Keeping your account safe</h2>
+    <p>Never share your password or one-time code with anyone, including people who say they work for the government.</p>
+    <p>Government staff will never ask for your password by phone, SMS or email.</p>
+    <p>Sign out when you finish on a shared computer.</p>
+    <h2>Accessibility</h2>
+    <p>This sign-in page works with keyboard, screen readers and voice control. Report any barrier to the help desk.</p>
+  </section>
+</main>
+<footer class="site">
+  <div class="inner">
+    <p><strong>TEST FIXTURE — not a real government site.</strong> This form only submits to result.html on this local server.</p>
+  </div>
+</footer>
+<script>
+  const note = document.getElementById('login-note');
+  document.getElementById('otp').addEventListener('click', () => { note.textContent = 'OTP route chosen (fixture: no code is sent).'; });
+  document.getElementById('digital-id').addEventListener('click', () => { note.textContent = 'Digital ID route chosen (fixture: nothing happens).'; });
+</script>
+</body>
+</html>

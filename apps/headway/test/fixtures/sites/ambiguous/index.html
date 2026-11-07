@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certificates (TEST FIXTURE — not a real government site)</title>
+<style>
+  body { margin: 0; font: 16px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1d2433; background: #f5f7fa; }
+  header { background: #fff; border-bottom: 3px solid #0b6b3a; }
+  header .inner, main { max-width: 1040px; margin: 0 auto; padding: 14px 20px; }
+  header .inner { display: flex; gap: 10px; align-items: center; }
+  header strong { margin-right: auto; font-size: 20px; }
+  button { font: inherit; font-weight: 600; padding: 9px 18px; border-radius: 6px; border: 1px solid #0b6b3a; background: #fff; color: #0b6b3a; cursor: pointer; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-top: 16px; }
+  .tiles a { display: block; background: #fff; border: 1px solid #d9dee7; border-radius: 10px; padding: 20px; min-height: 110px; color: #1d2433; font-weight: 600; text-decoration: none; }
+  #picked { font-weight: 600; margin-top: 16px; }
+  .notes p { max-width: 720px; color: #5b6475; }
+  footer { background: #1d2433; color: #cfd5df; padding: 24px 20px; margin-top: 40px; }
+  footer strong { color: #ffd166; }
+</style>
+</head>
+<body>
+<header>
+  <div class="inner">
+    <strong>Certificates</strong>
+    <button type="button" data-pick="Sign in">Sign in</button>
+    <button type="button" data-pick="Sign up">Sign up</button>
+  </div>
+</header>
+<main>
+  <h1>Which certificate do you need?</h1>
+  <p>Three tiles share the word "Certificate", and two buttons start with "Sign". Headway must ask, never click the first match (scenarios C3, C4).</p>
+  <nav class="tiles" aria-label="Certificates">
+    <a href="#good-conduct" data-pick="Certificate of Good Conduct">Certificate of Good Conduct</a>
+    <a href="#birth" data-pick="Birth Certificate">Birth Certificate</a>
+    <a href="#marriage" data-pick="Marriage Certificate">Marriage Certificate</a>
+  </nav>
+  <p id="picked" role="status">Nothing chosen yet</p>
+  <!-- Filler so the page scrolls at 1100x800. -->
+  <section class="notes" aria-label="About certificates">
+    <h2>About certificates</h2>
+    <p>A Certificate of Good Conduct is issued by the Directorate of Criminal Investigations.</p>
+    <p>Birth certificates are issued by Civil Registration Services.</p>
+    <p>Marriage certificates are issued by the Registrar of Marriages.</p>
+    <h2 id="good-conduct">Good Conduct</h2><p>Section anchor.</p><p>Fingerprints are needed.</p><p>Fee applies.</p>
+    <h2 id="birth">Birth</h2><p>Section anchor.</p><p>Bring the notification of birth.</p><p>Fee applies.</p>
+    <h2 id="marriage">Marriage</h2><p>Section anchor.</p><p>Both parties' IDs are needed.</p><p>Fee applies.</p>
+  </section>
+</main>
+<footer>
+  <p><strong>TEST FIXTURE — not a real government site.</strong> Served on localhost by the Headway e2e runner.</p>
+</footer>
+<script>
+  const picked = document.getElementById('picked');
+  for (const el of document.querySelectorAll('[data-pick]')) {
+    el.addEventListener('click', () => { picked.textContent = 'Chose: ' + el.dataset.pick; });
+  }
+</script>
+</body>
+</html>

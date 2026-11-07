@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certificate of Good Conduct · Government Services (TEST FIXTURE — not a real government site)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="fixture-banner" role="note">TEST FIXTURE for Headway end-to-end tests. Not a real government site.</div>
+<header class="site">
+  <div class="inner">
+    <a class="brand" href="index.html"><span class="flag" aria-hidden="true"></span>Government Services</a>
+  </div>
+</header>
+<main>
+  <div class="card wide">
+    <h1>Apply for Certificate of Good Conduct</h1>
+    <p class="lede">Directorate of Criminal Investigations · Fee KSh 1,050</p>
+    <form action="result.html" method="get" id="good-conduct-form">
+      <input type="hidden" name="form" value="good-conduct">
+      <label class="field" for="id-number">ID number</label>
+      <input type="text" id="id-number" name="id_number" inputmode="numeric" autocomplete="off" pattern="[0-9]{6,10}">
+      <label class="field" for="county">County</label>
+      <select id="county" name="county">
+        <option value="">Choose your county</option>
+        <option>Nairobi</option>
+        <option>Mombasa</option>
+        <option>Kisumu</option>
+        <option>Nakuru</option>
+        <option>Kiambu</option>
+      </select>
+      <label class="check"><input type="checkbox" id="agree" name="agree" value="yes" required> I agree to the terms</label>
+      <button type="submit" class="btn btn-primary" style="width:100%">Pay KSh 1,050</button>
+    </form>
+  </div>
+
+  <section class="notes" aria-labelledby="req-title">
+    <h2 id="req-title">Before you apply</h2>
+    <p>You will need your national ID card. Fingerprints are taken at a DCI office after you pay.</p>
+    <p>Processing usually takes up to 14 working days after your fingerprints are taken.</p>
+    <h2>Terms</h2>
+    <p>The information you give must be true. False information is an offence.</p>
+    <p>The fee is not refundable once fingerprints have been taken.</p>
+    <p>Your certificate can be downloaded from your account when it is ready.</p>
+    <h2>Need help?</h2>
+    <p>Visit any Huduma centre or DCI office.</p>
+  </section>
+</main>
+<footer class="site">
+  <div class="inner">
+    <p><strong>TEST FIXTURE — not a real government site.</strong> "Pay" only loads result.html on this local server; no payment happens.</p>
+  </div>
+</footer>
+</body>
+</html>

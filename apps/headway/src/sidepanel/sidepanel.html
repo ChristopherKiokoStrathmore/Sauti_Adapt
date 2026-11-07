@@ -56,14 +56,15 @@
         <button type="button" id="agent-enable" class="btn btn-secondary">Enable current website</button>
         <button type="button" id="agent-disable" class="btn btn-secondary">Disable current website</button>
         <label class="field-label" for="agent-instruction">Instruction or reviewed speech transcript</label>
-        <textarea id="agent-instruction" rows="3" maxlength="400" placeholder="Search Google for Strathmore University"></textarea>
-        <button type="button" id="agent-plan" class="btn btn-primary">Ask Gemini to plan</button>
+        <textarea id="agent-instruction" rows="3" maxlength="400" placeholder="Type an instruction, e.g. click good conduct"></textarea>
+        <button type="button" id="agent-plan" class="btn btn-secondary">Do this</button>
         <label class="field-label" for="agent-model">Voice model</label>
         <select id="agent-model"><option value="english">English speech model</option><option value="swahili">Kiswahili speech model</option></select>
-        <label class="field-label"><input id="agent-consent" type="checkbox"> I consent to sending this audio to our private speech service and the resulting transcript to Gemini for this instruction.</label>
-        <button type="button" id="agent-record" class="btn btn-secondary">Record spoken instruction</button>
-        <p id="agent-status" class="hint" aria-live="polite" role="status">Ready. Enable your website first.</p>
-        <button type="button" id="agent-confirm" class="btn btn-primary" disabled>Confirm and execute</button>
+        <label class="field-label"><input id="agent-consent" type="checkbox"> I agree: my voice goes to our private speech service, and the words to Gemini. Never passwords or numbers I type.</label>
+        <button type="button" id="agent-record" class="btn btn-primary">Speak</button>
+        <p id="agent-status" class="hint agent-status" aria-live="polite" role="status">Ready. Enable your website first.</p>
+        <div id="agent-choices" class="agent-choices" aria-label="Choices"></div>
+        <button type="button" id="agent-confirm" class="btn btn-primary" disabled>Yes, do it</button>
         <button type="button" id="agent-cancel" class="btn btn-secondary">Cancel</button>
         <p class="hint">Browser actions remain restricted to explicitly enabled websites. No purchases, sending messages, or form submissions.</p>
       </div>

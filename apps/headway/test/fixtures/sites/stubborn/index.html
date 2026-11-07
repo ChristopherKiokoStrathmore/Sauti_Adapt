@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stubborn button (TEST FIXTURE — not a real site)</title>
+<style>
+  body { margin: 0; font: 16px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1d2433; background: #f5f7fa; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 20px; }
+  .video { background: #111; color: #eee; border-radius: 10px; height: 320px; display: flex; align-items: flex-end; justify-content: flex-end; padding: 16px; }
+  #skip { font: inherit; font-weight: 600; padding: 10px 20px; border-radius: 6px; border: 1px solid #fff; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; }
+  #outcome { font-weight: 600; margin-top: 16px; }
+  .filler p { max-width: 640px; }
+  footer { background: #1d2433; color: #cfd5df; padding: 24px 20px; margin-top: 40px; }
+  footer strong { color: #ffd166; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ad break</h1>
+  <p>This button behaves like a video player's "Skip" button: it ignores synthetic (script) clicks and only responds to trusted input.</p>
+  <div class="video" aria-label="Video player">
+    <button type="button" id="skip">Skip</button>
+  </div>
+  <p id="outcome" role="status">Not clicked yet</p>
+  <!-- Filler so the page scrolls at 1100x800, like a real video page with comments below. -->
+  <section class="filler" aria-label="Comments">
+    <h2>Comments</h2>
+    <p>Comment 1. This fixture exists for scenario C5 (trusted click through chrome.debugger).</p>
+    <p>Comment 2. A synthetic element.click() shows "Ignored synthetic click".</p>
+    <p>Comment 3. A real mouse or CDP Input.dispatchMouseEvent shows "Clicked (trusted)".</p>
+    <p>Comment 4.</p><p>Comment 5.</p><p>Comment 6.</p><p>Comment 7.</p><p>Comment 8.</p>
+    <p>Comment 9.</p><p>Comment 10.</p><p>Comment 11.</p><p>Comment 12.</p>
+  </section>
+</main>
+<footer>
+  <p><strong>TEST FIXTURE — not a real site.</strong> Served on localhost by the Headway e2e runner.</p>
+</footer>
+<script>
+  const outcome = document.getElementById('outcome');
+  document.getElementById('skip').addEventListener('click', (event) => {
+    outcome.textContent = event.isTrusted ? 'Clicked (trusted)' : 'Ignored synthetic click';
+    outcome.dataset.trusted = String(event.isTrusted);
+  });
+</script>
+</body>
+</html>

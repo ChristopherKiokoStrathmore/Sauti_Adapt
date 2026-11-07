@@ -1,0 +1,43 @@
+/* TEST FIXTURE styling: a generic government-services look. Not a copy of any real site. */
+:root { --green: #0b6b3a; --green-dark: #08502b; --ink: #1d2433; --muted: #5b6475; --line: #d9dee7; --bg: #f5f7fa; --red: #b3261e; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--ink); background: var(--bg); }
+a { color: var(--green); }
+.fixture-banner { background: #fff4ce; color: #5c4400; text-align: center; font-size: 14px; padding: 6px 12px; border-bottom: 1px solid #e6d58f; }
+header.site { background: #fff; border-bottom: 3px solid var(--green); }
+header.site .inner { max-width: 1040px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; color: var(--ink); text-decoration: none; }
+.brand .flag { width: 36px; height: 24px; background: linear-gradient(#111 0 30%, #fff 30% 35%, var(--red) 35% 65%, #fff 65% 70%, var(--green) 70%); border-radius: 3px; }
+header.site nav { margin-left: auto; display: flex; gap: 10px; }
+.btn { display: inline-block; font: inherit; font-weight: 600; padding: 9px 18px; border-radius: 6px; border: 1px solid var(--green); cursor: pointer; text-decoration: none; }
+.btn-primary { background: var(--green); color: #fff; }
+.btn-primary:hover { background: var(--green-dark); }
+.btn-outline { background: #fff; color: var(--green); }
+main { max-width: 1040px; margin: 0 auto; padding: 28px 20px 40px; }
+h1 { font-size: 30px; margin: 0 0 6px; }
+.lede { color: var(--muted); margin: 0 0 24px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+.tile { display: block; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 20px; min-height: 120px; text-decoration: none; color: var(--ink); font-weight: 600; font-size: 17px; }
+.tile:hover, .tile:focus { border-color: var(--green); box-shadow: 0 0 0 2px rgba(11,107,58,.15); }
+.tile small { display: block; font-weight: 400; color: var(--muted); font-size: 14px; margin-top: 8px; }
+section.agencies { margin-top: 40px; }
+section.agencies ul { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+section.agencies li { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+section.agencies li span { display: block; color: var(--muted); font-size: 14px; }
+.card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 28px; max-width: 480px; margin: 0 auto; }
+.card.wide { max-width: 640px; }
+label.field { display: block; font-weight: 600; margin: 16px 0 6px; }
+input[type=text], input[type=password], select { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid #b8c0cc; border-radius: 6px; background: #fff; }
+.check { display: flex; gap: 8px; align-items: center; margin: 16px 0; }
+.row { display: flex; justify-content: space-between; align-items: center; }
+.stack { display: grid; gap: 10px; margin-top: 18px; }
+.stack .btn { width: 100%; text-align: center; }
+.divider { text-align: center; color: var(--muted); margin: 18px 0 4px; font-size: 14px; }
+.notes { margin-top: 32px; color: var(--muted); }
+.notes p { max-width: 720px; }
+footer.site { background: #1d2433; color: #cfd5df; padding: 28px 20px; margin-top: 40px; }
+footer.site .inner { max-width: 1040px; margin: 0 auto; }
+footer.site strong { color: #ffd166; }
+dl.result { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; }
+dl.result dt { font-weight: 600; }
+dl.result dd { margin: 0; }

@@ -7,7 +7,8 @@ from contextlib import asynccontextmanager
 from functools import lru_cache
 from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
+from typing import Literal, Optional
+from pydantic import BaseModel, Field, field_validator, model_validator
 from .audio import AudioValidationError, decode_wav
 from .auth import audit, create_participant_account, fail_pair_locked, note_auth_failure, note_ip_attempt, is_allowed_extension_origin, origin_allowed, trusted_client_ip, verify_user
 from .contracts import Intent, Language, Recognition, reject
@@ -99,6 +100,9 @@ LOCAL_PROFILE_ID = '00000000-0000-4000-8000-000000000002'
 
 def local_single_user(request: Request) -> bool:
     if os.environ.get('SAUTI_LOCAL_SINGLE_USER') != 'true':
+        return False
+    # Never on a hosted deployment, whatever the flag says.
+    if any(os.environ.get(k) for k in ('RAILWAY_ENVIRONMENT', 'RAILWAY_PROJECT_ID', 'FLY_APP_NAME')):
         return False
     peer = request.client.host if request.client else ''
     return peer in ('127.0.0.1', '::1')
@@ -506,10 +510,66 @@ def training_status(profile_id: str, user_id: str = Depends(require_user)):
     return released or {'state': 'idle'}
 
 
+class AgentAffordance(BaseModel):
+    """One labelled control on the page (Agent v2). The name is an untrusted page label."""
+    id: str = Field(pattern=r'^h[0-9]{1,5}$')
+    kind: Literal['link', 'button', 'textbox', 'password', 'number', 'checkbox', 'radio', 'select', 'tab', 'other']
+    name: str = Field(default='', max_length=2000)
+    submit: bool = False
+
+    @field_validator('name')
+    @classmethod
+    def _trim_name(cls, value: str) -> str:
+        return ' '.join(value.split())[:80]
+
+
+class AgentProfileCommand(BaseModel):
+    id: str = Field(pattern=r'^[A-Za-z0-9_-]{1,40}$')
+    phrases: list[str] = Field(default_factory=list, max_length=10)
+
+    @field_validator('phrases')
+    @classmethod
+    def _cap_phrases(cls, value: list[str]) -> list[str]:
+        if any(len(p) > 80 for p in value):
+            raise ValueError('Command phrases must be at most 80 characters.')
+        return [' '.join(p.split()) for p in value if p.strip()]
+
+
+class AgentProfile(BaseModel):
+    """Compact voice profile from her onboarding answers (fields.voice)."""
+    language: Literal['en', 'sw', 'both'] = 'both'
+    confirm: Literal['always', 'forms', 'never'] = 'always'
+    commands: list[AgentProfileCommand] = Field(default_factory=list, max_length=40)
+
+
 class AgentPlanRequest(BaseModel):
-    """Only a short instruction and current page URL; never raw audio or page contents."""
+    """A short instruction, page URL and (v2) page title, control labels and voice profile.
+
+    Never raw audio, page body text, passwords or typed values.
+    """
     instruction: str
     page_url: str = ""
+    page_title: str = Field(default="", max_length=200)
+    affordances: Optional[list[AgentAffordance]] = Field(default=None, max_length=150)
+    profile: Optional[AgentProfile] = None
+
+    @model_validator(mode='after')
+    def _unique_affordance_ids(self):
+        ids = [a.id for a in self.affordances or []]
+        if len(ids) != len(set(ids)):
+            raise ValueError('Affordance ids must be unique.')
+        return self
+
+    def planner_kwargs(self) -> dict:
+        """Only the v2 fields that were sent, so v1 requests call the planner exactly as before."""
+        kwargs: dict = {}
+        if self.page_title:
+            kwargs['page_title'] = self.page_title
+        if self.affordances:
+            kwargs['affordances'] = [a.model_dump() for a in self.affordances]
+        if self.profile is not None:
+            kwargs['profile'] = self.profile.model_dump()
+        return kwargs
 
 
 @app.post('/v1/agent/plan', dependencies=[Depends(require_token)])
@@ -521,7 +581,7 @@ def plan_browser_action(payload: AgentPlanRequest, user_id: str = Depends(requir
     from .auth import _consume, _configured_limit
     _consume('agent:' + user_id, _configured_limit('SAUTI_AGENT_RATE_LIMIT_PER_MINUTE', 12))
     try:
-        plan = plan_action(payload.instruction, payload.page_url)
+        plan = plan_action(payload.instruction, payload.page_url, **payload.planner_kwargs())
     except AgentPlanError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
@@ -534,7 +594,9 @@ def headway_extension_config(request: Request):
     """Tells the extension whether it must send personal credentials."""
     origin_allowed(request)
     single = local_single_user(request)
-    return {'single_user': single, 'profile_id': LOCAL_PROFILE_ID if single else None}
+    from .audio import max_duration_seconds
+    return {'single_user': single, 'profile_id': LOCAL_PROFILE_ID if single else None,
+            'max_clip_seconds': max_duration_seconds()}
 
 
 @app.post('/v1/extension/compare')
@@ -583,13 +645,14 @@ def plan_for_headway_extension(payload: AgentPlanRequest, user_id: str = Depends
     Only the participant's personal token is accepted in the extension.
     The Gemini API key stays solely in Railway environment variables.
     """
-    if not 1 <= len(payload.instruction.strip()) <= 400 or len(payload.page_url) > 2048:
+    if not 1 <= len(payload.instruction.strip()) <= 400:
         raise HTTPException(status_code=422, detail='Invalid agent instruction.')
+    payload.page_url = payload.page_url[:2048]
     from .auth import _consume, _configured_limit
     _consume('agent:' + user_id, _configured_limit('SAUTI_AGENT_RATE_LIMIT_PER_MINUTE', 12))
     from .agent import AgentPlanError, plan_action
     try:
-        plan = plan_action(payload.instruction, payload.page_url)
+        plan = plan_action(payload.instruction, payload.page_url, **payload.planner_kwargs())
     except AgentPlanError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:

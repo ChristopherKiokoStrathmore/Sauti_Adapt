@@ -51,3 +51,17 @@ def test_config_tells_the_extension_which_mode_it_is_in(monkeypatch):
 
 def test_local_user_id_is_a_fixed_uuid():
     assert LOCAL_USER_ID == '00000000-0000-4000-8000-000000000001'
+
+
+def test_local_mode_is_refused_on_a_hosted_deployment(monkeypatch):
+    monkeypatch.setenv('SAUTI_LOCAL_SINGLE_USER', 'true')
+    monkeypatch.setenv('RAILWAY_ENVIRONMENT', 'production')
+    res, planned = plan_request(local)
+    assert res.status_code in (401, 422)
+    planned.assert_not_called()
+
+
+def test_config_reports_the_server_clip_limit(monkeypatch):
+    monkeypatch.setenv('SAUTI_LOCAL_SINGLE_USER', 'true')
+    monkeypatch.setenv('SAUTI_MAX_CLIP_SECONDS', '30')
+    assert local.get('/v1/extension/config', headers={'origin': ORIGIN}).json()['max_clip_seconds'] == 30

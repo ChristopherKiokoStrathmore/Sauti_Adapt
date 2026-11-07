@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Submitted · Government Services (TEST FIXTURE — not a real government site)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="fixture-banner" role="note">TEST FIXTURE for Headway end-to-end tests. Not a real government site.</div>
+<header class="site">
+  <div class="inner">
+    <a class="brand" href="index.html"><span class="flag" aria-hidden="true"></span>Government Services</a>
+  </div>
+</header>
+<main>
+  <!-- Short by design: a confirmation page has nothing to scroll to. -->
+  <div class="card wide">
+    <h1 id="result-title">Submitted</h1>
+    <p class="lede">The fixture received these values (password fields are never shown):</p>
+    <dl class="result" id="values"></dl>
+    <p><a href="index.html">Back to services</a></p>
+  </div>
+</main>
+<footer class="site">
+  <div class="inner">
+    <p><strong>TEST FIXTURE — not a real government site.</strong> Values stay in this page's address bar on localhost.</p>
+  </div>
+</footer>
+<script>
+  const list = document.getElementById('values');
+  const params = new URLSearchParams(location.search);
+  if ([...params.keys()].length === 0) {
+    const p = document.createElement('p'); p.textContent = '(no values)'; list.replaceWith(p);
+  }
+  for (const [name, value] of params) {
+    const dt = document.createElement('dt'); dt.textContent = name;
+    const dd = document.createElement('dd');
+    dd.textContent = /password/i.test(name) ? '(hidden)' : value;
+    dd.dataset.name = name;
+    list.append(dt, dd);
+  }
+</script>
+</body>
+</html>

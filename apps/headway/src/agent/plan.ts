@@ -4,7 +4,10 @@ export type BrowserPlan =
   | { action: 'open_url'; url: string }
   | { action: 'scroll'; direction: 'up' | 'down' }
   | { action: 'read_page' | 'go_back' }
-  | { action: 'none'; reason: string };
+  | { action: 'none'; reason: string }
+  // Agent v2 (docs/harness/AGENT_V2_CONTRACT.md): elements by id from the page snapshot.
+  | { action: 'click' | 'focus'; target_id: string }
+  | { action: 'clarify'; question: string; options: string[] };
 
 export function publicHttpsUrl(raw: string): URL {
   if (typeof raw !== 'string' || raw.length > 1200 || /\s/.test(raw)) throw new Error('Invalid website URL.');
@@ -25,7 +28,7 @@ export function publicHttpsUrl(raw: string): URL {
   return u;
 }
 
-export function validateBrowserPlan(value: unknown): BrowserPlan {
+export function validateBrowserPlan(value: unknown, allowedIds: ReadonlySet<string> = new Set()): BrowserPlan {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid Gemini response.');
   const v = value as Record<string, unknown>;
   switch (v.action) {
@@ -41,6 +44,18 @@ export function validateBrowserPlan(value: unknown): BrowserPlan {
     case 'read_page': return { action: 'read_page' };
     case 'go_back': return { action: 'go_back' };
     case 'none': return { action: 'none', reason: typeof v.reason === 'string' ? v.reason.slice(0, 180) : 'Please clarify the request.' };
+    case 'click':
+    case 'focus':
+      if (typeof v.target_id !== 'string' || !allowedIds.has(v.target_id)) throw new Error('Gemini chose something that is not on this page.');
+      return { action: v.action, target_id: v.target_id };
+    case 'clarify': {
+      const opts = Array.isArray(v.options) ? v.options.map((o) => (o && typeof o === 'object' ? (o as Record<string, unknown>).target_id : null)) : [];
+      if (typeof v.question !== 'string' || !v.question.trim() || v.question.length > 160) throw new Error('Invalid clarifying question.');
+      if (opts.length < 2 || opts.length > 3 || new Set(opts).size !== opts.length || !opts.every((o) => typeof o === 'string' && allowedIds.has(o))) {
+        throw new Error('Gemini offered choices that are not on this page.');
+      }
+      return { action: 'clarify', question: v.question.trim(), options: opts as string[] };
+    }
     default: throw new Error('Gemini proposed an unsupported action.');
   }
 }
@@ -53,6 +68,9 @@ export function actionDescription(plan: BrowserPlan): string {
     case 'read_page': return 'Read this page aloud';
     case 'go_back': return 'Go back one page';
     case 'none': return 'No action: ' + plan.reason;
+    case 'click': return 'Press an item on the page';
+    case 'focus': return 'Go to a field on the page';
+    case 'clarify': return plan.question;
   }
 }
 

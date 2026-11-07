@@ -1,12 +1,17 @@
-"""CDLI Kenyan atypical speech Whisper inference on Modal GPUs.
+"""Fine-tuned Kenyan atypical speech Whisper inference on Modal GPUs.
 
 Only the trusted Sauti speech API should call this endpoint. Audio is
 transient: accepted request bodies are used for GPU inference and discarded.
-Model weights are downloaded directly from Hugging Face into a Modal Volume.
 
-One GPU container serves every model key: both CDLI base models stay loaded
-together, and any installed personalized LoRA adapter is switched per request.
-That means one cold start instead of one per model.
+The GPU serves two fine-tuned Whisper models, uploaded to the Modal Volume
+'sauti-adapt-finetuned-model' (folders /english and /swahili), under the
+request keys 'english' and 'swahili'. One GPU container holds both, so there
+is one cold start instead of one per model.
+
+The CDLI base checkpoints are no longer served. Their weights stay stored in
+the 'sauti-adapt-cdli-cache' volume (do not delete it): a fine-tuned folder
+without its own preprocessor_config.json or generation_config.json borrows
+the CDLI copy, and serving CDLI again needs no new download.
 
 Deployment prerequisites:
   - Modal account / billing
@@ -22,9 +27,7 @@ however long it sits idle (scaledown_window only applies outside a window).
 enforce_warm_window releases the GPU when the window ends, so a forgotten
 session cannot keep billing.
 """
-import contextlib
 import hmac
-import json
 import os
 import time
 from pathlib import Path
@@ -34,26 +37,34 @@ from fastapi import Request
 
 APP_NAME = "sauti-adapt-cdli-gpu"
 
-MODEL_IDS = {
+# CDLI base checkpoints: stored in the 'sauti-adapt-cdli-cache' volume, not
+# served. Pinned Hugging Face commits; read from the volume cache with no
+# network call. Used only for config files a fine-tuned folder lacks.
+CDLI_MODEL_IDS = {
     "english": "cdli/whisper-large-v3_finetuned_kenyan_english_nonstandard_speech_v1.0",
     "swahili": "cdli/whisper-large-v3_finetuned_kenyan_swahili_nonstandard_speech_v1.0",
 }
-# Pinned Hugging Face commits. Startup reads these from the volume cache with
-# no network call. Change them deliberately: private adapter manifests are
-# checked against these exact revisions.
-MODEL_REVISIONS = {
+CDLI_REVISIONS = {
     "english": "bf30914177cf7f40b9b6d0c8aa3e38c37ea59cc4",
     "swahili": "644252d2258ad6ef6b5f8b1d65cccb8fbbd6cf86",
 }
-LANGUAGE_CODES = {"english": "en", "swahili": "sw"}
 
-# Private LoRA artifacts must be transferred from authorized storage.
-# A pilot adapter is never published through this source repository.
-PILOT_KEYS = {
-    "personalized_english": ("english", "en-KE"),
-    "personalized_swahili": ("swahili", "sw-KE"),
+# Fine-tuned models served on the GPU. Each folder is a full Hugging Face
+# Whisper export (config.json, model.safetensors, tokenizer files) uploaded
+# with: modal volume put sauti-adapt-finetuned-model <local dir> /<folder>
+FINETUNED_VOLUME_NAME = "sauti-adapt-finetuned-model"
+FINETUNED_ROOT = Path("/finetuned")
+SERVED_MODELS = {
+    # key: volume folder, Whisper language code, CDLI model for missing configs
+    "english": {"folder": "english", "language": "en", "fallback": "english"},
+    "swahili": {"folder": "swahili", "language": "sw", "fallback": "swahili"},
 }
-ALL_KEYS = (*MODEL_IDS, *PILOT_KEYS)
+
+# Personalized LoRA adapters were trained on the CDLI base models, which are
+# no longer served, so these keys answer 503 rather than attach an adapter to
+# a model it was not trained for. Kept so callers get a clear answer.
+PILOT_KEYS = ("personalized_english", "personalized_swahili")
+ALL_KEYS = (*SERVED_MODELS, *PILOT_KEYS)
 
 SAMPLE_RATE = 16_000
 MIN_SAMPLES = 4_800                    # 0.3 s
@@ -79,7 +90,9 @@ WARM_WINDOW_MAX_HOURS = 12
 
 app = modal.App(APP_NAME)
 weights = modal.Volume.from_name("sauti-adapt-cdli-cache", create_if_missing=True)
-pilot_adapters = modal.Volume.from_name("sauti-adapt-private-adapters", create_if_missing=True)
+# No create_if_missing: a misspelt name must fail the deploy, not silently
+# create an empty volume with no models in it.
+finetuned = modal.Volume.from_name(FINETUNED_VOLUME_NAME)
 warm_window = modal.Dict.from_name("sauti-adapt-warm-window", create_if_missing=True)
 
 gpu_image = (
@@ -91,6 +104,7 @@ gpu_image = (
         "fastapi>=0.115,<1",
     )
     .env({"HF_HOME": "/models"})
+    .add_local_python_source("finetuned_models")
 )
 api_image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -121,50 +135,80 @@ def split_into_windows(audio):
 @app.cls(
     image=gpu_image,
     gpu=["L4", "A10G"],          # L4 first; A10G only when no L4 is free
-    volumes={"/models": weights, "/private_adapters": pilot_adapters},
+    volumes={"/models": weights, str(FINETUNED_ROOT): finetuned},
     timeout=300,                 # per request
     startup_timeout=900,         # model loading, separate from request time
     scaledown_window=300,
     max_containers=1,
 )
 class CDLIWhisper:
+    # Class name kept so warm.py and enforce_warm_window (which look it up by
+    # name) keep working. It now serves the fine-tuned models in SERVED_MODELS.
+
     @modal.enter()
     def load(self):
         import torch
-        from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+        from transformers import (
+            AutoConfig, AutoFeatureExtractor, AutoModelForSpeechSeq2Seq, AutoTokenizer,
+            GenerationConfig, WhisperProcessor,
+        )
+        from finetuned_models import (
+            FEATURE_EXTRACTOR_FILE, GENERATION_CONFIG_FILE,
+            folder_fingerprint, folder_problems, has_file,
+        )
 
         started = time.monotonic()
         self.torch = torch
         self.device = torch.cuda.get_device_name(0)
-        self.processors, self.models, self.snapshots = {}, {}, {}
-        for base_key, model_id in MODEL_IDS.items():
-            snapshot = self._snapshot(model_id, MODEL_REVISIONS[base_key])
-            self.snapshots[base_key] = snapshot
-            self.processors[base_key] = AutoProcessor.from_pretrained(snapshot, trust_remote_code=False)
-            self.models[base_key] = AutoModelForSpeechSeq2Seq.from_pretrained(
-                snapshot, torch_dtype=torch.float16, low_cpu_mem_usage=True,
+        self.processors, self.models, self.revisions, self.unavailable = {}, {}, {}, {}
+        for key, spec in SERVED_MODELS.items():
+            folder = FINETUNED_ROOT / spec["folder"]
+            problems = folder_problems(folder)
+            if problems:
+                # Fail closed for this key only; the other model keeps serving.
+                self.unavailable[key] = "; ".join(problems)
+                print(f"model {key} unavailable: {self.unavailable[key]}", flush=True)
+                continue
+            fallback = self._cdli_snapshot(spec["fallback"])
+            extractor_source = folder if has_file(folder, FEATURE_EXTRACTOR_FILE) else fallback
+            processor = WhisperProcessor(
+                feature_extractor=AutoFeatureExtractor.from_pretrained(extractor_source),
+                tokenizer=AutoTokenizer.from_pretrained(folder, trust_remote_code=False),
+            )
+            model = AutoModelForSpeechSeq2Seq.from_pretrained(
+                folder, torch_dtype=torch.float16, low_cpu_mem_usage=True,
                 use_safetensors=True, trust_remote_code=False,
                 attn_implementation="sdpa",
-            ).to("cuda").eval()
-
-        # Personalized adapters are optional. A missing or invalid adapter
-        # disables only that personalized key (fail closed per request); the
-        # base models keep working.
-        self.adapters = {}
-        for pilot_key, (base_key, language_key) in PILOT_KEYS.items():
-            try:
-                self._attach_adapter(base_key, language_key)
-                self.adapters[pilot_key] = base_key
-            except RuntimeError as exc:
-                print(f"adapter {pilot_key} unavailable: {exc}")
-        print(f"loaded on {self.device} in {time.monotonic() - started:.1f}s; "
-              f"personalized={sorted(self.adapters)}", flush=True)
+            )
+            if model.config.num_mel_bins != processor.feature_extractor.feature_size:
+                raise RuntimeError(
+                    f"{key}: model expects {model.config.num_mel_bins} mel bins but the feature "
+                    f"extractor gives {processor.feature_extractor.feature_size}; upload the "
+                    f"model's own {FEATURE_EXTRACTOR_FILE}.")
+            if not has_file(folder, GENERATION_CONFIG_FILE):
+                # Whisper needs language/task token ids from the generation
+                # config. Borrowing the CDLI copy is only safe for the same
+                # vocabulary (whisper-large-v3 has one more token than others).
+                fallback_config = GenerationConfig.from_pretrained(fallback)
+                fallback_vocab = AutoConfig.from_pretrained(fallback).vocab_size
+                if model.config.vocab_size != fallback_vocab:
+                    raise RuntimeError(
+                        f"{key}: no {GENERATION_CONFIG_FILE} and the vocabulary differs from "
+                        f"whisper-large-v3; upload the model's own {GENERATION_CONFIG_FILE}.")
+                model.generation_config = fallback_config
+            self.models[key] = model.to("cuda").eval()
+            self.processors[key] = processor
+            self.revisions[key] = folder_fingerprint(folder)
+        print(f"loaded {sorted(self.models)} on {self.device} in "
+              f"{time.monotonic() - started:.1f}s; unavailable={sorted(self.unavailable)}", flush=True)
 
     @staticmethod
-    def _snapshot(model_id: str, revision: str) -> str:
+    def _cdli_snapshot(base_key: str) -> str:
+        """Local path of a stored CDLI checkpoint (downloaded once if missing)."""
         from huggingface_hub import snapshot_download
         from huggingface_hub.errors import LocalEntryNotFoundError
 
+        model_id, revision = CDLI_MODEL_IDS[base_key], CDLI_REVISIONS[base_key]
         try:
             return snapshot_download(repo_id=model_id, revision=revision, local_files_only=True)
         except LocalEntryNotFoundError:
@@ -172,38 +216,19 @@ class CDLIWhisper:
             weights.commit()
             return path
 
-    def _attach_adapter(self, base_key: str, language_key: str) -> None:
-        # This is a research transcription adapter, not a released command
-        # recognizer. The HTTP caller never receives weights.
-        root = Path("/private_adapters/pilot")
-        adapter_dir = root / language_key / "best_adapter"
-        manifest_file = root / "model_manifest.json"
-        model_id = MODEL_IDS[base_key]
-        if not manifest_file.is_file():
-            raise RuntimeError("private participant model manifest has not been installed")
-        manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
-        entry = manifest.get(language_key, {})
-        if (entry.get("base_model") != model_id
-                or entry.get("base_revision") != MODEL_REVISIONS[base_key]
-                or not entry.get("personalized_metrics")
-                or entry.get("release_status") not in ("RESEARCH_ONLY", "COMMAND_EVALUATED_REVIEW_REQUIRED")):
-            raise RuntimeError("private model manifest does not match the pinned CDLI base")
-        if not (adapter_dir / "adapter_model.safetensors").is_file() or not (adapter_dir / "adapter_config.json").is_file():
-            raise RuntimeError("private personalized adapter is incomplete")
-        config = json.loads((adapter_dir / "adapter_config.json").read_text(encoding="utf-8"))
-        if config.get("base_model_name_or_path") not in (model_id, str(self.snapshots[base_key])):
-            raise RuntimeError("LoRA adapter does not match the base model")
-        from peft import PeftModel
-        self.models[base_key] = PeftModel.from_pretrained(
-            self.models[base_key], str(adapter_dir), is_trainable=False,
-        ).eval()
-
     @modal.method()
     def transcribe(self, model_key: str, audio_bytes: bytes) -> dict:
         import numpy as np
 
         if model_key not in ALL_KEYS:
-            raise ValueError("Unknown CDLI checkpoint.")
+            raise ValueError("Unknown model.")
+        if model_key in PILOT_KEYS:
+            return {"model": model_key, "unavailable":
+                    "Personalized adapters need the CDLI base model, which is not served."}
+        if model_key not in self.models:
+            # Details (missing files) are in the container log, not the response.
+            return {"model": model_key, "unavailable":
+                    "This fine-tuned model is not installed or is incomplete."}
         # float32 samples are 4 bytes; drop a trailing partial sample (1-3 bytes).
         audio_bytes = audio_bytes[: len(audio_bytes) - len(audio_bytes) % 4]
         if not audio_bytes or len(audio_bytes) > MAX_BYTES:
@@ -212,25 +237,18 @@ class CDLIWhisper:
         if not (MIN_SAMPLES <= audio.size <= MAX_SAMPLES) or not np.isfinite(audio).all():
             raise ValueError(f"Expected finite 16 kHz mono audio, 0.3 to {MAX_SECONDS} seconds.")
 
-        personalized = model_key in PILOT_KEYS
-        base_key = PILOT_KEYS[model_key][0] if personalized else model_key
-        if personalized and model_key not in self.adapters:
-            return {"model": model_key, "unavailable": "Personalized adapter is not installed."}
-        model = self.models[base_key]
-        has_adapter = base_key in self.adapters.values()
-        # A base request on a model carrying an adapter runs with it switched off.
-        adapter_context = model.disable_adapter() if has_adapter and not personalized else contextlib.nullcontext()
-
+        model, processor = self.models[model_key], self.processors[model_key]
         started = time.monotonic()
         windows = split_into_windows(audio)
         # Whisper invents text for silence, so silent windows are skipped.
         windows = [w for w in windows if float(np.sqrt(np.mean(w.astype(np.float64) ** 2))) >= MIN_RMS]
         result = {
             "model": model_key,
-            "revision": MODEL_REVISIONS[base_key],
+            "model_id": f"{FINETUNED_VOLUME_NAME}/{SERVED_MODELS[model_key]['folder']}",
+            "revision": self.revisions[model_key],
             "transcript": "",
             "device": self.device,
-            "personalized": personalized,
+            "personalized": False,
             "research_only": True,
             "audio_seconds": round(audio.size / SAMPLE_RATE, 2),
             "windows": len(windows),
@@ -240,21 +258,21 @@ class CDLIWhisper:
             return result
         longest_seconds = max(w.size for w in windows) / SAMPLE_RATE
         max_new_tokens = min(MAX_NEW_TOKENS, max(MIN_NEW_TOKENS, round(longest_seconds * TOKENS_PER_SECOND)))
-        inputs = self.processors[base_key](
+        inputs = processor(
             windows, sampling_rate=SAMPLE_RATE, return_tensors="pt",
             return_attention_mask=True,
         )
         kwargs = {}
         if "attention_mask" in inputs:
             kwargs["attention_mask"] = inputs.attention_mask.to("cuda")
-        with self.torch.inference_mode(), adapter_context:
+        with self.torch.inference_mode():
             ids = model.generate(
                 inputs.input_features.to("cuda", dtype=self.torch.float16),
-                language=LANGUAGE_CODES[base_key], task="transcribe",
+                language=SERVED_MODELS[model_key]["language"], task="transcribe",
                 num_beams=1, do_sample=False,
                 max_new_tokens=max_new_tokens, **kwargs,
             )
-        texts = self.processors[base_key].batch_decode(ids, skip_special_tokens=True)
+        texts = processor.batch_decode(ids, skip_special_tokens=True)
         result["transcript"] = " ".join(t.strip() for t in texts if t.strip())
         result["inference_ms"] = round((time.monotonic() - started) * 1000)
         return result

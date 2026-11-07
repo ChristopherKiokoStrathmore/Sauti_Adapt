@@ -9,6 +9,41 @@ adapter. NOT VERIFIED: recognition accuracy for Sauti co-designers, and any
 personalized adapter (none has been trained). The Hugging Face Hub hosts the
 weights; a Hub model page is not automatically an available shared API.
 
+**Change (feature/serve-finetuned-models, NOT VERIFIED on Modal yet):** the
+`english` and `swahili` keys now serve two fine-tuned Whisper models from the
+Modal Volume `sauti-adapt-finetuned-model` instead of the CDLI checkpoints.
+The CDLI weights stay stored in `sauti-adapt-cdli-cache`; keep that volume.
+Accuracy of the fine-tuned models is NOT VERIFIED.
+
+## Serving fine-tuned models
+
+Each model is a full Hugging Face Whisper export in its own volume folder:
+
+| Key | Volume folder | Language |
+|---|---|---|
+| `english` | `/english` | `en` |
+| `swahili` | `/swahili` | `sw` |
+
+Required files: `config.json`, `model.safetensors` (or
+`model.safetensors.index.json` plus its shards) and `tokenizer.json`.
+`pytorch_model.bin` is refused because pickled weights can run code; re-save
+with `model.save_pretrained(path, safe_serialization=True)`. If
+`preprocessor_config.json` or `generation_config.json` is missing, the CDLI
+copy is used; startup refuses this when the mel bins or vocabulary differ
+from whisper-large-v3, so upload the model's own files in that case.
+
+```bash
+modal volume put sauti-adapt-finetuned-model ./english /english
+modal volume put sauti-adapt-finetuned-model ./swahili /swahili
+modal volume ls sauti-adapt-finetuned-model /english
+modal deploy ml/modal/server.py
+```
+
+A folder with missing files makes only that key return `503`; the container
+log names what is missing. To change folders or languages, edit
+`SERVED_MODELS` in `ml/modal/server.py`. The response's `model_id` and
+`revision` (a fingerprint of the uploaded files) show which upload answered.
+
 ## Recommended topology
 
 ```text
@@ -146,12 +181,11 @@ curl -sS -L --max-time 300 "$URL" \
   answers `303` and the result must be fetched with a `GET`; `-X POST`
   re-sends a POST and fails with `400 bad redirect method`. Python
   `requests` and `urllib` follow the redirect correctly by default.
-- The response holds `transcript`, `revision`, `device`, `audio_seconds`,
-  `windows` and `inference_ms`. Outputs are research transcriptions, not
+- The response holds `transcript`, `model_id`, `revision`, `device`,
+  `audio_seconds`, `windows` and `inference_ms`. Outputs are research transcriptions, not
   validated accuracy.
-- `personalized_english` / `personalized_swahili` return `503` until a
-  participant adapter is installed in the `sauti-adapt-private-adapters`
-  volume.
+- `personalized_english` / `personalized_swahili` return `503`: their
+  adapters were trained on the CDLI base models, which are no longer served.
 
 | Status | Meaning |
 |---|---|
@@ -160,7 +194,7 @@ curl -sS -L --max-time 300 "$URL" \
 | 413 | Audio empty, shorter than 0.3 s, longer than 120 s, or upload over 25 MB (a trailing partial float32 sample of 1-3 bytes is dropped, not rejected) |
 | 415 | Audio could not be decoded, took over 60 s to decode, or was sent as text, JSON or form data |
 | 422 | Unknown `X-Sauti-Model` |
-| 503 | Personalized adapter not installed |
+| 503 | Fine-tuned model folder missing or incomplete, or a personalized key (needs the CDLI base) |
 
 ## Long speech and output length
 

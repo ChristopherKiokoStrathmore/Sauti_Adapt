@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sauti Voice Test</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --surface: #ffffff; --ink: #1c1b19; --quiet: #5f5b53;
+    --line: #dcd7cc; --accent: #1f5c4a; --accent-ink: #ffffff; --rec: #b3261e;
+    --focus: #e0a100; --good: #1f6b3a; --mid: #8a5a00; --bad: #b3261e; --tint: #ebe7dd;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151513; --surface: #1f1e1b; --ink: #f2efe8; --quiet: #b3ada1;
+      --line: #3a3832; --accent: #5fbf9f; --accent-ink: #0d1f19; --rec: #ff6b5e;
+      --good: #6fd08f; --mid: #f0b44c; --bad: #ff6b5e; --tint: #2a2925; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font: 18px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center; padding: 28px 16px 40px; }
+  main { width: 100%; max-width: 680px; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; }
+  .lang { display: flex; gap: 8px; }
+  .pill { font: inherit; font-size: 16px; padding: 10px 18px; min-height: 48px; border-radius: 999px;
+    border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+  .pill[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+  /* 1. Expected sentence */
+  .prompt { width: 100%; background: var(--surface); border: 1.5px solid var(--line); border-radius: 18px; padding: 18px 20px 14px; }
+  .prompt .step { font-size: 14px; color: var(--quiet); margin: 0 0 6px; display: flex; justify-content: space-between; }
+  #expected { font-size: 34px; line-height: 1.25; font-weight: 600; margin: 0 0 12px; min-height: 44px; }
+  .nav { display: flex; gap: 8px; }
+  .nav button { flex: 1; }
+
+  #mic { width: 168px; height: 168px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; transition: background .2s, transform .1s; }
+  #mic svg { width: 60px; height: 60px; }
+  #mic:active { transform: scale(.97); }
+  #mic[data-state="recording"] { background: var(--rec); animation: pulse 1.6s ease-out infinite; }
+  #mic[data-state="sending"] { opacity: .6; cursor: progress; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--rec) 45%, transparent); } 100% { box-shadow: 0 0 0 26px transparent; } }
+  @media (prefers-reduced-motion: reduce) { #mic { transition: none; } #mic[data-state="recording"] { animation: none; } }
+  :focus-visible { outline: 4px solid var(--focus); outline-offset: 4px; }
+  #status { font-size: 19px; min-height: 28px; margin: -6px 0 0; text-align: center; color: var(--quiet); }
+  #status strong { color: var(--ink); }
+  .err { color: var(--bad) !important; }
+
+  /* 2 and 3. Results */
+  .results { width: 100%; display: grid; gap: 12px; }
+  .card { background: var(--surface); border: 1.5px solid var(--line); border-radius: 16px; padding: 14px 18px 16px; }
+  .card h2 { font-size: 14px; font-weight: 600; color: var(--quiet); margin: 0 0 6px; display: flex; justify-content: space-between; gap: 12px; }
+  .card .text { font-size: 24px; line-height: 1.35; min-height: 34px; white-space: pre-wrap; word-wrap: break-word; }
+  .card .text.empty { font-size: 18px; color: var(--quiet); }
+  .card.sauti { border-color: var(--accent); border-width: 2px; }
+  .score { font-size: 14px; font-weight: 600; padding: 2px 10px; border-radius: 999px; background: var(--tint); color: var(--ink); white-space: nowrap; }
+  .score.good { color: var(--good); } .score.mid { color: var(--mid); } .score.bad { color: var(--bad); }
+  audio { width: 100%; margin-top: 8px; height: 40px; }
+  .opt { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--quiet); margin-top: 10px; cursor: pointer; }
+  .opt input { width: 22px; height: 22px; accent-color: var(--accent); }
+  .meta { font-size: 14px; color: var(--quiet); margin-top: 6px; min-height: 20px; }
+
+  details { width: 100%; font-size: 16px; }
+  summary { cursor: pointer; color: var(--quiet); min-height: 44px; display: flex; align-items: center; }
+  textarea { width: 100%; min-height: 160px; font: inherit; font-size: 16px; padding: 12px; border-radius: 12px;
+    border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--quiet); font-weight: 600; }
+  .note { font-size: 14px; color: var(--quiet); text-align: center; max-width: 560px; margin: 0; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sauti voice test</h1>
+
+  <div class="lang" role="group" aria-label="Language">
+    <button type="button" class="pill" data-lang="english" aria-pressed="true">English</button>
+    <button type="button" class="pill" data-lang="swahili" aria-pressed="false">Kiswahili</button>
+  </div>
+
+  <section class="prompt" aria-labelledby="expLabel">
+    <p class="step"><span id="expLabel">1 · Please read this aloud</span><span id="counter"></span></p>
+    <p id="expected" aria-live="polite"></p>
+    <div class="nav">
+      <button type="button" class="pill" id="prev">Previous</button>
+      <button type="button" class="pill" id="next">Next sentence</button>
+    </div>
+  </section>
+
+  <button id="mic" type="button" data-state="idle" aria-pressed="false" aria-describedby="status">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>
+    </svg>
+    <span class="sr" id="micLabel">Start recording</span>
+  </button>
+
+  <p id="status" role="status" aria-live="polite">Tap the microphone, read the sentence, then tap again to stop.</p>
+
+  <section class="results" aria-label="Results">
+    <div class="card">
+      <h2><span>2 · What the microphone picked up</span><span class="score" id="stdScore" hidden></span></h2>
+      <div class="text empty" id="heard">Standard recognition is off. Turn it on below to compare.</div>
+      <audio id="playback" controls hidden></audio>
+      <label class="opt"><input type="checkbox" id="stdToggle"> Also run standard speech recognition (Chrome sends this audio to Google)</label>
+    </div>
+    <div class="card sauti">
+      <h2><span>3 · What Sauti understood</span><span class="score" id="sautiScore" hidden></span></h2>
+      <div class="text empty" id="understood" aria-live="polite">The model's result will appear here.</div>
+      <div class="meta" id="meta"></div>
+    </div>
+  </section>
+
+  <details>
+    <summary>Edit the sentences</summary>
+    <p class="note" style="text-align:left;margin:0 0 6px">One sentence per line, for the selected language.</p>
+    <textarea id="editor" aria-label="Sentences, one per line"></textarea>
+    <div class="row"><button type="button" class="pill" id="save">Save sentences</button><button type="button" class="pill" id="reset">Restore defaults</button></div>
+  </details>
+
+  <details>
+    <summary>Previous attempts</summary>
+    <table>
+      <thead><tr><th>Expected</th><th>Standard</th><th>Sauti</th></tr></thead>
+      <tbody id="history"></tbody>
+    </table>
+    <div class="row"><button type="button" class="pill" id="export">Download attempts (CSV)</button></div>
+  </details>
+
+  <p class="note">Test tool only. The page and its helper do not save audio. Space or Enter also starts and stops recording.</p>
+</main>
+
+<script>
+(() => {
+  const RATE = 16000, MAX_SECONDS = 30;
+  const DEFAULTS = {
+    english: ['Scroll down', 'Scroll up', 'Go back', 'Read this page aloud', 'Undo last setting',
+              'Open my messages', 'I would like a cup of tea', 'Please call my sister'],
+    swahili: ['Shuka chini', 'Panda juu', 'Rudi nyuma', 'Soma ukurasa kwa sauti', 'Tengua mpangilio',
+              'Fungua ujumbe wangu', 'Ningependa kikombe cha chai', 'Tafadhali mpigie dada yangu simu']
+  };
+  const $ = id => document.getElementById(id);
+  const mic = $('mic'), statusEl = $('status');
+  let lang = 'english', idx = 0, format = 'float32';
+  let recorder = null, chunks = [], stream = null, timer = null, started = 0, audioUrl = null;
+  let recog = null, heardText = '';
+  const attempts = [];
+
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+  };
+  const sentences = () => store.get('sauti.sentences.' + lang) || DEFAULTS[lang];
+
+  fetch('api/config').then(r => r.ok ? r.json() : null).then(c => { if (c && c.format) format = c.format; }).catch(() => {});
+
+  // ---- Expected sentence -------------------------------------------------
+  function renderPrompt() {
+    const list = sentences();
+    idx = (idx + list.length) % list.length;
+    $('expected').textContent = list[idx];
+    $('counter').textContent = `${idx + 1} of ${list.length}`;
+    $('editor').value = list.join('\n');
+  }
+  $('prev').onclick = () => { idx--; renderPrompt(); clearResults(); };
+  $('next').onclick = () => { idx++; renderPrompt(); clearResults(); };
+  document.querySelectorAll('[data-lang]').forEach(b => b.onclick = () => {
+    lang = b.dataset.lang; idx = 0;
+    document.querySelectorAll('[data-lang]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    renderPrompt(); clearResults();
+  });
+  $('save').onclick = () => {
+    const list = $('editor').value.split('\n').map(s => s.trim()).filter(Boolean);
+    if (list.length) { store.set('sauti.sentences.' + lang, list); idx = 0; renderPrompt(); setStatus('Sentences saved.'); }
+  };
+  $('reset').onclick = () => { store.set('sauti.sentences.' + lang, null); idx = 0; renderPrompt(); setStatus('Default sentences restored.'); };
+
+  // ---- Scoring: share of expected words matched, in order -------------------
+  const words = s => (s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^\p{L}\p{N}\s']/gu, ' ').split(/\s+/).filter(Boolean);
+  function wordMatch(expected, got) {
+    const a = words(expected), b = words(got);
+    if (!a.length) return null;
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+      d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+    return Math.max(0, Math.round((1 - d[a.length][b.length] / a.length) * 100));
+  }
+  function showScore(el, pct) {
+    if (pct === null) { el.hidden = true; return; }
+    el.hidden = false;
+    el.textContent = pct === 100 ? 'Exact match' : `${pct}% word match`;
+    el.className = 'score ' + (pct >= 90 ? 'good' : pct >= 50 ? 'mid' : 'bad');
+  }
+
+  // ---- Recording ----------------------------------------------------------
+  const setStatus = (html, isErr) => { statusEl.innerHTML = html; statusEl.classList.toggle('err', !!isErr); };
+  const setState = s => {
+    mic.dataset.state = s;
+    mic.setAttribute('aria-pressed', String(s === 'recording'));
+    $('micLabel').textContent = s === 'recording' ? 'Stop recording' : 'Start recording';
+    mic.disabled = s === 'sending';
+  };
+  function clearResults() {
+    $('heard').className = 'text empty';
+    $('heard').textContent = $('stdToggle').checked ? 'Waiting for your recording.' : 'Standard recognition is off. Turn it on below to compare.';
+    $('understood').className = 'text empty'; $('understood').textContent = "The model's result will appear here.";
+    $('meta').textContent = ''; $('stdScore').hidden = true; $('sautiScore').hidden = true;
+    $('playback').hidden = true;
+  }
+  $('stdToggle').onchange = clearResults;
+
+  mic.onclick = () => mic.dataset.state === 'recording' ? stop() : start();
+
+  async function start() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+    } catch {
+      setStatus('Microphone access was blocked. Allow the microphone for this page and try again.', true);
+      return;
+    }
+    clearResults();
+    chunks = []; heardText = '';
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+    recorder.onstop = send;
+    recorder.start();
+    startStandard();
+    started = Date.now();
+    setState('recording'); tick(); timer = setInterval(tick, 250);
+  }
+  function tick() {
+    const s = (Date.now() - started) / 1000;
+    setStatus(`<strong>Listening…</strong> ${s.toFixed(0)}s · tap to stop`);
+    if (s >= MAX_SECONDS) stop();
+  }
+  function stop() {
+    clearInterval(timer);
+    if (recog) { try { recog.stop(); } catch {} }
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+    if (stream) stream.getTracks().forEach(t => t.stop());
+  }
+
+  // Standard recognition (browser built-in), optional, runs alongside the recording.
+  let stdDone = Promise.resolve();
+  function startStandard() {
+    recog = null;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!$('stdToggle').checked) { stdDone = Promise.resolve(); return; }
+    if (!SR) { $('heard').textContent = 'Standard recognition is not available in this browser.'; stdDone = Promise.resolve(); return; }
+    recog = new SR();
+    recog.lang = lang === 'swahili' ? 'sw-KE' : 'en-KE';
+    recog.continuous = true; recog.interimResults = false;
+    stdDone = new Promise(resolve => {
+      recog.onresult = e => { heardText = Array.from(e.results).map(r => r[0].transcript).join(' ').trim(); };
+      recog.onerror = () => resolve(); recog.onend = () => resolve();
+    });
+    try { recog.start(); } catch { stdDone = Promise.resolve(); }
+  }
+
+  async function toMono16k(blob) {
+    const ctx = new AudioContext();
+    const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+    ctx.close();
+    const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * RATE), RATE);
+    const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
+    return (await off.startRendering()).getChannelData(0);
+  }
+  function toWav(samples) {
+    const buf = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buf);
+    const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+    w(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, RATE, true); v.setUint32(28, RATE * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    w(36, 'data'); v.setUint32(40, samples.length * 2, true);
+    samples.forEach((s, i) => v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, s)) * 0x7fff, true));
+    return new Blob([buf], { type: 'audio/wav' });
+  }
+
+  async function send() {
+    setState('sending');
+    setStatus('<strong>Transcribing…</strong> the first try can take up to a minute while the model wakes up.');
+    const expected = $('expected').textContent, t0 = performance.now();
+    const blob = new Blob(chunks, { type: recorder.mimeType });
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    audioUrl = URL.createObjectURL(blob);
+    $('playback').src = audioUrl; $('playback').hidden = false;
+
+    // Column 2: standard recognition
+    await Promise.race([stdDone, new Promise(r => setTimeout(r, 4000))]);
+    let stdPct = null;
+    if ($('stdToggle').checked) {
+      $('heard').className = 'text' + (heardText ? '' : ' empty');
+      $('heard').textContent = heardText || 'Standard recognition did not pick up any words.';
+      stdPct = wordMatch(expected, heardText); showScore($('stdScore'), stdPct);
+    } else {
+      $('heard').className = 'text empty'; $('heard').textContent = 'Listen to the recording above. Standard recognition is off.';
+    }
+
+    // Column 3: Sauti model
+    let sautiText = '', sautiPct = null, data = {};
+    try {
+      const samples = await toMono16k(blob);
+      if (samples.length < RATE * 0.3) throw new Error('That recording was too short. Try again and speak after tapping.');
+      const body = format === 'wav' ? toWav(samples) : new Blob([samples.buffer], { type: 'application/octet-stream' });
+      const res = await fetch('api/transcribe', { method: 'POST', headers: { 'X-Model': lang, 'Content-Type': body.type }, body });
+      data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || data.error || `The speech service answered ${res.status}.`);
+      sautiText = (data.transcript ?? data.text ?? '').trim();
+      $('understood').className = 'text' + (sautiText ? '' : ' empty');
+      $('understood').textContent = sautiText || 'No words recognised.';
+      sautiPct = wordMatch(expected, sautiText); showScore($('sautiScore'), sautiPct);
+      const bits = [lang === 'swahili' ? 'Kiswahili model' : 'English model', `${((performance.now() - t0) / 1000).toFixed(1)}s`];
+      if (data.intent) bits.push(`command: ${data.intent}`);
+      if (data.device) bits.push(data.device);
+      $('meta').textContent = bits.join(' · ');
+      setStatus('Done. Tap the microphone to try again, or go to the next sentence.');
+    } catch (e) {
+      setStatus(e.message || 'Something went wrong. Try again.', true);
+    } finally {
+      setState('idle'); mic.focus();
+    }
+    record(expected, $('stdToggle').checked ? heardText : '', stdPct, sautiText, sautiPct);
+  }
+
+  // ---- History and export --------------------------------------------------
+  const fmt = (t, p) => t ? `${t}${p === null ? '' : ` (${p}%)`}` : '—';
+  function record(expected, std, stdPct, sauti, sautiPct) {
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    attempts.unshift({ time, lang, expected, standard: std, standard_match: stdPct, sauti, sauti_match: sautiPct });
+    const tr = document.createElement('tr');
+    [expected, fmt(std, stdPct), fmt(sauti, sautiPct)].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.append(td); });
+    $('history').prepend(tr);
+  }
+  $('export').onclick = () => {
+    const cols = ['time', 'lang', 'expected', 'standard', 'standard_match', 'sauti', 'sauti_match'];
+    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = [cols.join(','), ...attempts.slice().reverse().map(a => cols.map(c => esc(a[c])).join(','))].join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = 'sauti-voice-test.csv'; a.click();
+  };
+
+  window.addEventListener('keydown', e => {
+    if ((e.code === 'Space' || e.code === 'Enter') && document.activeElement === document.body) { e.preventDefault(); mic.click(); }
+  });
+  renderPrompt();
+})();
+</script>
+</body>
+</html>

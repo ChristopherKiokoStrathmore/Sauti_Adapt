@@ -34,3 +34,18 @@ declare module '*ai4a11y-toolkit/toolkit/index.js' {
 declare module '*ai4a11y-toolkit/toolkit/platforms/node/kv.js' {
   export function memoryKV(): AA_KV;
 }
+
+/** Minimal documented Controller interfaces for Headway's own content bundle. */
+interface AA_ControlPort {
+  getContent(mode?: string, chunk?: number): Promise<unknown>;
+  [key: string]: unknown;
+}
+declare module '@ai4a11y/toolkit/controller/createController.js' {
+  export function createController(options: {
+    control: AA_ControlPort;
+    operator: { abilityModel: { supportAreas: string[] } };
+  }): { handle(utterance: string): Promise<{ ok?: boolean; say?: string }> };
+}
+declare module '@ai4a11y/toolkit/controller/web/dom-receiver.js' {
+  export function createDomReceiver(root: HTMLElement, options?: { scrollTarget?: HTMLElement }): AA_ControlPort;
+}

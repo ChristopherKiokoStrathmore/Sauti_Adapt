@@ -24,7 +24,8 @@ Load `apps/headway` unpacked in Chrome (`chrome://extensions`, Developer mode, L
 
 Secrets never go in the repo, a chat or a PR:
 - **Sauti model token:** `ml/modal/.env` (`SAUTI_GPU_BEARER_TOKEN`), shared privately by Brian. Run `tools/voice-test/serve.py` (port 8790) to use it.
-- **Gemini API key:** `GEMINI_KEY` in `ml/modal/.env` for the dev relay; on the deployed speech API, a protected environment variable. Never in the extension.
+- **Gemini API key:** `GEMINI_API_KEY`, in Railway's Variables for the deployed speech API, and in `services/speech-api/.env` (git-ignored) for a local run. Never in the extension.
+- **Participant credentials:** the Headway agent panel uses her personal user id + token from the speech API (`/v1/participants`); never a shared team code.
 - **Without either:** everything still builds and the fixture tests run. Sauti and Gemini readings say "not available".
 
 If `bootstrap_toolkit.py` says the checkout has local changes: run `git -C vendor/ai4a11y-toolkit diff`. If it's only file modes, run `git -C vendor/ai4a11y-toolkit checkout -- .`. Never edit `vendor/`.

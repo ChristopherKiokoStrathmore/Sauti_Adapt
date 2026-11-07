@@ -16,6 +16,7 @@ Status: **Todo** · **Claimed** · **In review** · **Done**
 | 6 | Eval harness on her recordings | 1, 3, 4 | | | Todo |
 | 7 | Upstream PRs to the AI4A11y toolkit | 1, 3, voice (#29) | | | Todo |
 | – | Voice onboarding + `fields.voice` | – | Brian | [#29](https://github.com/ChristopherKiokoStrathmore/Sauti_Adapt/pull/29) | In review |
+| – | Gemini agent panel + `/v1/extension/compare` + `/v1/extension/agent/plan` (one action: search, navigate, scroll, read, back) | – | Christopher | on `feature/headway-voice` | Done (needs Railway deploy) |
 
 ---
 
@@ -54,7 +55,7 @@ Status: **Todo** · **Claimed** · **In review** · **Done**
 
 ## WP3 · Understanding
 
-**Folders:** `apps/headway/src/toolkit-next/controller/` (grammar v2, Gemini lane v2), relay endpoint for Gemini.
+**Folders:** `apps/headway/src/toolkit-next/controller/` (grammar v2), `apps/headway/src/agent/` and `services/speech-api/sauti_ml/agent.py` (extend Christopher's planner; coordinate with him).
 **Scenarios:** N1, N5, R4, C2, C3, C4, P1–P3, X3.
 
 - Grammar v2: Kiswahili, `extend()` for aliases and site phrases, exact after normalisation.

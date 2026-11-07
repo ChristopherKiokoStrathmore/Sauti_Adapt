@@ -73,7 +73,7 @@ Pieces and where they live:
 | Gemini lane v2 | `apps/headway/src/toolkit-next/controller/` | `controller/llm-lane.js` |
 | Safety: risk, confirmation, secrets | `apps/headway/src/harness/safety/` | risk + confirmation: yes; secrets: decide later |
 | Panel UI in use (Ready, Listening, Working, Did you mean, Check) | `apps/headway/src/sidepanel/` | no |
-| Gemini call (key server-side) | `services/speech-api/sauti_ml/understand.py`, served as `POST /v1/understand` and, for local testing, `POST /api/understand` on the dev relay | no |
+| Gemini planning (key server-side) | `services/speech-api/sauti_ml/agent.py`, `POST /v1/extension/agent/plan` (built) | no |
 | Dev relay (Sauti + Gemini on this computer) | `tools/voice-test/serve.py` on 127.0.0.1:8790 | no |
 
 `src/toolkit-next/` mirrors the toolkit's own paths. Code there must be portable: TypeScript
@@ -83,32 +83,50 @@ bump the pin and delete the copy.
 
 ## 3a. Backend: where Gemini runs
 
-**Decision D3.** The toolkit is a library that runs **inside the extension**: Controller, grammar,
-safety and Chrome actions all run in her browser. Only the call that needs a key leaves it.
+**Decision D3 (matches what is built).** The toolkit is a library that runs **inside the
+extension**: Controller, grammar, safety and Chrome actions run in her browser. Only calls that
+need a key leave it, to the FastAPI **speech API** (`services/speech-api`, deployed on Railway).
+Christopher built these endpoints on this branch; see [`../EXTENSION_ONLY_GEMINI.md`](../EXTENSION_ONLY_GEMINI.md)
+and `docs/GEMINI_BROWSER_AGENT.md`.
 
 ```
-Headway (extension)                                  Backend
+Headway side panel (extension)                       Railway speech API (FastAPI)
+  her audio  ───────────────────────────────►  POST /v1/extension/compare
+                                                  → Modal Whisper (English / Kiswahili)
+             ◄── transcript + model_id/revision
   Controller.handle(transcript)
     her aliases / grammar         → local, no network
-    on a miss: llm-lane ──HTTPS──► POST /v1/understand   (services/speech-api, FastAPI)
-                                     checks her personal token (AGENTS.md rule 8)
-                                     calls Gemini with GEMINI_KEY held server-side
-                       ◄──JSON──    call | plan | clarify | none
-    safety check → ChromeControlPort → page
+    on a miss ───────────────────────────────►  POST /v1/extension/agent/plan
+                                                  personal user id + token (AGENTS.md rule 8)
+                                                  GEMINI_API_KEY held on Railway only
+                                                  rate-limited per person
+             ◄── ONE validated action
+    safety check → she confirms → ChromeControlPort / toolkit Controller → page
 ```
 
-- **One implementation.** The Gemini logic lives in `services/speech-api/sauti_ml/understand.py`,
-  standard library only. The FastAPI route `/v1/understand` wraps it for deployment. The dev relay
-  (`tools/voice-test/serve.py`) imports the same module and serves `/api/understand` on 127.0.0.1:8790,
-  reading `GEMINI_KEY` from `ml/modal/.env` (git-ignored), so the whole loop runs on one laptop for testing
-  with Faridah.
-- **Her profile goes with the request, not secrets.** The extension sends a compact profile: her
-  language, her commands and aliases, known sites, and her confirmation and feedback choices (from
-  `fields.voice`). Never recordings, passwords, OTPs, ID numbers or page body text.
-- **Gemini Nano** (Chrome's on-device model) needs no backend; it is tried first when available.
+- **Keys:** `GEMINI_API_KEY`, `SAUTI_MODAL_BEARER_TOKEN`, `SAUTI_TOKEN_PEPPER` and `SAUTI_API_TOKEN` live in
+  Railway's private Variables. For a local run of the speech API they go in `services/speech-api/.env`
+  (git-ignored). Never in the extension.
+- **Her profile goes with the plan request, never secrets.** The harness extends the request with a
+  compact profile from `fields.voice`: her language, her commands and aliases, known sites, her
+  confirmation and feedback choices. Never recordings, passwords, OTPs, ID numbers or page body text.
+- **Gemini Nano** (on-device) needs no backend and can be tried first for simple commands.
+- **Railway must run this branch** for the `/v1/extension/*` endpoints to exist (it tracks `main`).
+- **Dev relay** `tools/voice-test/serve.py` (127.0.0.1:8790) only forwards speech to Modal for local
+  onboarding tests. It is not the Gemini path.
 - **Not used:** Django (it would duplicate FastAPI's auth and deployment). Not now: the toolkit's own
-  `server/`. It already has a Gemini caller and could host shared profiles later, but it logs
-  prompts and replies by default; that must be switched off before any use with Faridah.
+  `server/`; it logs prompts and replies by default.
+
+### What is built today vs what the harness adds
+
+| | Built (Christopher, `src/agent/`) | Harness adds |
+|---|---|---|
+| Gemini plan | One action; search, HTTPS navigation, scroll, read, back | Click by element id with ambiguity, type, choose, submit with read-back, plans of up to 4 steps, clarify questions (§4.3) |
+| Page context | None (by design) | Affordance names only, untrusted (D1) |
+| Language | English and Kiswahili speech models | Kiswahili grammar, numbers, her aliases (§4.4) |
+| Her profile | Not sent | Compact `fields.voice` profile in the plan request |
+| Secrets | Isolated from Gemini (tested) | Secret-field mode, masked read-back (§5.2) |
+| Listening | User-initiated capture in the panel | Her trigger key, her end-of-speech wait, offscreen mic (WP4) |
 
 ## 4. Contracts
 

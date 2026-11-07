@@ -1,8 +1,7 @@
 /** The official AI4A11y Controller is the only in-page action executor.
  * Injected by Headway after an explicit site grant; no unattended background work.
  */
-import { createController } from '@ai4a11y/toolkit/controller/createController.js';
-import { createDomReceiver } from '@ai4a11y/toolkit/controller/web/dom-receiver.js';
+import { createController, createDomReceiver } from '../../../../packages/shared/src/controller.ts';
 import { capReadPort } from '../../../../packages/shared/src/page-text.ts';
 
 type AgentWindow = typeof globalThis & { __HEADWAY_AGENT_LOADED__?: boolean };

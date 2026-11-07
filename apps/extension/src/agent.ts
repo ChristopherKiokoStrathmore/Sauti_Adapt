@@ -149,6 +149,10 @@ export function initBrowserAgent() {
       if (!response.ok) throw new Error(String(result?.detail || result?.error || 'Speech API unavailable.'));
       const row = result?.results?.find((item: { model?: string }) => item.model === model);
       const transcript = row?.transcript;
+      // Do not silently substitute the CDLI baseline when this pilot selected
+      // the participant's uploaded fine tuned checkpoint.
+      if (row?.model_id !== 'sauti-adapt-finetuned-model/' + model)
+        throw new Error('The selected fine tuned model was not verified on the live GPU. Check the Modal model_id.');
       if (typeof transcript !== 'string' || !transcript.trim())
         throw new Error('No usable transcript. The model may be unavailable or the speech was not recognized.');
       if (!(await stillSamePage(page))) throw new Error('Page changed during transcription.');

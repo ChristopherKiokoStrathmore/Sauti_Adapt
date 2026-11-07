@@ -38,6 +38,7 @@ const entries = {
   'youtube-caption-handler': 'src/youtube/caption-handler.ts',
   'twitter-interceptor': 'src/twitter/interceptor.ts',
   sidepanel: 'src/sidepanel/sidepanel.ts',
+  'agent-content': 'src/agent/controller-content.ts',
   onboarding: 'src/onboarding/onboarding.ts',
   'mic-permission': 'src/onboarding/mic-permission.ts'
 };
@@ -52,7 +53,7 @@ const options = {
   sourcemap: 'linked',
   legalComments: 'eof',
   logLevel: 'info',
-  alias: { '@ai4a11y/toolkit': toolkitDir }
+  alias: { '@ai4a11y/toolkit': toolkitDir, '@toolkit': join(root, '../../vendor/ai4a11y-toolkit') }
 };
 
 async function copyStatic() {

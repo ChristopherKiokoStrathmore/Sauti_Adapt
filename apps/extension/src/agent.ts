@@ -133,7 +133,7 @@ export function initBrowserAgent() {
       say('Transcribing speech with the selected fine tuned model…');
       const audio = await session.stop();
       const form = new FormData();
-      const model = (el('agent-language') as HTMLSelectElement).value;
+      const model = (document.getElementById('agent-language') as HTMLSelectElement).value;
       form.append('audio', audio, 'speech.wav');
       form.append('profile_id', credentials().profileId);
       form.append('language', model === 'swahili' ? 'sw-KE' : 'en-KE');

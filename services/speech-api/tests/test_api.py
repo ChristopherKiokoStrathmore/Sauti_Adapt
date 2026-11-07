@@ -35,8 +35,8 @@ def test_health_does_not_expose_secrets(monkeypatch):
     resp = client.get('/health')
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {'status', 'mode', 'enrollment_enabled'}
-    assert body == {'status': 'ok', 'mode': 'mock', 'enrollment_enabled': False}
+    assert set(body) == {'status', 'mode', 'enrollment_enabled', 'demo_mode'}
+    assert body == {'status': 'ok', 'mode': 'mock', 'enrollment_enabled': False, 'demo_mode': False}
     assert 'secret-in-health-test' not in resp.text
     assert 'pepper-in-health-test' not in resp.text
 
@@ -546,7 +546,8 @@ def test_expired_clip_removes_its_embedding_and_keeps_the_released_model(monkeyp
     assert stored.status_code == 200, stored.text
     audio = next(tmp_path.rglob('*.wav'))
     raw = read_private_bytes(audio)
-    key = hashlib.sha256(b'facebook/wav2vec2-base|' + raw).hexdigest()
+    from sauti_ml.encoder_config import encoder_signature
+    key = hashlib.sha256((encoder_signature() + '|').encode() + raw).hexdigest()
     profile = audio.parent.parent
     cache = profile / 'feature-cache'
     cache.mkdir(mode=0o700)

@@ -20,13 +20,21 @@ from .audio import decode_wav
 from .storage import canonical_uuid, load_manifest, profile_dir, read_private_bytes, write_private_bytes
 from .prototype import PrototypeModel, model_content_version
 from .encoder import SpeechEncoder
-from .release_gate import GatePolicy, assess_release
+from dataclasses import replace
+from .release_gate import DEMO_STATUS, GatePolicy, assess_release, demo_mode, training_policy
 
 MIN_TRAIN_PER_CLASS = 3
 MIN_VALID_PER_CLASS = 2
 MIN_UNKNOWN_VALID = 5
 # Margins are selected using calibration data, not fixed in the source.
 MARGIN_CANDIDATES = (0.01, 0.03, 0.05, 0.08, 0.10, 0.15, 0.20)
+
+
+def _minimums():
+    """(train per class, calibration and test per class, unknown clips per check)."""
+    if demo_mode():
+        return 3, 1, 3
+    return MIN_TRAIN_PER_CLASS, MIN_VALID_PER_CLASS, MIN_UNKNOWN_VALID
 
 
 def _language_bucket():
@@ -113,6 +121,13 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
     test = [e for e in entries if e['session_id'] == test_session]
     if not training or not calibration or not test:
         raise ValueError('Three distinct data partitions are required: train, calibration, untouched test.')
+    return _train_core(profile_id, training, calibration, test, calibration_session, test_session,
+                       encoder=encoder, result_kind=result_kind, started=started, strict=True)
+
+
+def _train_core(profile_id, training, calibration, test, calibration_session, test_session, *,
+                encoder, result_kind, started, strict):
+    """Shared by session based training (strict) and auto partitioned training."""
     def fingerprints(rows):
         return {hashlib.sha256(read_private_bytes(Path(e['absolute_path']))).hexdigest() for e in rows}
     a, b, c = fingerprints(training), fingerprints(calibration), fingerprints(test)
@@ -121,15 +136,16 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
     classes = sorted({(e['intent'], e['language']) for e in training if e['intent'] != 'UNKNOWN'})
     if len({c[0] for c in classes}) < 3:
         raise ValueError('Enrollment requires at least three distinct commands, plus unknown speech.')
+    min_train, min_valid, min_unknown = _minimums()
     for label, lang in classes:
         train_n = sum(e['intent'] == label and e['language'] == lang for e in training)
         cal_n = sum(e['intent'] == label and e['language'] == lang for e in calibration)
         test_n = sum(e['intent'] == label and e['language'] == lang for e in test)
-        if train_n < MIN_TRAIN_PER_CLASS or cal_n < MIN_VALID_PER_CLASS or test_n < MIN_VALID_PER_CLASS:
-            raise ValueError(f'{label} / {lang} requires >=3 train, >=2 calibration and >=2 test samples; got {train_n}/{cal_n}/{test_n}.')
+        if train_n < min_train or cal_n < min_valid or test_n < min_valid:
+            raise ValueError(f'{label} / {lang} requires >={min_train} train, >={min_valid} calibration and >={min_valid} test samples; got {train_n}/{cal_n}/{test_n}.')
     for session_name, subset in [('calibration',calibration),('test',test)]:
-        if len([e for e in subset if e['intent'] == 'UNKNOWN']) < MIN_UNKNOWN_VALID:
-            raise ValueError(f'Collect at least five unknown/unrelated utterances in the {session_name} session.')
+        if len([e for e in subset if e['intent'] == 'UNKNOWN']) < min_unknown:
+            raise ValueError(f'Collect at least {min_unknown} unknown/unrelated utterances for the {session_name} check.')
 
     encoder = encoder or SpeechEncoder()
     folder = profile_dir(profile_id)
@@ -196,12 +212,7 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
     test_metrics = test_predictions(model, test_positive, test_negatives)
     # Minimum evidence is enforced across calibration and untouched test.
     # No held-out test labels participate in threshold or margin selection.
-    import os
-    policy = GatePolicy(
-        minimum_unknown_count=int(os.environ.get('SAUTI_MIN_UNKNOWN_COUNT', '30')),
-        maximum_upper_false_accept_rate=float(os.environ.get('SAUTI_MAX_UNKNOWN_FAR_UPPER', '0.10')),
-        weak_evidence=os.environ.get('SAUTI_ALLOW_WEAK_EVIDENCE', '').lower() == 'true',
-    )
+    policy = training_policy()
     missing = _unenrolled_activations(test_metrics, enrolled)
     decision = assess_release(
         len(negatives), metrics['unknown_false_accepts'],
@@ -211,6 +222,8 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
     )
     if decision.status == 'blocked':
         raise RuntimeError('Voice command evidence gate blocked: ' + decision.reason + ' Model NOT released.')
+    if demo_mode() and decision.executable:
+        decision = replace(decision, status=DEMO_STATUS, reason='Demo-grade evidence only. Not a validated release.')
     # Weak evidence is written for review but never executable by the API.
     model.save(folder, released=decision.executable)
     report = {
@@ -225,11 +238,53 @@ def run(profile_id: str, calibration_session: str, test_session: str, *, encoder
         'metrics': {'calibration': metrics, 'test': test_metrics},
         'latency_seconds': round(time.perf_counter() - started, 3),
         'result_kind': result_kind,
+        'demo_grade': demo_mode(),
         'accuracy_claim': False,
         'warning': 'Small test sets cannot establish a low real-world false activation rate. The Clopper-Pearson upper bound applies only to collected unknown clips. Requires independent co-designer testing.'
     }
     (folder / 'evaluation.json').write_text(json.dumps(report, indent=2), encoding='utf8')
     return report
+
+
+def auto_partition(entries):
+    """Split one pool of consented clips into train, calibration and test, stratified per command.
+
+    Deterministic (ordered by a hash of the recording id) so a retrain gives the same split.
+    One recording session is enough: the participant does not manage session roles.
+    """
+    _, min_valid, _ = _minimums()
+    def order(rows):
+        return sorted(rows, key=lambda e: hashlib.sha256(e['recording_id'].encode()).hexdigest())
+    groups = defaultdict(list)
+    for e in entries:
+        groups[(e['intent'], e['language'])].append(e)
+    training, calibration, test = [], [], []
+    for (intent, _language), rows in sorted(groups.items()):
+        rows = order(rows)
+        if intent == 'UNKNOWN':
+            half = (len(rows) + 1) // 2
+            calibration += rows[:half]
+            test += rows[half:]
+            continue
+        held = min_valid
+        if len(rows) <= 2 * held:
+            training += rows
+            continue
+        calibration += rows[:held]
+        test += rows[held:2 * held]
+        training += rows[2 * held:]
+    return training, calibration, test
+
+
+def run_auto(profile_id: str, *, encoder=None, result_kind: str = 'private-auto-split') -> dict:
+    started = time.perf_counter()
+    profile_id = canonical_uuid(profile_id)
+    entries = load_manifest(profile_id)
+    training, calibration, test = auto_partition(entries)
+    if not training or not calibration or not test:
+        raise ValueError('Not enough recordings yet. Record each command and some unrelated speech first.')
+    return _train_core(profile_id, training, calibration, test, 'auto-split', 'auto-split',
+                       encoder=encoder, result_kind=result_kind, started=started, strict=False)
 
 
 def main():

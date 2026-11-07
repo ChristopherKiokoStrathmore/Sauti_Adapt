@@ -68,7 +68,11 @@ ALL_KEYS = (*SERVED_MODELS, *PILOT_KEYS)
 
 SAMPLE_RATE = 16_000
 MIN_SAMPLES = 4_800                    # 0.3 s
-MAX_SECONDS = 120                      # longer descriptions are split into windows
+# Long recordings are split into 30 s windows and transcribed BATCH_WINDOWS at
+# a time, so GPU memory stays flat however long the audio is. The ceiling is
+# bounded by the request timeouts below, not by memory.
+MAX_SECONDS = 30 * 60                  # 30 minutes
+BATCH_WINDOWS = 8                      # 30 s windows per generate() call (4 min of audio)
 MAX_SAMPLES = MAX_SECONDS * SAMPLE_RATE
 MAX_BYTES = MAX_SAMPLES * 4            # float32
 WINDOW_SAMPLES = 30 * SAMPLE_RATE      # Whisper hears at most 30 s at a time
@@ -136,7 +140,7 @@ def split_into_windows(audio):
     image=gpu_image,
     gpu=["L4", "A10G"],          # L4 first; A10G only when no L4 is free
     volumes={"/models": weights, str(FINETUNED_ROOT): finetuned},
-    timeout=300,                 # per request
+    timeout=1200,                # per request; 30 min of audio is 60 windows
     startup_timeout=900,         # model loading, separate from request time
     scaledown_window=300,
     max_containers=1,
@@ -256,23 +260,26 @@ class CDLIWhisper:
         if not windows:
             result["inference_ms"] = round((time.monotonic() - started) * 1000)
             return result
-        longest_seconds = max(w.size for w in windows) / SAMPLE_RATE
-        max_new_tokens = min(MAX_NEW_TOKENS, max(MIN_NEW_TOKENS, round(longest_seconds * TOKENS_PER_SECOND)))
-        inputs = processor(
-            windows, sampling_rate=SAMPLE_RATE, return_tensors="pt",
-            return_attention_mask=True,
-        )
-        kwargs = {}
-        if "attention_mask" in inputs:
-            kwargs["attention_mask"] = inputs.attention_mask.to("cuda")
-        with self.torch.inference_mode():
-            ids = model.generate(
-                inputs.input_features.to("cuda", dtype=self.torch.float16),
-                language=SERVED_MODELS[model_key]["language"], task="transcribe",
-                num_beams=1, do_sample=False,
-                max_new_tokens=max_new_tokens, **kwargs,
+        texts = []
+        for first in range(0, len(windows), BATCH_WINDOWS):
+            batch = windows[first:first + BATCH_WINDOWS]
+            longest_seconds = max(w.size for w in batch) / SAMPLE_RATE
+            max_new_tokens = min(MAX_NEW_TOKENS, max(MIN_NEW_TOKENS, round(longest_seconds * TOKENS_PER_SECOND)))
+            inputs = processor(
+                batch, sampling_rate=SAMPLE_RATE, return_tensors="pt",
+                return_attention_mask=True,
             )
-        texts = processor.batch_decode(ids, skip_special_tokens=True)
+            kwargs = {}
+            if "attention_mask" in inputs:
+                kwargs["attention_mask"] = inputs.attention_mask.to("cuda")
+            with self.torch.inference_mode():
+                ids = model.generate(
+                    inputs.input_features.to("cuda", dtype=self.torch.float16),
+                    language=SERVED_MODELS[model_key]["language"], task="transcribe",
+                    num_beams=1, do_sample=False,
+                    max_new_tokens=max_new_tokens, **kwargs,
+                )
+            texts.extend(processor.batch_decode(ids, skip_special_tokens=True))
         result["transcript"] = " ".join(t.strip() for t in texts if t.strip())
         result["inference_ms"] = round((time.monotonic() - started) * 1000)
         return result
@@ -281,7 +288,8 @@ class CDLIWhisper:
 @app.function(
     image=api_image,
     secrets=[modal.Secret.from_name("sauti-gpu-auth")],
-    timeout=900,   # covers a cold start (GPU queue + model load) plus inference
+    timeout=2400,  # covers a cold start (GPU queue + model load) plus 30 min of audio
+    memory=4096,   # holds a large upload plus its decoded float32 samples
 )
 @modal.fastapi_endpoint(method="POST")
 async def transcribe(request: Request):

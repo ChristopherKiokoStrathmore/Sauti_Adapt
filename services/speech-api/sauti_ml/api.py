@@ -477,6 +477,8 @@ def plan_browser_action(payload: AgentPlanRequest, user_id: str = Depends(requir
     if not 1 <= len(payload.instruction.strip()) <= 400 or len(payload.page_url) > 2048:
         raise HTTPException(status_code=422, detail='Invalid agent instruction or page URL.')
     from .agent import AgentPlanError, plan_action
+    from .auth import _consume, _configured_limit
+    _consume('agent:' + user_id, _configured_limit('SAUTI_AGENT_RATE_LIMIT_PER_MINUTE', 12))
     try:
         plan = plan_action(payload.instruction, payload.page_url)
     except AgentPlanError as exc:

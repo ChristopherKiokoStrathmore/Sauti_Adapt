@@ -156,12 +156,14 @@ repository. Replace the secret value (and the speech API's
 
 Request format: `POST`, `Authorization: Bearer <token>`,
 `X-Sauti-Model: english` or `swahili`, and the audio file itself as the
-request body (Postman: Body > binary), 0.3 to 120 seconds.
+request body (Postman: Body > binary), 0.3 seconds to 30 minutes.
 
-- **Any common audio file:** WAV, MP3, M4A/AAC, OGG/Opus, WebM, FLAC, AIFF,
-  AMR or WMA, at any sample rate and channel count, up to 25 MB. The endpoint
-  decodes it with ffmpeg on CPU to 16 kHz mono before it reaches the GPU.
-  Any `Content-Type` works except text, JSON and form data.
+- **Any common audio or video file:** WAV, MP3, M4A/AAC, OGG/Opus, WebM,
+  FLAC, AIFF, AMR, WMA, AC3, WavPack, APE, AU and others, plus video files
+  (MP4, MOV, MKV, AVI, MPEG-TS, FLV) whose first audio track is used, at any
+  sample rate and channel count, up to 500 MB. The endpoint decodes it with
+  ffmpeg on CPU to 16 kHz mono before it reaches the GPU. Any `Content-Type`
+  works except text, JSON and form data.
 - **Raw float32 (fastest, used by the speech API):** `Content-Type:
   application/octet-stream` and raw 16 kHz mono float32 little-endian
   samples. These skip ffmpeg. A body sent as `application/octet-stream` that
@@ -191,16 +193,20 @@ curl -sS -L --max-time 300 "$URL" \
 |---|---|
 | 200 | Transcribed (silence gives an empty transcript) |
 | 401 | Missing or wrong bearer token |
-| 413 | Audio empty, shorter than 0.3 s, longer than 120 s, or upload over 25 MB (a trailing partial float32 sample of 1-3 bytes is dropped, not rejected) |
-| 415 | Audio could not be decoded, took over 60 s to decode, or was sent as text, JSON or form data |
+| 413 | Audio empty, shorter than 0.3 s, longer than 30 min, or upload over 500 MB (a trailing partial float32 sample of 1-3 bytes is dropped, not rejected) |
+| 415 | Audio could not be decoded, took over 5 min to decode, or was sent as text, JSON or form data |
 | 422 | Unknown `X-Sauti-Model` |
 | 503 | Fine-tuned model folder missing or incomplete, or a personalized key (needs the CDLI base) |
 
 ## Long speech and output length
 
-Whisper hears at most 30 s at a time. Longer audio (up to 120 s) is split at
-the quietest point in the last 5 s of each window, transcribed as one batch
-and joined. Each window may produce up to 440 new tokens (Whisper's decoder
+Whisper hears at most 30 s at a time. Longer audio (up to 30 min) is split at
+the quietest point in the last 5 s of each window, transcribed 8 windows
+(4 min of audio) per batch so GPU memory stays flat, and joined. Limits are
+`MAX_SECONDS` / `BATCH_WINDOWS` in `ml/modal/server.py` and `MAX_UPLOAD_BYTES`
+in `ml/modal/audio_input.py`; the GPU request timeout (20 min) and endpoint
+timeout (40 min, including a cold start) bound how long audio can be. Long
+requests return `303` and must be followed (see `-L` above). Each window may produce up to 440 new tokens (Whisper's decoder
 ceiling), scaled at 15 tokens per second of audio so a hallucination loop on
 silence cannot run to the limit; real speech never reaches that rate.
 Windows below the speech API's silence floor (RMS 0.002) are skipped.

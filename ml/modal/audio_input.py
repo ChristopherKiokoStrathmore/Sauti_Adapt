@@ -20,13 +20,17 @@ import subprocess
 import tempfile
 
 RAW_FLOAT32_TYPE = "application/octet-stream"
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024    # encoded upload; 120 s of WAV at 48 kHz stereo 16-bit is ~23 MB
-DECODE_TIMEOUT_SECONDS = 60
-# Only real audio/video containers. Blocks playlist and concat demuxers (hls,
-# concat, ...) that could make ffmpeg read other files.
+MAX_UPLOAD_BYTES = 500 * 1024 * 1024   # encoded upload; 30 min of 48 kHz stereo 24-bit WAV is ~520 MB
+DECODE_TIMEOUT_SECONDS = 300
+# Real audio/video containers only (video files are accepted; their first
+# audio track is used). Deliberately excludes playlist, concat, image and
+# device demuxers (hls, concat, image2, lavfi, ...) that could make ffmpeg
+# read other files.
 FFMPEG_FORMATS = ",".join((
-    "wav", "w64", "mp3", "flac", "ogg", "matroska", "webm", "mov", "mp4", "m4a",
-    "3gp", "aac", "aiff", "caf", "amr", "asf",
+    "wav", "w64", "rf64", "mp3", "mp2", "flac", "ogg", "matroska", "webm", "mov", "mp4",
+    "m4a", "3gp", "aac", "ac3", "eac3", "aiff", "caf", "amr", "amrnb", "amrwb", "asf",
+    "avi", "flv", "mpeg", "mpegts", "wv", "ape", "tta", "au", "voc", "dsf", "mpc",
+    "mpc8", "spx", "gsm",
 ))
 # Content types that are clearly not an audio file body.
 REJECTED_TYPE_PREFIXES = ("text/", "application/json", "application/x-www-form-urlencoded", "multipart/")
@@ -52,6 +56,9 @@ def has_container_signature(data: bytes) -> bool:
     sync (0xFFEx) can occur by chance at the start of raw float32 audio.
     """
     head = data[:12]
+    # MPEG-TS has no header: a 0x47 sync byte starts every 188-byte packet.
+    if len(data) >= 3 * 188 and data[0] == data[188] == data[376] == 0x47:
+        return True
     return (
         (head[:4] == b"RIFF" and head[8:12] in (b"WAVE", b"RF64"))
         or head[:4] in (b"RF64", b"OggS", b"fLaC", b"FORM", b"caff", b"\x1a\x45\xdf\xa3")
@@ -59,6 +66,9 @@ def has_container_signature(data: bytes) -> bool:
         or head[4:8] == b"ftyp"                 # MP4 / M4A / 3GP
         or head[:5] == b"#!AMR"
         or head[:4] == b"\x30\x26\xb2\x75"      # ASF / WMA
+        or (head[:4] == b"RIFF" and head[8:12] == b"AVI ")
+        or head[:3] == b"FLV"
+        or head[:4] in (b"wvpk", b"MAC ", b"TTA1", b".snd", b"MPCK")
     )
 
 
@@ -100,8 +110,9 @@ def decode_with_ffmpeg(data: bytes, sample_rate: int, max_seconds: float,
     if completed.returncode != 0 or not completed.stdout:
         # ffmpeg's stderr can echo file metadata, so it is not returned or logged.
         raise AudioInputError(
-            415, "Could not decode audio. Send WAV, MP3, M4A, OGG/Opus, WebM, FLAC "
-                 "or raw 16 kHz mono float32 (application/octet-stream).")
+            415, "Could not decode audio. Send a common audio or video file (WAV, MP3, "
+                 "M4A/AAC, OGG/Opus, WebM, FLAC, AIFF, AMR, WMA, MP4, MKV, AVI, ...) or raw "
+                 "16 kHz mono float32 (application/octet-stream).")
     return completed.stdout
 
 

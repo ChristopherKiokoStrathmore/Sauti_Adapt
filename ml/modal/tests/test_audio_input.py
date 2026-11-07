@@ -10,6 +10,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import audio_input  # noqa: E402
 from audio_input import (  # noqa: E402
     MAX_UPLOAD_BYTES,
     AudioInputError,
@@ -133,12 +134,24 @@ def test_empty_body_is_rejected():
     assert error.value.status == 413
 
 
-def test_oversized_upload_is_rejected_before_decoding():
+def test_oversized_upload_is_rejected_before_decoding(monkeypatch):
+    # Shrink the limit so the test does not allocate hundreds of MB.
+    monkeypatch.setattr(audio_input, "MAX_UPLOAD_BYTES", 1024)
     runner = FakeRunner()
     with pytest.raises(AudioInputError) as error:
-        prepare_audio("audio/wav", b"\x00" * (MAX_UPLOAD_BYTES + 1), runner=runner, **LIMITS)
+        prepare_audio("audio/wav", b"\x00" * 1025, runner=runner, **LIMITS)
     assert error.value.status == 413
     assert runner.calls == []
+
+
+def test_upload_limit_allows_long_recordings():
+    # 30 min of 48 kHz stereo 16-bit WAV (~345 MB) must fit.
+    assert MAX_UPLOAD_BYTES >= 30 * 60 * 48_000 * 2 * 2
+
+
+@pytest.mark.parametrize("head", [b"RIFF\x00\x00\x00\x00AVI ", b"FLV\x01", b"wvpk", b".snd"])
+def test_more_container_signatures_are_recognised(head):
+    assert has_container_signature(head + b"\x00" * 16)
 
 
 def test_undecodable_audio_returns_415_without_ffmpeg_output():
@@ -226,3 +239,16 @@ def test_real_ffmpeg_rejects_garbage():
     with pytest.raises(AudioInputError) as error:
         prepare_audio("audio/mpeg", b"definitely not an mp3 file" * 100, **LIMITS)
     assert error.value.status == 415
+
+
+@needs_ffmpeg
+def test_real_ffmpeg_accepts_audio_longer_than_old_two_minute_limit():
+    samples = prepare_audio("audio/wav", wav_bytes(150, rate=8_000, channels=1),
+                            sample_rate=RATE, min_samples=4_800, max_seconds=30 * 60)
+    assert abs(len(samples) // 4 - 150 * RATE) <= 160
+
+
+def test_mpeg_ts_is_recognised_by_its_packet_sync_bytes():
+    packets = (b"\x47" + b"\x00" * 187) * 4
+    assert has_container_signature(packets)
+    assert not has_container_signature(b"\x47" + b"\x00" * 700)   # one sync byte is not enough

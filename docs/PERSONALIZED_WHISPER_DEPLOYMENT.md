@@ -99,7 +99,7 @@ GitHub Actions > **Deploy CDLI Whisper GPUs to Modal** > Run workflow.
 
 Set `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` as GitHub environment secrets
 in the protected `speech-gpu` environment. Review the code change and
-execute the workflow. It deploys `ml/modal/serve.py`. Confirm the deployed
+execute the workflow. It deploys `ml/modal/server.py`. Confirm the deployed
 HTTPS URL from Modal, and perform a private authenticated health/inference
 test with non-sensitive consented clips. The worker requires
 `Authorization: Bearer <SAUTI_GPU_BEARER_TOKEN>` and returns transcription
@@ -113,6 +113,8 @@ these service-side variables (as secrets where applicable):
 ```env
 SAUTI_MODAL_URL=https://<actual Modal HTTPS endpoint>
 SAUTI_MODAL_BEARER_TOKEN=<the GPU service bearer from Modal secret>
+SAUTI_MODAL_PROXY_KEY=<wk-... Modal proxy auth token ID for the speech API>
+SAUTI_MODAL_PROXY_SECRET=<ws-... Modal proxy auth token secret for the speech API>
 SAUTI_COMPARE_ENABLED=true
 SAUTI_PERSONALIZED_COMPARE_ENABLED=true
 SAUTI_PILOT_PROFILE_ID=<the participant-owned UUID from the authorized Sauti session>

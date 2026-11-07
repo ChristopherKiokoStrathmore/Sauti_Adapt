@@ -111,9 +111,15 @@ def whisper_prediction(samples, key: str) -> dict:
 
     address = os.environ.get('SAUTI_MODAL_URL', '').strip()
     token = os.environ.get('SAUTI_MODAL_BEARER_TOKEN', '').strip()
+    proxy_key = os.environ.get('SAUTI_MODAL_PROXY_KEY', '').strip()
+    proxy_secret = os.environ.get('SAUTI_MODAL_PROXY_SECRET', '').strip()
     if not address or not token:
         return {'status': 'unavailable', 'intent': None,
                 'error': 'Modal CDLI GPU endpoint is not configured.'}
+    # The endpoint requires Modal proxy auth in addition to the service bearer.
+    if not proxy_key or not proxy_secret:
+        return {'status': 'unavailable', 'intent': None,
+                'error': 'Modal proxy auth token is not configured.'}
     if not address.startswith('https://'):
         return {'status': 'unavailable', 'intent': None,
                 'error': 'Modal GPU endpoint must use HTTPS.'}
@@ -122,6 +128,8 @@ def whisper_prediction(samples, key: str) -> dict:
         address, data=payload, method='POST',
         headers={
             'Authorization': 'Bearer ' + token,
+            'Modal-Key': proxy_key,
+            'Modal-Secret': proxy_secret,
             'X-Sauti-Model': key,
             'Content-Type': 'application/octet-stream',
         },

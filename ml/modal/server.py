@@ -1,22 +1,32 @@
 """CDLI Kenyan atypical speech Whisper inference on Modal GPUs.
 
-Only the trusted Sauti speech API should call this endpoint. Audio is
+Callers are the trusted Sauti speech API and named partner teams, each with
+its own bearer token (see sauti_gpu_auth.py). The endpoint also requires
+Modal proxy auth (Modal-Key / Modal-Secret headers). Partners may only use the
+public CDLI base models, never a participant's personalized adapter. Audio is
 transient: accepted request bodies are used for GPU inference and discarded.
 Model weights are downloaded directly from Hugging Face into a Modal Volume.
+
+Deploy: modal deploy ml/modal/server.py
 
 Deployment prerequisites:
   - Modal account / billing
   - Modal Secret 'sauti-gpu-auth' with SAUTI_GPU_BEARER_TOKEN
+  - Modal Secret 'sauti-gpu-partner-auth' with SAUTI_GPU_PARTNER_TOKENS
+    ("team-a:<token>,team-b:<token>"; may be empty to disable partners)
+  - Modal proxy auth tokens (dashboard > Settings > Proxy Auth Tokens), one per caller
+  - Optional deploy-time SAUTI_GPU_MAX_CONTAINERS (1-4, default 1) per model
   - Check CDLI checkpoint usage permissions and personal data hosting terms.
 Run through a trusted CI workflow, not in the user's Windows shell.
 """
-import hmac
 import json
 import os
 from pathlib import Path
 
 import modal
 from fastapi import Request
+
+from sauti_gpu_auth import SPEECH_API_LABEL, authorized_caller
 
 MODEL_IDS = {
     "english": "cdli/whisper-large-v3_finetuned_kenyan_english_nonstandard_speech_v1.0",
@@ -30,6 +40,11 @@ PILOT_KEYS = {
     "personalized_swahili": ("swahili", "sw-KE"),
 }
 
+# GPU containers per model key. Read at deploy time; raise only with a budget.
+MAX_CONTAINERS = int(os.environ.get("SAUTI_GPU_MAX_CONTAINERS", "1"))
+if not 1 <= MAX_CONTAINERS <= 4:
+    raise ValueError("SAUTI_GPU_MAX_CONTAINERS must be between 1 and 4.")
+
 app = modal.App("sauti-adapt-cdli-gpu")
 weights = modal.Volume.from_name("sauti-adapt-cdli-cache", create_if_missing=True)
 pilot_adapters = modal.Volume.from_name("sauti-adapt-private-adapters", create_if_missing=True)
@@ -42,8 +57,13 @@ gpu_image = (
         "peft==0.17.1"
     )
     .env({"HF_HOME": "/models"})
+    .add_local_python_source("sauti_gpu_auth")
 )
-api_image = modal.Image.debian_slim(python_version="3.11").pip_install("fastapi>=0.115,<1")
+api_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install("fastapi>=0.115,<1")
+    .add_local_python_source("sauti_gpu_auth")
+)
 
 
 @app.cls(
@@ -52,7 +72,7 @@ api_image = modal.Image.debian_slim(python_version="3.11").pip_install("fastapi>
     volumes={"/models": weights, "/private_adapters": pilot_adapters},
     timeout=300,
     scaledown_window=300,
-    max_containers=1,
+    max_containers=MAX_CONTAINERS,
 )
 class CDLIWhisper:
     model_key: str = modal.parameter()
@@ -140,25 +160,34 @@ class CDLIWhisper:
 
 @app.function(
     image=api_image,
-    secrets=[modal.Secret.from_name("sauti-gpu-auth")],
+    secrets=[
+        modal.Secret.from_name("sauti-gpu-auth"),
+        modal.Secret.from_name("sauti-gpu-partner-auth"),
+    ],
     timeout=300,
 )
-@modal.fastapi_endpoint(method="POST")
+@modal.fastapi_endpoint(method="POST", requires_proxy_auth=True)
 async def transcribe(request: Request):
     from fastapi import HTTPException
 
-    expected = os.environ.get("SAUTI_GPU_BEARER_TOKEN", "")
-    supplied = request.headers.get("authorization", "")
-    if not expected or not hmac.compare_digest(supplied, "Bearer " + expected):
+    caller = authorized_caller(
+        request.headers.get("authorization", ""),
+        os.environ.get("SAUTI_GPU_BEARER_TOKEN", ""),
+        os.environ.get("SAUTI_GPU_PARTNER_TOKENS", ""),
+    )
+    if caller is None:
         raise HTTPException(status_code=401, detail="Invalid service authorization.")
     model_key = request.headers.get("x-sauti-model", "")
-    if model_key not in (*MODEL_IDS, *PILOT_KEYS):
+    allowed = (*MODEL_IDS, *PILOT_KEYS) if caller == SPEECH_API_LABEL else tuple(MODEL_IDS)
+    if model_key not in allowed:
         raise HTTPException(status_code=422, detail="Unknown model.")
     if request.headers.get("content-type", "").split(";")[0] != "application/octet-stream":
         raise HTTPException(status_code=415, detail="Expected 16 kHz float32 mono audio.")
     audio = await request.body()
     if len(audio) > 2_000_000 or not audio or len(audio) % 4:
         raise HTTPException(status_code=413, detail="Invalid audio size.")
+    # Usage accounting only: caller label, model and size. Never audio or tokens.
+    print(f"caller={caller} model={model_key} audio_bytes={len(audio)}")
     # Each model_key has a separate Modal container pool; the weights stay
     # loaded while that pool is warm. Comparison results never execute actions.
     return await CDLIWhisper(model_key=model_key).transcribe.remote.aio(audio)

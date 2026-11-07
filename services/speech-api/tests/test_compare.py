@@ -149,3 +149,41 @@ def test_default_comparison_excludes_pilot_models(monkeypatch):
     monkeypatch.setattr(cmp, 'infer_one', fake_infer)
     cmp.compare_models(np.zeros(20, dtype=np.float32), str(uuid4()), 'all', 'en-KE')
     assert called == ['prototype', 'english', 'swahili']
+
+
+def test_modal_call_requires_proxy_auth_and_sends_it(monkeypatch):
+    import json as _json
+    import urllib.request
+    import sauti_ml.compare as cmp
+
+    monkeypatch.setenv('SAUTI_MODAL_URL', 'https://example.modal.run')
+    monkeypatch.setenv('SAUTI_MODAL_BEARER_TOKEN', 'service-token')
+    monkeypatch.delenv('SAUTI_MODAL_PROXY_KEY', raising=False)
+    monkeypatch.delenv('SAUTI_MODAL_PROXY_SECRET', raising=False)
+
+    def must_not_call(*args, **kwargs):
+        raise AssertionError('Modal must not be called without proxy auth')
+
+    monkeypatch.setattr(urllib.request, 'urlopen', must_not_call)
+    result = cmp.whisper_prediction(np.zeros(16000, dtype=np.float32), 'english')
+    assert result['status'] == 'unavailable' and result['intent'] is None
+
+    monkeypatch.setenv('SAUTI_MODAL_PROXY_KEY', 'wk-test')
+    monkeypatch.setenv('SAUTI_MODAL_PROXY_SECRET', 'ws-test')
+    sent = {}
+
+    class Reply:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def read(self, limit): return _json.dumps({'model': 'english', 'transcript': 'move down'}).encode()
+
+    def fake_urlopen(request, timeout):
+        sent.update({k.lower(): v for k, v in request.header_items()})
+        return Reply()
+
+    monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
+    result = cmp.whisper_prediction(np.zeros(16000, dtype=np.float32), 'english')
+    assert sent['modal-key'] == 'wk-test' and sent['modal-secret'] == 'ws-test'
+    assert sent['authorization'] == 'Bearer service-token'
+    assert result['intent'] == 'SCROLL_DOWN'

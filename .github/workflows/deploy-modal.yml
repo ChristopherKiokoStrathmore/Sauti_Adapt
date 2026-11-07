@@ -26,4 +26,4 @@ jobs:
       - name: Install deployment tooling
         run: python -m pip install 'modal>=1.0,<2' 'fastapi>=0.115,<1'
       - name: Deploy GPU inference service
-        run: modal deploy ml/modal/serve.py
+        run: modal deploy ml/modal/server.py

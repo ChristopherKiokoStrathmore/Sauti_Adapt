@@ -46,7 +46,11 @@ automatically waive ODPC registration.
 
 1. Create a Modal account and confirm billing, region, privacy and budget
    controls. Create a Modal secret named `sauti-gpu-auth` with environment
-   variable `SAUTI_GPU_BEARER_TOKEN`, a long random credential.
+   variable `SAUTI_GPU_BEARER_TOKEN`, a long random credential. Also create
+   `sauti-gpu-partner-auth` with `SAUTI_GPU_PARTNER_TOKENS` (it may be empty;
+   see "Sharing the endpoint with another team" below). The deploy fails if
+   either secret is missing. In the Modal dashboard under **Settings > Proxy
+   Auth Tokens**, create a proxy auth token for the speech API.
 
 2. Create a Modal API token for deployment. Add `MODAL_TOKEN_ID` and
    `MODAL_TOKEN_SECRET` to GitHub's `speech-gpu` Actions environment
@@ -55,7 +59,7 @@ automatically waive ODPC registration.
 
 3. Review and merge the cloud comparison pull request after CI passes. Then
    run **GitHub Actions > Deploy CDLI Whisper GPUs to Modal > Run workflow**.
-   This deploys `ml/modal/serve.py` through CI. There is no need to install
+   This deploys `ml/modal/server.py` through CI. There is no need to install
    or run the app on your Windows computer.
 
 4. Modal will report the HTTPS endpoint URL for `transcribe`. Its GPU
@@ -71,6 +75,8 @@ automatically waive ODPC registration.
 ```env
 SAUTI_MODAL_URL=https://<the-real-deployed-modal-endpoint>
 SAUTI_MODAL_BEARER_TOKEN=<the-same-secret-value-as-on-Modal>
+SAUTI_MODAL_PROXY_KEY=<wk-... proxy auth token ID for the speech API>
+SAUTI_MODAL_PROXY_SECRET=<ws-... proxy auth token secret for the speech API>
 SAUTI_COMPARE_ENABLED=true
 ```
 
@@ -96,6 +102,82 @@ SAUTI_COMPARE_ENABLED=true
    disposable test account, GitHub CI can run `npm run test:e2e:cloud`
    after a separate workflow is configured. Never run mutating tests against
    a real person's stored profile.
+
+## Sharing the endpoint with another team
+
+The endpoint is a public HTTPS URL, protected by two independent credentials.
+Every caller needs both:
+
+1. **Modal proxy auth** (`Modal-Key` / `Modal-Secret` headers). Modal checks
+   these before any container starts. Create one proxy auth token per team
+   in the Modal dashboard under **Settings > Proxy Auth Tokens**, and delete
+   it to revoke that team.
+2. **A per-team bearer token** (`Authorization: Bearer ...`). The endpoint
+   checks it and logs the team label, model and audio size per request (never
+   audio or tokens), so usage can be attributed.
+
+Partners can use only the public `english` and `swahili` CDLI base models.
+A participant's `personalized_*` adapter answers only the speech API's token,
+and any other caller gets `422 Unknown model`.
+
+Before you grant access, agree in writing with the team on: the model terms
+(the CDLI model cards state no license, so confirm permitted use with CDLI),
+whose speech they will send, consent, Kenyan data protection obligations,
+and who pays for GPU time. Sauti's consent and deletion workflow does not
+cover audio another team sends.
+
+### Add a team
+
+```bash
+# One token per team. Labels: lowercase letters, digits, '-'.
+TEAM_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(48))")
+# --force replaces the whole value, so list EVERY team that should keep access:
+modal secret create sauti-gpu-partner-auth --force \
+  SAUTI_GPU_PARTNER_TOKENS="team-a:$TEAM_TOKEN"
+modal deploy ml/modal/server.py   # running containers pick up secrets on redeploy
+```
+
+Send the team its bearer token and proxy auth token through a password
+manager share or another secure channel, never in chat, email or a repository.
+Keep your own record of which label owns which token.
+
+### Revoke a team
+
+Delete its proxy auth token in the Modal dashboard. Access stops immediately.
+Then remove its entry from `SAUTI_GPU_PARTNER_TOKENS` and redeploy. The speech
+API and other teams are unaffected. A malformed partner list disables all
+partner access but never the speech API, so check the entries after an edit.
+
+### What to send the partner team
+
+- The endpoint URL, and their proxy auth token ID (`wk-...`) and secret (`ws-...`).
+- Their bearer token.
+- Request format: `POST`, `Content-Type: application/octet-stream`,
+  `X-Sauti-Model: english` or `swahili`, and a body of raw 16 kHz mono
+  float32 little-endian samples, 0.3 to 30 seconds. WAV or MP3 files are
+  not accepted.
+
+```python
+import librosa, requests
+audio, _ = librosa.load("clip.wav", sr=16000, mono=True)
+r = requests.post(URL, data=audio.astype("<f4").tobytes(), timeout=600, headers={
+    "Modal-Key": PROXY_KEY, "Modal-Secret": PROXY_SECRET,
+    "Authorization": f"Bearer {TOKEN}",
+    "X-Sauti-Model": "swahili",
+    "Content-Type": "application/octet-stream"})
+r.raise_for_status()
+print(r.json()["transcript"])
+```
+
+- The first call after an idle period can take minutes while the GPU starts.
+- Outputs are research transcriptions, not validated accuracy.
+
+### Capacity
+
+By default each model has one GPU container, which handles requests one at a
+time, so a busy partner slows down Sauti comparisons. To allow more, deploy
+with `SAUTI_GPU_MAX_CONTAINERS=2` (accepted range 1 to 4). This raises the
+maximum GPU spend, so set a Modal spending limit first.
 
 ## Performance and cost
 

@@ -113,8 +113,6 @@ these service-side variables (as secrets where applicable):
 ```env
 SAUTI_MODAL_URL=https://<actual Modal HTTPS endpoint>
 SAUTI_MODAL_BEARER_TOKEN=<the GPU service bearer from Modal secret>
-SAUTI_MODAL_PROXY_KEY=<wk-... Modal proxy auth token ID for the speech API>
-SAUTI_MODAL_PROXY_SECRET=<ws-... Modal proxy auth token secret for the speech API>
 SAUTI_COMPARE_ENABLED=true
 SAUTI_PERSONALIZED_COMPARE_ENABLED=true
 SAUTI_PILOT_PROFILE_ID=<the participant-owned UUID from the authorized Sauti session>

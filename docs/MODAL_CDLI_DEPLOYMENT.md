@@ -62,8 +62,13 @@ actual reference transcripts.
 
 ## Outstanding evidence
 
-* Live authenticated Modal HTTP round trip: NOT VERIFIED
-* Whether private adapters are loaded in the Modal image: NOT VERIFIED
+* Live authenticated Modal HTTP round trip: VERIFIED 2026-11-07, called
+  directly from a developer machine (not through Railway). Wrong token gets
+  401; real 18-30 s English and Kiswahili clips return transcripts in about
+  4-5 s warm. See `docs/MODAL_GPU_HOSTING.md`.
+* Private adapters: none installed. `personalized_*` keys return `503
+  Personalized adapter is not installed.`, so a personalized result cannot
+  silently come from the base model.
 * Kenyan English transcription accuracy: NOT VERIFIED
 * Kiswahili transcription accuracy: NOT VERIFIED
 * End-to-end browser comparison on deployed Railway: NOT VERIFIED

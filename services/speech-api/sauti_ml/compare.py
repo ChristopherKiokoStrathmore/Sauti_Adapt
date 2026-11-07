@@ -151,10 +151,15 @@ def whisper_prediction(samples, key: str) -> dict:
         raise ValueError('Invalid Modal GPU response.')
     transcript = data['transcript'].strip()
     intent = mapped_intent(transcript)
-    return {'status': 'rejected' if intent == 'UNKNOWN' else 'accepted',
-            'intent': intent, 'transcript': transcript,
-            'revision': data.get('revision'), 'device': data.get('device'),
-            'personalized': data.get('personalized') is True}
+    row = {'status': 'rejected' if intent == 'UNKNOWN' else 'accepted',
+           'intent': intent, 'transcript': transcript,
+           'revision': data.get('revision'), 'device': data.get('device'),
+           'personalized': data.get('personalized') is True}
+    # The GPU reports which model actually answered (e.g. a fine-tuned model
+    # now serves the 'english' key), so results are not labelled CDLI.
+    if isinstance(data.get('model_id'), str) and 0 < len(data['model_id']) <= 200:
+        row['model_id'] = data['model_id']
+    return row
 
 def infer_one(samples, profile_id: str, key: str) -> dict:
     if key == 'prototype':

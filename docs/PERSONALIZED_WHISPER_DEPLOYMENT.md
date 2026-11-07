@@ -99,7 +99,7 @@ GitHub Actions > **Deploy CDLI Whisper GPUs to Modal** > Run workflow.
 
 Set `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` as GitHub environment secrets
 in the protected `speech-gpu` environment. Review the code change and
-execute the workflow. It deploys `ml/modal/serve.py`. Confirm the deployed
+execute the workflow. It deploys `ml/modal/server.py`. Confirm the deployed
 HTTPS URL from Modal, and perform a private authenticated health/inference
 test with non-sensitive consented clips. The worker requires
 `Authorization: Bearer <SAUTI_GPU_BEARER_TOKEN>` and returns transcription

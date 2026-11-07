@@ -10,6 +10,10 @@ import { readParticipantSession } from './participant-session';
 export function originAllowed(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
   if (!origin) return true;
+  // Developer Mode extensions use a chrome-extension:// origin, not Vercel.
+  // Only authenticated speech and planning endpoints accept this origin.
+  if (/^chrome-extension:\/\/[a-p]{32}$/.test(origin)
+      && ['/api/recognize', '/api/compare', '/api/agent/plan'].includes(request.nextUrl.pathname)) return true;
   const configured = (process.env.SAUTI_ALLOWED_ORIGINS || '').split(',').map(item => item.trim()).filter(Boolean);
   if (configured.length > 0) return configured.includes(origin);
   const host = request.headers.get('host');

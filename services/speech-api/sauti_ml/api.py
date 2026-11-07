@@ -463,3 +463,26 @@ def training_status(profile_id: str, user_id: str = Depends(require_user)):
     if job and job.get('state') == 'blocked' and (released is None or released.get('state') != 'ready'):
         return job
     return released or {'state': 'idle'}
+
+
+class AgentPlanRequest(BaseModel):
+    """Only a short instruction and current page URL; never raw audio or page contents."""
+    instruction: str
+    page_url: str = ""
+
+
+@app.post('/v1/agent/plan', dependencies=[Depends(require_token)])
+def plan_browser_action(payload: AgentPlanRequest, user_id: str = Depends(require_user)):
+    """Authenticated planning only. Browser actions require explicit extension confirmation."""
+    if not 1 <= len(payload.instruction.strip()) <= 400 or len(payload.page_url) > 2048:
+        raise HTTPException(status_code=422, detail='Invalid agent instruction or page URL.')
+    from .agent import AgentPlanError, plan_action
+    from .auth import _consume, _configured_limit
+    _consume('agent:' + user_id, _configured_limit('SAUTI_AGENT_RATE_LIMIT_PER_MINUTE', 12))
+    try:
+        plan = plan_action(payload.instruction, payload.page_url)
+    except AgentPlanError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {'plan': plan, 'requires_confirmation': True, 'executed_action': False}

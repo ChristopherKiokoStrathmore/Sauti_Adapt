@@ -2,8 +2,8 @@
 <title>Sauti Adapt</title><style>
 :root{font-family:system-ui,sans-serif;color:#201d37;background:#faf9ff}body{margin:0;padding:18px}h1{font-size:1.7rem;margin:0 0 8px}.help{color:#5c6172;font-size:.85rem}section{background:#fff;padding:16px;border:1px solid #ddd7f0;border-radius:14px;margin:12px 0}label{font-weight:600;display:block;margin:10px 0 5px}input,select{font:inherit;width:100%;padding:10px;border:1px solid #8f84b9;border-radius:8px;box-sizing:border-box}input[type=checkbox]{width:auto}button{font:inherit;background:#4d33ad;color:white;border:0;border-radius:10px;padding:11px 13px;cursor:pointer;margin:4px 0;width:100%}button:disabled{opacity:.5}button.secondary{color:#3d268b;background:#e9e5f7}.status{background:#eeeaf9;border-radius:10px;padding:13px;overflow-wrap:anywhere;white-space:pre-wrap;min-height:36px}:focus-visible{outline:3px solid #e4a716;outline-offset:2px}
 </style></head><body>
-<h1>Sauti Adapt</h1><p class="help">Kenyan English and Kiswahili commands. The app path freezes Wav2Vec2 and uses prototypes. It does not fine-tune. No accuracy is claimed.</p>
-<section><label for="api">PWA origin</label><input id="api" value="http://localhost:3000" placeholder="https://your-project.vercel.app">
+<h1>Sauti Adapt</h1><p class="help">Personalized voice commands and a consented AI browser agent. The standard command recognizer uses Wav2Vec2 prototypes; the agent can compare fine tuned Whisper transcription. Accuracy is not claimed.</p>
+<section><label for="api">PWA origin</label><input id="api" value="https://sauti-adapt.vercel.app" placeholder="https://your-project.vercel.app">
 <label for="user">Personal user ID</label><input id="user" autocomplete="off" placeholder="Account UUID">
 <label for="code">Personal access token (not saved)</label><input id="code" type="password" autocomplete="off">
 <label for="profile">Private voice profile ID</label><input id="profile" placeholder="Copy the UUID from the enrollment website">
@@ -21,5 +21,20 @@
 <button id="test-scroll" type="button" class="secondary">Test scroll down</button>
 <p class="help">Test scroll down runs the canonical phrase through the official Controller. It does not use the microphone and does not call the speech model. It still requires this website to be enabled.</p>
 <div id="status" class="status" role="status" aria-live="polite">Ready. Enable the current website first.</div></section>
+<section>
+<h2>AI Browser Agent (pilot)</h2>
+<p class="help">Gemini proposes one action at a time. Nothing happens until you confirm it. The browser stays under your control.</p>
+<label for="agent-text">Browser instruction</label>
+<input id="agent-text" autocomplete="off" maxlength="400" placeholder="Search Google for Strathmore University">
+<button id="agent-plan" type="button">Ask Gemini to plan</button>
+<label for="agent-language">Voice model</label>
+<select id="agent-language"><option value="english">Fine tuned English Whisper</option><option value="swahili">Fine tuned Kiswahili Whisper</option></select>
+<label><input id="agent-consent" type="checkbox"> I consent to sending this recording to the private GPU transcription service and the resulting transcript to Gemini for planning this request.</label>
+<button id="agent-voice" class="secondary" type="button">Record voice instruction</button>
+<button id="agent-confirm" type="button" disabled>Confirm and execute</button>
+<button id="agent-cancel" class="secondary" type="button">Cancel</button>
+<div id="agent-status" class="status" role="status" aria-live="polite">Ready for a typed or spoken browser instruction.</div>
+<p class="help">First pilot actions: Google search, open a public HTTPS website, scroll, read and go back. Unrecognized speech and unsupported tasks are not executed. The same personal user account and enabled website permissions are required.</p>
+</section>
 <p class="help">Only recognized commands run, and only on the same page where you pressed Start. Read aloud uses speechSynthesis in this panel and is not recorded or uploaded. Undo last setting reverts a recorded display adaptation only. It does not undo clicks, scrolling, Back, or any transaction. This prototype does not run on browser-restricted pages.</p>
 <script src="sidepanel.js"></script></body></html>

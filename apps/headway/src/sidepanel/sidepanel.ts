@@ -4,6 +4,7 @@ import type { ApiChoice, ApiStatus, ApiStatusResponse, DisplayMode, RuntimeMessa
 import { HEAD_POINTER_ENABLED, SUMMARIES_ENABLED } from '../shared/features';
 import { asSteadiness, clampSpeed } from '../gaze/motion';
 import { initVoicePanel } from './voice-panel.ts';
+import { initHeadwayAgent } from '../agent/panel.ts';
 
 // Summaries are switched off for now (shared/features.ts): hide everything that belongs to them.
 if (!HEAD_POINTER_ENABLED) {
@@ -352,6 +353,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 void (async () => {
   initVoicePanel();
+  initHeadwayAgent();
   await loadSettings();
   bindEvents();
   showOutput('empty');

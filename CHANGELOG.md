@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Modal CDLI GPU endpoint deployed and working** (workspace `ulla39254`, 2026-11-07). `ml/modal/serve.py` is renamed to `ml/modal/server.py`; the deploy workflow and docs use `modal deploy ml/modal/server.py`.
+  - Fixed: the GPU container crashed at startup (`No module named 'fastapi'`, because every container imports the module), so requests were cancelled. Earlier `401`s came from the `sauti-gpu-auth` secret missing or holding a different value in the hosting workspace.
+  - One GPU container (L4, A10G fallback) holds both CDLI checkpoints and serves every model key, so a comparison never starts a second container. Hugging Face revisions are pinned; startup makes no network calls once weights are cached. Startup and request timeouts are separate.
+  - Audio up to 120 s, split at quiet points into ≤30 s windows. Output up to Whisper's 440-token ceiling per window, scaled by audio length; silent windows are skipped, so silence returns an empty transcript instead of invented text.
+  - A personalized key without an installed adapter returns `503` instead of crashing the container.
+  - `ml/modal/warm.py` opens a warm window (default 10 h, max 12) that keeps one container loaded; `enforce_warm_window` releases it when the window ends and restores it after a redeploy.
+  - Auth is the single service bearer token (`sauti-gpu-auth`). Per-team partner tokens and Modal proxy auth were tried on this branch and removed by agreement, so the speech API needs no proxy credentials.
+  - Measured: warm 18–30 s real clips 3.7–4.9 s per request (under 1 s of GPU time), cold start about 15 s (was 105 s or a 300 s timeout). **NOT VERIFIED:** accuracy for Sauti co-designers, and personalized adapters (none trained yet).
+
 - The first account created while `SAUTI_PILOT_PROFILE_ID` is set (and unclaimed) receives that profile ID automatically; later accounts get random IDs, so one person's private adapter is never shared.
 
 - **Working-demo path for voice control.** Previously nothing in the app could train a model: training was a console command, so `SPEECH_MODE=prototype` still answered `NO_VALIDATED_PERSONAL_MODEL`. Added `POST /v1/train` and `GET /v1/train/{profile_id}` (owner only, background job), automatic stratified train/calibration/test splitting from one recording session, and a "Build my voice model" button on step 4. Tests use artificial tones; real speech is NOT VERIFIED.

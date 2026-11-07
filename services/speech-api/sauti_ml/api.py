@@ -6,10 +6,10 @@ import threading
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from .audio import AudioValidationError, decode_wav
-from .auth import audit, create_participant_account, fail_pair_locked, note_auth_failure, note_ip_attempt, origin_allowed, trusted_client_ip, verify_user
+from .auth import audit, create_participant_account, fail_pair_locked, note_auth_failure, note_ip_attempt, is_allowed_extension_origin, origin_allowed, trusted_client_ip, verify_user
 from .contracts import Intent, Language, Recognition, reject
 from .prototype import PrototypeModel
 from .release_gate import demo_mode, recognition_requirements
@@ -55,6 +55,31 @@ async def limit_request_size(request: Request, call_next):
     if length and length.isdigit() and int(length) > MAX_REQUEST_BYTES:
         return JSONResponse({'detail': 'Request is too large.'}, status_code=413)
     return await call_next(request)
+
+
+@app.middleware('http')
+async def headway_extension_cors(request: Request, call_next):
+    """Preflight and response headers for two personal-token-protected routes.
+
+    Only the exact extension routes are eligible; all existing server API key
+    endpoints remain unchanged. Chrome Origin is not sufficient for access.
+    """
+    origin = request.headers.get('origin') or ''
+    allowed = is_allowed_extension_origin(origin, request.url.path)
+    if allowed and request.method == 'OPTIONS':
+        return Response(status_code=204, headers={
+            'Access-Control-Allow-Origin': origin,
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'content-type, x-sauti-user, x-sauti-user-token',
+            'Access-Control-Max-Age': '600',
+            'Vary': 'Origin',
+        })
+    response = await call_next(request)
+    if allowed:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Vary'] = 'Origin'
+        response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 def require_token(x_api_key: str | None = Header(default=None)):

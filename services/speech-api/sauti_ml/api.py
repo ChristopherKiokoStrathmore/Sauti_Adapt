@@ -6,10 +6,10 @@ import threading
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from .audio import AudioValidationError, decode_wav
-from .auth import audit, create_participant_account, fail_pair_locked, note_auth_failure, note_ip_attempt, origin_allowed, trusted_client_ip, verify_user
+from .auth import audit, create_participant_account, fail_pair_locked, note_auth_failure, note_ip_attempt, is_allowed_extension_origin, origin_allowed, trusted_client_ip, verify_user
 from .contracts import Intent, Language, Recognition, reject
 from .prototype import PrototypeModel
 from .release_gate import demo_mode, recognition_requirements
@@ -55,6 +55,31 @@ async def limit_request_size(request: Request, call_next):
     if length and length.isdigit() and int(length) > MAX_REQUEST_BYTES:
         return JSONResponse({'detail': 'Request is too large.'}, status_code=413)
     return await call_next(request)
+
+
+@app.middleware('http')
+async def headway_extension_cors(request: Request, call_next):
+    """Preflight and response headers for two personal-token-protected routes.
+
+    Only the exact extension routes are eligible; all existing server API key
+    endpoints remain unchanged. Chrome Origin is not sufficient for access.
+    """
+    origin = request.headers.get('origin') or ''
+    allowed = is_allowed_extension_origin(origin, request.url.path)
+    if allowed and request.method == 'OPTIONS':
+        return Response(status_code=204, headers={
+            'Access-Control-Allow-Origin': origin,
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'content-type, x-sauti-user, x-sauti-user-token',
+            'Access-Control-Max-Age': '600',
+            'Vary': 'Origin',
+        })
+    response = await call_next(request)
+    if allowed:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Vary'] = 'Origin'
+        response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 def require_token(x_api_key: str | None = Header(default=None)):
@@ -479,6 +504,66 @@ def plan_browser_action(payload: AgentPlanRequest, user_id: str = Depends(requir
     from .agent import AgentPlanError, plan_action
     from .auth import _consume, _configured_limit
     _consume('agent:' + user_id, _configured_limit('SAUTI_AGENT_RATE_LIMIT_PER_MINUTE', 12))
+    try:
+        plan = plan_action(payload.instruction, payload.page_url)
+    except AgentPlanError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {'plan': plan, 'requires_confirmation': True, 'executed_action': False}
+
+
+@app.post('/v1/extension/compare')
+async def compare_from_headway_extension(
+    audio: UploadFile = File(...),
+    profile_id: str = Form(...),
+    language: str = Form('en-KE'),
+    model: str = Form('english'),
+    compare_consent: bool = Form(False),
+    user_id: str = Depends(require_user),
+):
+    """Headway pilot audio comparison with personal authentication, not a shared key.
+
+    This extension route never executes a command. No recording is persisted by
+    this API. Only specifically selected English/Swahili GPU models are accepted.
+    """
+    if os.environ.get('SAUTI_COMPARE_ENABLED') != 'true':
+        raise HTTPException(status_code=403, detail='Cloud model comparison is disabled.')
+    if not compare_consent:
+        raise HTTPException(status_code=403, detail='Explicit audio comparison consent is required.')
+    if os.environ.get('SAUTI_REQUIRE_TERMS') == 'true' and not os.environ.get('SAUTI_PRIVACY_CONTACT', '').strip():
+        raise HTTPException(status_code=503, detail='Pilot privacy safeguards are not configured.')
+    if (model, language) not in (('english', 'en-KE'), ('swahili', 'sw-KE')):
+        raise HTTPException(status_code=422, detail='Choose an English or Kiswahili model with matching language.')
+    from .auth import _consume, _configured_limit
+    _consume('ext-comparison:' + user_id, _configured_limit('SAUTI_EXTENSION_COMPARE_RATE_LIMIT_PER_MINUTE', 6))
+    try:
+        profile_id = canonical_uuid(profile_id)
+        assert_owner(profile_id, user_id)
+        samples = await read_audio(audio)
+        from fastapi.concurrency import run_in_threadpool
+        from .compare import compare_models
+        return await run_in_threadpool(compare_models, samples, profile_id, model, language)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail='Speech service unavailable.') from exc
+
+
+@app.post('/v1/extension/agent/plan')
+def plan_for_headway_extension(payload: AgentPlanRequest, user_id: str = Depends(require_user)):
+    """Gemini never gets a server action tool; browser execution is local and confirmed.
+
+    Only the participant's personal token is accepted in the extension.
+    The Gemini API key stays solely in Railway environment variables.
+    """
+    if not 1 <= len(payload.instruction.strip()) <= 400 or len(payload.page_url) > 2048:
+        raise HTTPException(status_code=422, detail='Invalid agent instruction.')
+    from .auth import _consume, _configured_limit
+    _consume('agent:' + user_id, _configured_limit('SAUTI_AGENT_RATE_LIMIT_PER_MINUTE', 12))
+    from .agent import AgentPlanError, plan_action
     try:
         plan = plan_action(payload.instruction, payload.page_url)
     except AgentPlanError as exc:

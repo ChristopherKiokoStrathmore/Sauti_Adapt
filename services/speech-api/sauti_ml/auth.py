@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from pathlib import Path
 import threading
 import time
@@ -143,9 +144,25 @@ def reset_rate_limits() -> None:
         _windows.clear()
 
 
+# Browser extensions use stable 32-character Chrome IDs.
+# Origin checks are not authentication: every extension request still needs
+# the participant's own verified token.
+EXTENSION_ORIGIN_PATTERN = re.compile(r"^chrome-extension://[a-p]{32}$")
+EXTENSION_API_PATHS = frozenset({
+    '/v1/extension/agent/plan',
+    '/v1/extension/compare',
+})
+
+
+def is_allowed_extension_origin(origin: str, path: str) -> bool:
+    return path in EXTENSION_API_PATHS and bool(EXTENSION_ORIGIN_PATTERN.fullmatch(origin))
+
+
 def origin_allowed(request: Request) -> None:
     origin = request.headers.get('origin')
     if not origin:
+        return
+    if is_allowed_extension_origin(origin, request.url.path):
         return
     allowed = [item.strip() for item in os.environ.get('SAUTI_ALLOWED_ORIGINS', '').split(',') if item.strip()]
     if origin not in allowed:

@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Set up your voice · Headway</title>
+  <link rel="stylesheet" href="onboarding.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="mark" viewBox="0 0 420 483"><path class="mark-ink" d="M42 42h84v399H42z"/><path class="mark-ink" d="M42 277.2a168 168 0 0 1 336 0v51.24h-84V277.2a84 84 0 0 0-168 0z"/><circle class="mark-dot" cx="336" cy="396.48" r="44.52"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M8 14h8"/></symbol>
+    <symbol id="i-press" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="12" cy="12" r="3.5"/></symbol>
+    <symbol id="i-switch" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.5 6a8 8 0 0 1 0 12"/></symbol>
+    <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2.5 19h19"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4.25 4.25 0 0 1-.5 8.5H7z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-wait" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7V5z"/></symbol>
+  </defs>
+</svg>
+
+<div class="panel">
+  <header class="p-top">
+    <svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span>
+    <span class="helper-tag" id="helper-tag" hidden>Helper mode</span>
+    <span class="step" id="step-count">1 / 9</span>
+  </header>
+  <div class="progress" id="progress" aria-hidden="true"></div>
+
+  <!-- 1 Welcome -->
+  <section class="stp" data-step="1" id="s-welcome">
+    <div class="p-body">
+      <p class="label">Set up your voice</p>
+      <h1 class="big" tabindex="-1">Use the web by speaking, the way you speak.</h1>
+      <p class="lede">You'll say a few short commands so Headway learns your voice. Everything you say is saved as you go, so you never have to repeat a take.</p>
+      <div class="list">
+        <div><svg class="ico"><use href="#i-wait"/></svg><span>About 12 minutes<small>Stop whenever you like and carry on later.</small></span></div>
+        <div><svg class="ico"><use href="#i-pause"/></svg><span>Rest when you need to<small>A break comes up every few commands.</small></span></div>
+        <div><svg class="ico"><use href="#i-speaker"/></svg><span>Kenyan English or Kiswahili<small>Or both. You choose your own commands.</small></span></div>
+      </div>
+    </div>
+    <div class="p-foot">
+      <button class="btn primary" type="button" data-go="2">Start <kbd>Enter</kbd></button>
+      <button class="btn quiet" type="button" id="btn-helper">Someone is helping me set up</button>
+    </div>
+  </section>
+
+  <!-- 2 Consent -->
+  <section class="stp" data-step="2" id="s-consent" hidden>
+    <div class="p-body">
+      <h1 tabindex="-1">Where your voice goes</h1>
+      <p class="lede">Headway only listens when you start it.</p>
+      <div class="list">
+        <div><svg class="ico"><use href="#i-laptop"/></svg><span>Recordings stay on this computer<small>In Headway's storage. Not in the cloud, not in a chat.</small></span></div>
+        <div><svg class="ico"><use href="#i-cloud"/></svg><span>Each practice command is written down by the Sauti model<small>Through the Sauti helper on this computer.</small></span></div>
+        <div><svg class="ico"><use href="#i-trash"/></svg><span>Delete everything with one button<small>In the side panel, any time.</small></span></div>
+      </div>
+      <div class="list">
+        <label class="check"><input type="checkbox" id="c-record"><span class="box"><svg class="ico"><use href="#i-check"/></svg></span><span>I agree to Headway recording my voice for this setup.</span></label>
+        <label class="check"><input type="checkbox" id="c-train"><span class="box"><svg class="ico"><use href="#i-check"/></svg></span><span>Also use my recordings to train a model just for me.<small>Optional. You can say yes later.</small></span></label>
+        <label class="check"><input type="checkbox" id="c-standard"><span class="box"><svg class="ico"><use href="#i-check"/></svg></span><span>Also compare with Chrome's standard speech recognition.<small>Optional. This sends the practice recordings to Google.</small></span></label>
+      </div>
+    </div>
+    <div class="p-foot">
+      <button class="btn primary" type="button" id="btn-agree" disabled>I agree</button>
+      <button class="btn quiet" type="button" id="btn-not-now">Not now</button>
+    </div>
+  </section>
+
+  <!-- 3 Mic and room -->
+  <section class="stp" data-step="3" id="s-room" hidden>
+    <div class="p-body">
+      <h1 tabindex="-1" id="room-title">Stay quiet for five seconds</h1>
+      <p class="lede" id="room-lede">Headway is listening to the room, so it can tell your voice from the background.</p>
+      <div class="card">
+        <p class="label">Room sound</p>
+        <div class="wave ghost" id="room-wave" aria-hidden="true"></div>
+        <div class="row-between">
+          <span class="status" id="room-status"><svg class="ico"><use href="#i-wait"/></svg><span>Waiting for the microphone</span></span>
+          <select id="mic-select" class="mic-select" aria-label="Microphone"></select>
+        </div>
+      </div>
+      <p class="label" id="name-label" hidden>Now say your name, or any word</p>
+      <div class="card" id="name-card" hidden>
+        <div class="wave" id="name-wave" aria-hidden="true"></div>
+        <div class="row-between">
+          <span class="status" id="name-status"><svg class="ico"><use href="#i-mic"/></svg><span>Listening…</span></span>
+          <span class="status" id="name-len"></span>
+        </div>
+      </div>
+      <p class="status" id="sauti-status"><svg class="ico"><use href="#i-wait"/></svg><span>Checking the Sauti model…</span></p>
+    </div>
+    <div class="p-foot">
+      <button class="btn primary" type="button" id="btn-room">Allow the microphone</button>
+      <button class="btn quiet" type="button" id="btn-room-again" hidden>Measure again</button>
+    </div>
+  </section>
+
+  <!-- 4 Trigger -->
+  <section class="stp" data-step="4" id="s-trigger" hidden>
+    <div class="p-body">
+      <h1 tabindex="-1">How would you like to start?</h1>
+      <p class="lede">Pick what's easiest. You can change it later.</p>
+      <div class="choices" role="radiogroup" aria-label="How you start">
+        <label class="choice"><input type="radio" name="trigger" value="key" checked><span class="radio"></span><span><b>One key, from any page</b><small id="key-label">Alt + Shift + H. Press again to finish.</small></span><svg class="ico"><use href="#i-key"/></svg></label>
+        <label class="choice"><input type="radio" name="trigger" value="panel"><span class="radio"></span><span><b>A big button in this panel</b><small>Tap to start, tap to finish.</small></span><svg class="ico"><use href="#i-press"/></svg></label>
+        <label class="choice"><input type="radio" name="trigger" value="switch"><span class="radio"></span><span><b>My switch</b><small id="switch-label">Press your switch once; we'll learn which key it sends.</small></span><svg class="ico"><use href="#i-switch"/></svg></label>
+      </div>
+      <p class="label">Finishing</p>
+      <div class="choices" role="radiogroup" aria-label="How you finish">
+        <label class="choice"><input type="radio" name="finish" value="pause" checked><span class="radio"></span><span><b>When I stop talking</b><small>Headway learns your pauses next.</small></span><span></span></label>
+        <label class="choice"><input type="radio" name="finish" value="press"><span class="radio"></span><span><b>When I press again</b><small>No time limit while you speak.</small></span><span></span></label>
+      </div>
+      <p class="status" id="trigger-test" hidden><svg class="ico"><use href="#i-check"/></svg><span>That worked.</span></p>
+    </div>
+    <div class="p-foot">
+      <button class="btn primary" type="button" id="btn-trigger">Next</button>
+    </div>
+  </section>
+
+  <!-- 5 Pace -->
+  <section class="stp" data-step="5" id="s-pace" hidden>
+    <div class="p-body">
+      <h1 tabindex="-1">Take your time. We'll wait.</h1>
+      <p class="lede" id="pace-lede">Say this sentence the way you normally would. Pauses are fine.</p>
+      <div class="prompt"><p class="label">Say</p><p class="say" id="pace-sentence"></p></div>
+      <div class="pace" id="pace-diagram" hidden aria-label="Your sentence drawn twice: where standard listening stops, and where Headway waits."></div>
+      <div class="slider" id="pace-slider" hidden>
+        <div class="row-between"><span class="label">Wait after you stop</span><b class="readout" id="wait-value">2.4 s</b></div>
+        <input type="range" id="wait-range" min="1000" max="5000" step="100" value="2400" aria-label="Wait after you stop, in seconds">
+        <div class="row-between ends"><span>1 s</span><span>5 s</span></div>
+      </div>
+    </div>
+    <div class="p-foot">
+      <button class="speak" type="button" data-speak="pace"><span class="dot"><svg class="ico"><use href="#i-mic"/></svg></span><span class="speak-text"><span data-title>Start speaking</span><small data-sub>Your key, Space, or tap</small></span></button>
+      <button class="btn primary" type="button" id="btn-pace-keep" hidden>Keep 2.4 seconds</button>
+      <button class="btn quiet" type="button" id="btn-pace-again" hidden>Say it again</button>
+    </div>
+  </section>
+
+  <!-- 6 Words -->
+  <section class="stp" data-step="6" id="s-words" hidden>
+    <div class="p-body">
+      <h1 tabindex="-1">Which commands do you want?</h1>
+      <p class="lede">Keep the ones you'll use. Say them however you like.</p>
+      <div class="seg" role="radiogroup" aria-label="Language">
+        <label><input type="radio" name="lang" value="en"><span>English</span></label>
+        <label><input type="radio" name="lang" value="sw"><span>Kiswahili</span></label>
+        <label><input type="radio" name="lang" value="both" checked><span>Both</span></label>
+      </div>
+      <div class="cmds" id="cmd-list"></div>
+      <details class="own">
+        <summary class="btn"><svg class="ico"><use href="#i-plus"/></svg>Add my own phrase</summary>
+        <div class="own-row">
+          <select id="own-cmd" aria-label="Command"></select>
+          <input id="own-text" type="text" placeholder="How you say it" aria-label="Your phrase">
+          <button class="btn" type="button" id="btn-own">Add</button>
+        </div>
+      </details>
+    </div>
+    <div class="p-foot">
+      <button class="btn primary" type="button" id="btn-words">Record these</button>
+    </div>
+  </section>
+
+  <!-- 7 Record -->
+  <section class="stp" data-step="7" id="s-record" hidden>
+    <div class="p-body">
+      <div class="prompt">
+        <p class="label" id="rec-label">Command 1 of 4 · say</p>
+        <p class="say" id="rec-say"></p>
+        <p class="also" id="rec-also" hidden></p>
+        <div class="takes" id="rec-takes"></div>
+      </div>
+      <div id="rec-live" hidden>
+        <div class="wave tall" id="rec-wave" aria-hidden="true"></div>
+        <div class="row-between">
+          <span class="status attn"><svg class="ico"><use href="#i-mic"/></svg><span>Listening</span></span>
+          <span class="status" id="rec-quiet"></span>
+        </div>
+      </div>
+      <div class="proof" id="rec-proof" hidden>
+        <div class="proof-head"><span id="proof-title">What was heard</span><span>words</span></div>
+        <div id="proof-rows"></div>
+      </div>
+      <p class="legend" id="rec-legend" hidden>Struck-through words were heard wrong.</p>
+      <p class="learned" id="rec-learned" hidden></p>
+    </div>
+    <div class="p-foot">
+      <button class="speak" type="button" data-speak="record"><span class="dot"><svg class="ico"><use href="#i-mic"/></svg></span><span class="speak-text"><span data-title>Start speaking</span><small data-sub>Your key, Space, or tap</small></span></button>
+      <div class="foot-row">
+        <button class="btn quiet" type="button" id="btn-hear" disabled><svg class="ico"><use href="#i-play"/></svg>Hear my take</button>
+        <button class="btn quiet" type="button" id="btn-skip">Skip this one</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 Rest -->
+  <section class="stp" data-step="7" id="s-rest" hidden>
+    <div class="p-body rest">
+      <svg class="ring" viewBox="0 0 132 132" aria-hidden="true">
+        <circle cx="66" cy="66" r="58" class="ring-track"/>
+        <circle cx="66" cy="66" r="58" class="ring-fill" id="rest-ring" transform="rotate(-90 66 66)"/>
+        <circle cx="66" cy="66" r="13" class="mark-dot"/>
+      </svg>
+      <h1 class="big" tabindex="-1">Good place for a break.</h1>
+      <p class="lede" id="rest-lede">Your takes are saved. Have some water. Nothing will be lost if you close this panel.</p>
+    </div>
+    <div class="p-foot">
+      <button class="btn primary" type="button" id="btn-rest">I'm ready</button>
+      <button class="btn quiet" type="button" id="btn-later">Finish later</button>
+    </div>
+  </section>
+
+  <!-- 9 Answers -->
+  <section class="stp" data-step="8" id="s-answers" hidden>
+    <div class="p-body">
+      <h1 tabindex="-1">How should Headway answer?</h1>
+      <div class="choices" role="radiogroup" aria-label="Answers">
+        <label class="choice"><input type="radio" name="feedback" value="speech" checked><span class="radio"></span><span><b>Say it out loud</b><small>"Scrolling down." <button type="button" class="link" id="btn-hear-voice">Hear it</button></small></span><svg class="ico"><use href="#i-speaker"/></svg></label>
+        <label class="choice"><input type="radio" name="feedback" value="sound"><span class="radio"></span><span><b>A short sound</b><small>A chime when done, a low tone if not.</small></span><span></span></label>
+        <label class="choice"><input type="radio" name="feedback" value="text"><span class="radio"></span><span><b>Text in this panel only</b><small>Best with a screen reader.</small></span><span></span></label>
+      </div>
+      <p class="label">Before clicking something</p>
+      <div class="choices" role="radiogroup" aria-label="Before clicking">
+        <label class="choice"><input type="radio" name="confirm" value="always"><span class="radio"></span><span><b>Always ask me first</b></span><span></span></label>
+        <label class="choice"><input type="radio" name="confirm" value="forms" checked><span class="radio"></span><span><b>Ask before sending forms</b><small>Clicks and links just happen.</small></span><span></span></label>
+        <label class="choice"><input type="radio" name="confirm" value="never"><span class="radio"></span><span><b>Never ask</b></span><span></span></label>
+      </div>
+    </div>
+    <div class="p-foot">
+      <button class="btn primary" type="button" id="btn-answers">See my results</button>
+    </div>
+  </section>
+
+  <!-- 10 Results -->
+  <section class="stp" data-step="9" id="s-results" hidden>
+    <div class="p-body">
+      <p class="label">Understood the first time</p>
+      <div class="bigstat"><b id="res-big">–</b><span id="res-of">of your test commands</span></div>
+      <p class="lede">On the takes Headway didn't learn from.</p>
+      <div class="bars" id="res-bars"></div>
+      <div class="proof" id="res-tricky" hidden>
+        <div class="proof-head"><span>Still tricky</span><span></span></div>
+        <div id="res-tricky-rows"></div>
+      </div>
+      <p class="legend" id="res-note"></p>
+      <ul class="lines" id="res-lines"></ul>
+    </div>
+    <div class="p-foot">
+      <button class="btn primary" type="button" id="btn-finish">Start using Headway</button>
+      <button class="btn quiet" type="button" id="btn-again" hidden></button>
+      <p class="status" id="save-status" hidden></p>
+    </div>
+  </section>
+</div>
+
+<script src="onboarding.js"></script>
+</body>
+</html>

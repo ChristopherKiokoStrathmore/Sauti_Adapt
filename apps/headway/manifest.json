@@ -10,26 +10,46 @@
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "permissions": ["sidePanel", "storage", "tabs", "scripting", "debugger"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "tabs",
+    "scripting",
+    "debugger"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "dist/background.js"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["dist/content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "dist/content.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["*://*.youtube.com/*"],
-      "js": ["dist/youtube-bridge.js"],
+      "matches": [
+        "*://*.youtube.com/*"
+      ],
+      "js": [
+        "dist/youtube-bridge.js"
+      ],
       "run_at": "document_start",
       "all_frames": false
     },
     {
-      "matches": ["<all_urls>"],
-      "js": ["dist/gaze.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "dist/gaze.js"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -54,7 +74,18 @@
         "dist/human/human.esm.js",
         "dist/human/models/*"
       ],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "<all_urls>"
+      ]
     }
-  ]
+  ],
+  "commands": {
+    "voice-trigger": {
+      "suggested_key": {
+        "default": "Alt+Shift+H",
+        "mac": "Alt+Shift+H"
+      },
+      "description": "Start or stop listening"
+    }
+  }
 }

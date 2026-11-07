@@ -21,13 +21,56 @@
       <svg class="brand-mark" aria-hidden="true"><use href="#hw-mark"/></svg>
       <span class="brand-word">headway<span class="brand-stop" aria-hidden="true">.</span></span>
     </p>
-    <p class="top-status" id="top-status" aria-live="polite"><span class="glyph" aria-hidden="true">○</span><span class="word">Off</span></p>
+    <p class="top-status" id="top-status" aria-live="polite" data-feature="head-pointer"><span class="glyph" aria-hidden="true">○</span><span class="word">Off</span></p>
   </header>
 
   <main>
-    <!-- 01 Pointer -->
-    <section class="panel" aria-labelledby="pointer-title">
-      <header class="panel-head"><span class="panel-index">01</span><h2 id="pointer-title">Pointer</h2></header>
+    <!-- 01 Voice -->
+    <section class="panel" aria-labelledby="voice-title">
+      <header class="panel-head"><span class="panel-index">01</span><h2 id="voice-title">Your voice</h2></header>
+      <div class="panel-body">
+        <p class="status" id="voice-status" aria-live="polite">
+          <span class="glyph" aria-hidden="true">○</span><span class="word" id="voice-status-text">Not set up yet</span>
+        </p>
+        <ul class="voice-lines" id="voice-lines" hidden></ul>
+        <button type="button" id="voice-calibrate-btn" class="btn btn-primary">Teach Headway my voice</button>
+        <p class="hint" id="voice-hint">Choose how you start, your commands and how Headway answers. It learns your pauses, pace and voice as you go.</p>
+        <div class="voice-manage" id="voice-manage" hidden>
+          <button type="button" id="voice-forget-btn" class="btn btn-secondary">Forget my voice profile</button>
+          <button type="button" id="voice-delete-takes-btn" class="btn btn-secondary">Delete my recordings</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 AI browser agent. Existing voice onboarding remains untouched. -->
+    <section class="panel" aria-labelledby="agent-title">
+      <header class="panel-head"><span class="panel-index">02</span><h2 id="agent-title">AI Browser Agent</h2></header>
+      <div class="panel-body">
+        <p class="hint">Ask Headway to search, open a website, scroll, read or go back. Gemini suggests one action; nothing happens until you confirm it.</p>
+        <label class="field-label" for="agent-user">Personal user ID</label>
+        <input id="agent-user" type="text" autocomplete="off" placeholder="Your pilot account UUID">
+        <label class="field-label" for="agent-token">Personal access token</label>
+        <input id="agent-token" type="password" autocomplete="off" placeholder="Not stored">
+        <label class="field-label" for="agent-profile">Private voice profile ID</label>
+        <input id="agent-profile" type="text" autocomplete="off" placeholder="Pilot profile UUID">
+        <button type="button" id="agent-enable" class="btn btn-secondary">Enable current website</button>
+        <button type="button" id="agent-disable" class="btn btn-secondary">Disable current website</button>
+        <label class="field-label" for="agent-instruction">Instruction or reviewed speech transcript</label>
+        <textarea id="agent-instruction" rows="3" maxlength="400" placeholder="Search Google for Strathmore University"></textarea>
+        <button type="button" id="agent-plan" class="btn btn-primary">Ask Gemini to plan</button>
+        <label class="field-label" for="agent-model">Voice model</label>
+        <select id="agent-model"><option value="english">Fine tuned English Whisper</option><option value="swahili">Fine tuned Kiswahili Whisper</option></select>
+        <label class="field-label"><input id="agent-consent" type="checkbox"> I consent to sending this audio to our private speech service and the resulting transcript to Gemini for this instruction.</label>
+        <button type="button" id="agent-record" class="btn btn-secondary">Record spoken instruction</button>
+        <p id="agent-status" class="hint" aria-live="polite" role="status">Ready. Enable your website first.</p>
+        <button type="button" id="agent-confirm" class="btn btn-primary" disabled>Confirm and execute</button>
+        <button type="button" id="agent-cancel" class="btn btn-secondary">Cancel</button>
+        <p class="hint">Browser actions remain restricted to explicitly enabled websites. No purchases, sending messages, or form submissions.</p>
+      </div>
+    </section>
+    <!-- 02 Pointer -->
+    <section class="panel" aria-labelledby="pointer-title" data-feature="head-pointer">
+      <header class="panel-head"><span class="panel-index">02</span><h2 id="pointer-title">Pointer</h2></header>
       <div class="panel-body">
         <label class="switch-row">
           <span class="switch-text">
@@ -75,8 +118,8 @@
     </section>
 
     <!-- 02 Click -->
-    <section class="panel" aria-labelledby="click-title">
-      <header class="panel-head"><span class="panel-index">02</span><h2 id="click-title">Click</h2></header>
+    <section class="panel" aria-labelledby="click-title" data-feature="head-pointer">
+      <header class="panel-head"><span class="panel-index">03</span><h2 id="click-title">Click</h2></header>
       <div class="panel-body">
         <label class="switch-row">
           <span class="switch-text">
@@ -102,7 +145,7 @@
 
     <!-- 03 Summaries -->
     <section class="panel" aria-labelledby="summary-title" data-feature="summaries">
-      <header class="panel-head"><span class="panel-index">03</span><h2 id="summary-title">Summaries</h2></header>
+      <header class="panel-head"><span class="panel-index">04</span><h2 id="summary-title">Summaries</h2></header>
       <div class="panel-body">
         <fieldset class="field">
           <legend class="field-label">Show summaries in</legend>
@@ -152,7 +195,7 @@
       </article>
     </section>
 
-    <details class="shortcuts">
+    <details class="shortcuts" data-feature="head-pointer">
       <summary>Keyboard shortcuts</summary>
       <dl>
         <div><dt><kbd>Alt</kbd><kbd>H</kbd></dt><dd>Calibrate head pointer</dd></div>
@@ -165,7 +208,7 @@
       </dl>
     </details>
 
-    <p class="footnote">Head tracking runs in your browser with Human.js.<span data-feature="summaries"> Summaries are written on this device by Chrome’s built-in Gemini Nano; no page text is sent to an AI service.</span></p>
+    <p class="footnote"><span data-feature="head-pointer">Head tracking runs in your browser with Human.js.</span><span data-feature="summaries"> Summaries are written on this device by Chrome’s built-in Gemini Nano; no page text is sent to an AI service.</span></p>
   </main>
 
   <script src="sidepanel.js"></script>

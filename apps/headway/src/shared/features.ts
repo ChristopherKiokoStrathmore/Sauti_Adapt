@@ -7,3 +7,11 @@
  * links so mouth click lands on them. Set it to true and rebuild to bring summaries back.
  */
 export const SUMMARIES_ENABLED = false;
+
+/**
+ * HEAD_POINTER_ENABLED: head pointer and mouth click (camera). Off in the audio-only
+ * Headway: the gaze content script loads nothing, so no page ever asks for the camera,
+ * even if `gazeEnabled` is still true in storage from an earlier version. The side
+ * panel hides the Pointer and Click sections. Set to true and rebuild to bring them back.
+ */
+export const HEAD_POINTER_ENABLED = false;

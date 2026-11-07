@@ -237,3 +237,22 @@ kbd {
 }
 
 .footnote { margin: 0; font-size: 12px; color: var(--faint); line-height: 1.5; }
+
+/* Your voice */
+.voice-lines { margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.voice-lines li { padding: 10px 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.voice-lines li:first-child { border-top: 0; }
+.voice-lines b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.voice-manage { display: grid; gap: 8px; }
+
+/* Headway's Gemini browser agent controls */
+#agent-title { font-size: 17px; }
+#agent-user, #agent-token, #agent-profile, #agent-model {
+  display: block; width: 100%; box-sizing: border-box; border: 1px solid var(--line-strong);
+  border-radius: 10px; padding: 10px 12px; margin: 5px 0 12px;
+  font: inherit; color: var(--fg); background: var(--bg);
+}
+#agent-instruction { margin: 5px 0 10px; }
+#agent-status { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+#agent-consent { margin-right: 8px; }

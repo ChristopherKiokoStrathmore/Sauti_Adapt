@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Headway Voice Onboarding</title>
+<meta name="description" content="Design board: the audio-only Headway side panel, onboarding that calibrates to one person's voice, and the panel in use.">
+<style>
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('../assets/fonts/BricolageGrotesque-var.woff2') format('woff2');
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+  --display: 'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --body: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --canvas: #e8e7e0;
+  --dots: rgba(17,18,14,.13);
+  --bg: #f4f3ee;
+  --surface: #fbfbf8;
+  --band: #ecebe4;
+  --fg: #11120e;
+  --muted: #5c5e55;
+  --faint: #8a8c82;
+  --line: rgba(17,18,14,.12);
+  --line-strong: rgba(17,18,14,.24);
+  --lime: #c8f031;
+  --on-lime: #11120e;
+  --ring: #4e6400;
+  --rule: #4e6400;
+  --ink-bar: #11120e;
+  --ghost-bar: rgba(17,18,14,.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas: #0a0b08;
+    --dots: rgba(238,238,230,.10);
+    --bg: #0f100d;
+    --surface: #171814;
+    --band: #1d1e19;
+    --fg: #eeeee6;
+    --muted: #a3a598;
+    --faint: #75776c;
+    --line: rgba(238,238,230,.11);
+    --line-strong: rgba(238,238,230,.24);
+    --ring: #c8f031;
+    --rule: #c8f031;
+    --ink-bar: #eeeee6;
+    --ghost-bar: rgba(238,238,230,.20);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #0a0b08;
+  --dots: rgba(238,238,230,.10);
+  --bg: #0f100d;
+  --surface: #171814;
+  --band: #1d1e19;
+  --fg: #eeeee6;
+  --muted: #a3a598;
+  --faint: #75776c;
+  --line: rgba(238,238,230,.11);
+  --line-strong: rgba(238,238,230,.24);
+  --ring: #c8f031;
+  --rule: #c8f031;
+  --ink-bar: #eeeee6;
+  --ghost-bar: rgba(238,238,230,.20);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+img, svg { max-width: 100%; }
+[hidden] { display: none !important; }
+body {
+  background-color: var(--canvas);
+  color: var(--fg);
+  font: 15px/1.55 var(--body);
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* ---------- Board chrome ---------- */
+.board { max-width: 1760px; margin: 0 auto; padding: 32px 24px 96px; }
+.board-head {
+  display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: start;
+  padding-bottom: 28px; border-bottom: 1px solid var(--line-strong); margin-bottom: 40px;
+}
+.eyebrow { font: 600 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+.board-head h1 {
+  font: 620 clamp(36px, 5.4vw, 72px)/.98 var(--display); letter-spacing: -.04em; margin: 0 0 16px; max-width: 14ch;
+}
+.board-head p { color: var(--muted); max-width: 62ch; margin: 0; }
+.theme-btn {
+  font: 500 13px/1 var(--body); color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line-strong); border-radius: 9px; padding: 11px 14px; min-height: 40px; cursor: pointer;
+}
+
+.section-title { display: flex; align-items: baseline; gap: 14px; margin: 56px 0 20px; }
+.section-title h2 { font: 600 24px/1.1 var(--display); letter-spacing: -.03em; margin: 0; }
+.section-title span { font: 500 12px/1 var(--mono); color: var(--muted); }
+
+/* Pipeline diagram */
+.pipeline { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.pipeline-band { background: var(--band); border-bottom: 1px solid var(--line); padding: 12px 20px; font: 600 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.pipeline svg { display: block; width: 100%; height: auto; }
+.pipeline svg text { font-family: var(--body); }
+.pipeline-notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); border-top: 1px solid var(--line); }
+.pipeline-notes div { padding: 16px 20px; border-right: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.pipeline-notes div:last-child { border-right: 0; }
+.pipeline-notes b { display: block; color: var(--fg); font-weight: 600; margin-bottom: 4px; }
+
+/* Gemini lane */
+.gem { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; max-width: 980px; }
+.gem-steps { list-style: none; margin: 0; padding: 0; }
+.gem-steps li { display: grid; grid-template-columns: 32px 1fr auto; gap: 16px; padding: 18px 20px; border-top: 1px solid var(--line); position: relative; align-items: start; }
+.gem-steps li:first-child { border-top: 0; }
+.gem-steps li.key::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--rule); }
+.gem-n { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--line-strong); display: grid; place-items: center; font: 600 13px/1 var(--mono); }
+.gem-steps li.key .gem-n { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.gem-steps b { font: 600 17px/1.3 var(--display); letter-spacing: -.015em; }
+.gem-steps p { margin: 4px 0 0; color: var(--muted); font-size: 14px; max-width: 68ch; }
+.gem-steps pre { margin: 10px 0 0; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; font: 12.5px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.gem-steps .status { margin-top: 4px; }
+
+/* Frames row */
+.row { display: flex; flex-wrap: wrap; gap: 48px 40px; align-items: flex-start; }
+.slot { width: 380px; max-width: 100%; }
+.slot-label { display: flex; justify-content: space-between; font: 500 12px/1 var(--mono); color: var(--muted); margin: 0 2px 10px; }
+.slot-label b { color: var(--fg); font-weight: 600; }
+.note { font-size: 13px; color: var(--muted); margin: 14px 2px 0; max-width: 380px; }
+.note b { color: var(--fg); font-weight: 600; }
+
+/* ---------- The side panel frame ---------- */
+.panel {
+  width: 380px; max-width: 100%; height: 760px; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line-strong); border-radius: 14px; overflow: hidden;
+  display: flex; flex-direction: column; font-size: 15px;
+}
+.p-top { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.p-top .mark { width: 18px; height: 21px; flex: none; }
+.p-top .name { font: 650 15px/1 var(--display); letter-spacing: -.02em; }
+.p-top .step { margin-left: auto; font: 500 12px/1 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress { display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; padding: 0 18px; margin-top: 12px; }
+.progress i { height: 3px; border-radius: 2px; background: var(--line-strong); }
+.progress i.done { background: var(--fg); }
+.progress i.now { background: var(--rule); }
+
+.p-body { flex: 1; padding: 22px 18px 0; overflow: hidden; display: flex; flex-direction: column; }
+.p-body h3 {
+  font: 620 30px/1.04 var(--display); letter-spacing: -.035em; margin: 0 0 10px;
+}
+.p-body h3.big { font-size: 44px; line-height: .98; letter-spacing: -.045em; }
+.lede { color: var(--muted); margin: 0 0 20px; font-size: 15px; }
+.p-foot { padding: 14px 18px 18px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+
+.btn {
+  font: 600 16px/1 var(--body); border-radius: 12px; min-height: 56px; width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer;
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg);
+}
+.btn.primary { background: var(--lime); color: var(--on-lime); border-color: transparent; }
+.btn.quiet { background: transparent; border-color: transparent; min-height: 44px; font-weight: 500; color: var(--muted); }
+.btn svg { width: 20px; height: 20px; }
+.kbd { font: 500 11px/1 var(--mono); padding: 4px 6px; border-radius: 5px; border: 1px solid currentColor; opacity: .7; }
+
+.ico { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+.label { font: 600 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+
+/* Plain list with hairlines */
+.list { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
+.list > div { display: flex; gap: 12px; align-items: flex-start; padding: 13px 14px; border-top: 1px solid var(--line); font-size: 14px; }
+.list > div:first-child { border-top: 0; }
+.list .ico { margin-top: 1px; color: var(--muted); }
+.list small { display: block; color: var(--muted); font-size: 13px; }
+
+/* Choice cards (single surface, rows) */
+.choices { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
+.choice { display: grid; grid-template-columns: 22px 1fr auto; gap: 12px; align-items: center; padding: 16px 14px; border-top: 1px solid var(--line); position: relative; min-height: 64px; }
+.choice:first-child { border-top: 0; }
+.choice b { font-weight: 600; display: block; }
+.choice small { color: var(--muted); font-size: 13px; display: block; }
+.choice .radio { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--line-strong); }
+.choice.on { background: var(--bg); }
+.choice.on::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--rule); }
+.choice.on .radio { border: 6px solid var(--fg); }
+
+.check { display: grid; grid-template-columns: 22px 1fr; gap: 12px; padding: 14px; border-top: 1px solid var(--line); font-size: 14px; }
+.check:first-child { border-top: 0; }
+.box { width: 20px; height: 20px; border-radius: 5px; border: 1.5px solid var(--line-strong); display: grid; place-items: center; }
+.box.on { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.box.on svg, .list .box.on .ico { width: 14px; height: 14px; stroke-width: 2.5; color: var(--bg); margin: 0; }
+
+/* Speak bar: the big target */
+.speak {
+  display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 12px;
+  min-height: 84px; padding: 0 16px; border-radius: 16px; background: var(--lime); color: var(--on-lime);
+  font: 650 19px/1.1 var(--display); letter-spacing: -.02em; border: 0; width: 100%; text-align: left;
+}
+.speak .dot { width: 44px; height: 44px; border-radius: 50%; background: var(--on-lime); display: grid; place-items: center; color: var(--lime); }
+.speak .dot svg { width: 22px; height: 22px; }
+.speak small { display: block; font: 500 12px/1.3 var(--body); letter-spacing: 0; opacity: .72; margin-top: 3px; }
+.speak.listening { background: var(--fg); color: var(--bg); }
+.speak.listening .dot { background: var(--lime); color: var(--on-lime); }
+
+/* Level / waveform */
+.wave { display: flex; align-items: center; gap: 2px; height: 56px; }
+.wave i { width: 3px; border-radius: 2px; background: var(--ink-bar); }
+.wave.ghost i { background: var(--ghost-bar); }
+
+/* Prompt card: the sentence to say */
+.prompt { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 18px 16px; margin-bottom: 14px; }
+.prompt .say { font: 620 34px/1.05 var(--display); letter-spacing: -.035em; margin: 6px 0 0; }
+.takes { display: flex; gap: 6px; margin-top: 16px; align-items: center; font: 500 12px/1 var(--mono); color: var(--muted); }
+.takes i { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--line-strong); display: grid; place-items: center; font-style: normal; }
+.takes i.done { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.takes i.done svg { width: 12px; height: 12px; stroke-width: 3; }
+.takes span { margin-left: 6px; }
+
+/* Proof: three readings of one take */
+.proof { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.proof-head { background: var(--band); border-bottom: 1px solid var(--line); padding: 9px 14px; display: flex; justify-content: space-between; font: 600 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.reading { display: grid; grid-template-columns: 62px 1fr auto; gap: 10px; align-items: baseline; padding: 12px 14px; border-top: 1px solid var(--line); position: relative; }
+.reading:first-of-type { border-top: 0; }
+.reading .who { font: 600 10.5px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.reading .words { font-size: 15px; line-height: 1.4; }
+.reading .words s { color: var(--faint); text-decoration-thickness: 1.5px; }
+.reading .words em { font-style: normal; border-bottom: 1.5px dashed var(--muted); }
+.reading .score { font: 600 13px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.reading.best::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--rule); }
+.reading.best .score { color: var(--fg); }
+
+/* Stat block */
+.bigstat { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 2px; }
+.bigstat b { font: 650 64px/.9 var(--display); letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
+.bigstat span { color: var(--muted); font-size: 15px; }
+.bars { display: grid; gap: 14px; margin-top: 18px; }
+.bar-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: 14px; }
+.bar-row .track { grid-column: 1 / -1; height: 10px; border-radius: 5px; background: var(--band); overflow: hidden; }
+.bar-row .fill { height: 100%; border-radius: 5px; background: var(--ghost-bar); }
+.bar-row.mid .fill { background: var(--muted); }
+.bar-row.you .fill { background: var(--fg); }
+.bar-row.you { font-weight: 600; }
+.bar-row .n { font: 600 13px/1.4 var(--mono); font-variant-numeric: tabular-nums; }
+
+/* Status glyph + word */
+.status { display: inline-flex; align-items: center; gap: 6px; font: 500 12px/1 var(--mono); color: var(--muted); white-space: nowrap; }
+.status .ico { width: 15px; height: 15px; }
+.status.attn { color: var(--fg); }
+
+/* History in use */
+.hist { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
+.hist-row { padding: 13px 14px; border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; }
+.hist-row:first-child { border-top: 0; }
+.hist-row b { font-weight: 600; font-size: 15px; }
+.hist-row small { grid-column: 1 / -1; color: var(--muted); font-size: 13px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.chip { font: 600 15px/1 var(--body); padding: 0 16px; min-height: 52px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg); display: inline-flex; align-items: center; gap: 8px; }
+.chip.primary { background: var(--lime); color: var(--on-lime); border-color: transparent; }
+
+.toggle { width: 40px; height: 24px; border-radius: 12px; background: var(--line-strong); position: relative; flex: none; }
+.toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); }
+.toggle.on { background: var(--fg); }
+.toggle.on::after { left: 19px; background: var(--bg); }
+
+.cmds { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
+.cmd { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
+.cmd:first-child { border-top: 0; }
+.cmd b { font-weight: 600; font-size: 15px; display: block; }
+.cmd small { color: var(--muted); font-size: 12.5px; display: block; }
+
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line-strong); border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+.seg span { text-align: center; padding: 12px 4px; font-size: 14px; font-weight: 500; border-left: 1px solid var(--line-strong); color: var(--muted); }
+.seg span:first-child { border-left: 0; }
+.seg span.on { background: var(--fg); color: var(--bg); font-weight: 600; }
+
+.slider { margin: 6px 0 4px; }
+.slider .rail { height: 4px; border-radius: 2px; background: var(--line-strong); position: relative; margin: 14px 0 8px; }
+.slider .rail b { position: absolute; left: 0; top: 0; bottom: 0; width: 46%; background: var(--fg); border-radius: 2px; }
+.slider .rail i { position: absolute; left: 46%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: var(--bg); border: 2px solid var(--fg); }
+.slider .ends { display: flex; justify-content: space-between; font: 500 12px/1 var(--mono); color: var(--muted); }
+
+.pace svg { display: block; width: 100%; height: auto; overflow: visible; }
+.pace text { font-family: var(--mono); font-size: 9.5px; fill: var(--muted); }
+
+.rest { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.ring-wrap { width: 132px; height: 132px; margin-bottom: 26px; }
+
+.legend { font-size: 12.5px; color: var(--muted); margin: 12px 0 0; }
+
+@media (max-width: 520px) {
+  .board { padding: 20px 16px 64px; }
+  .board-head { grid-template-columns: 1fr; }
+  .row { gap: 40px; }
+  .panel { height: auto; min-height: 700px; }
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M8 14h8"/></symbol>
+    <symbol id="i-press" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="12" cy="12" r="3.5"/></symbol>
+    <symbol id="i-switch" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.5 6a8 8 0 0 1 0 12"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></symbol>
+    <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2.5 19h19"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4.25 4.25 0 0 1-.5 8.5H7z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-q" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8 1c0 1.7-2.4 2.2-2.4 3.7M12 17h.01"/></symbol>
+    <symbol id="i-wait" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7V5z"/></symbol>
+    <symbol id="mark" viewBox="0 0 420 483"><path d="M42 42h84v399H42z" fill="currentColor"/><path d="M42 277.2a168 168 0 0 1 336 0v51.24h-84V277.2a84 84 0 0 0-168 0z" fill="currentColor"/><circle cx="336" cy="396.48" r="44.52" fill="#C8F031"/></symbol>
+  </defs>
+</svg>
+
+<main class="board">
+  <header class="board-head">
+    <div>
+      <p class="eyebrow">Headway Voice · Design board · Side panel 380 × 760</p>
+      <h1>Teach Headway your voice.</h1>
+      <p>The audio-only Headway: a person speaks, a speech model tuned to them writes it down, the AI4A11y Controller works out what they mean, and Chrome does it on the page. Onboarding is where the tuning happens, and where the person sees, in their own recordings, why it matters. Sentences, scores and transcripts on this board are sample values, not results.</p>
+    </div>
+    <button class="theme-btn" id="themeBtn" type="button" aria-label="Switch between light and dark">Dark</button>
+  </header>
+
+  <!-- ===================== Pipeline ===================== -->
+  <div class="section-title"><h2>How one command travels</h2><span>whiteboard → system</span></div>
+  <div class="pipeline">
+    <div class="pipeline-band">Faridah speaks → the browser acts</div>
+    <svg viewBox="0 0 1200 220" role="img" aria-label="Pipeline: her trigger starts recording, the Sauti model writes a transcript, the Controller tries its command list then Gemini, and a Chrome control port acts on the page, with spoken feedback back to her.">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker>
+      </defs>
+      <g fill="none" stroke="var(--line-strong)" stroke-width="1.2">
+        <rect x="20" y="58" width="160" height="84" rx="12" fill="var(--bg)"/>
+        <rect x="236" y="58" width="190" height="84" rx="12" fill="var(--fg)" stroke="var(--fg)"/>
+        <rect x="482" y="34" width="250" height="132" rx="12" fill="var(--bg)"/>
+        <rect x="788" y="58" width="190" height="84" rx="12" fill="var(--bg)"/>
+        <rect x="1034" y="58" width="146" height="84" rx="12" fill="var(--bg)"/>
+        <line x1="498" y1="100" x2="716" y2="100" stroke-dasharray="3 4"/>
+      </g>
+      <circle cx="404" cy="80" r="7" fill="#C8F031"/>
+      <g stroke="var(--muted)" stroke-width="1.4" fill="none" marker-end="url(#ah)">
+        <path d="M180 100H232"/><path d="M426 100H478"/><path d="M732 100H784"/><path d="M978 100H1030"/>
+        <path d="M1107 142V196H100V146"/>
+      </g>
+      <g font-size="15" font-weight="600" fill="var(--fg)">
+        <text x="38" y="92">Her trigger</text>
+        <text x="254" y="92" fill="var(--bg)">Sauti model</text>
+        <text x="500" y="64">AI4A11y Controller</text>
+        <text x="806" y="92">Chrome port</text>
+        <text x="1052" y="92">The page</text>
+      </g>
+      <g font-size="12.5" fill="var(--muted)">
+        <text x="38" y="114">key, switch or button</text>
+        <text x="38" y="130">records 16 kHz audio</text>
+        <text x="254" y="114" fill="var(--bg)" opacity=".75">Whisper + her profile</text>
+        <text x="254" y="130" fill="var(--bg)" opacity=".75">audio → transcript</text>
+        <text x="500" y="88">1 · command list (instant)</text>
+        <text x="500" y="124">2 · Gemini, only on a miss</text>
+        <text x="500" y="142">picks from declared actions</text>
+        <text x="806" y="114">tabs, scroll, click,</text>
+        <text x="806" y="130">read aloud, search</text>
+        <text x="1052" y="114">done, or asks</text>
+        <text x="1052" y="130">"did you mean…"</text>
+        <text x="470" y="214">spoken and on-screen feedback, in the way she chose</text>
+      </g>
+    </svg>
+    <div class="pipeline-notes">
+      <div><b>Personal speech model</b>Her calibration (pace, room noise, her words) shapes the request; the LoRA adapter comes later, after consent and a held-out test.</div>
+      <div><b>Controller handle()</b>The toolkit's own grammar runs first; Gemini plugs into its LLM lane and only sees her words plus the actions this tab supports.</div>
+      <div><b>Chrome control port</b>One ControlPort over chrome.tabs, scripting and debugger. Pages Chrome protects (chrome://, the Web Store) say so instead of failing quietly.</div>
+      <div><b>Default to asking</b>Unclear speech never runs. She gets the transcript and two big guesses to choose from, and a choice can be remembered.</div>
+    </div>
+  </div>
+
+  <!-- ===================== Gemini lane ===================== -->
+  <div class="section-title"><h2>When the command list misses: the Gemini lane</h2><span>controller/llm-lane.js</span></div>
+  <div class="gem" id="gemini">
+    <div class="pipeline-band">Example: she says "take me to where people are commenting"</div>
+    <ol class="gem-steps">
+      <li>
+        <span class="gem-n">1</span>
+        <div><b>Sauti writes it down</b><p>Her audio goes to the Sauti model on Modal.</p>
+        <pre>"take me to where people are commenting"</pre></div>
+        <span class="status"><svg class="ico"><use href="#i-check"/></svg>1.4 s</span>
+      </li>
+      <li>
+        <span class="gem-n">2</span>
+        <div><b>Her aliases, then the toolkit grammar</b><p>Instant, on this computer. No pattern matches "take me to … commenting".</p>
+        <pre>grammar.parse()  →  miss</pre></div>
+        <span class="status">— Miss</span>
+      </li>
+      <li class="key">
+        <span class="gem-n">3</span>
+        <div><b>Ask Gemini, with only her words and this tab's actions</b><p>Gemini Nano on the device first, cloud Gemini through our relay if Nano is missing. Page text is never in the prompt, so a web page can't give Gemini instructions.</p>
+        <pre>Settings you may change: fontScale (50-300), darkMode, …
+App actions available: scroll, activate, back, forward,
+  navigate, search, nextTab, previousTab, readPage, pauseMedia
+Request: "take me to where people are commenting"
+JSON:</pre></div>
+        <span class="status"><svg class="ico"><use href="#i-wait"/></svg>0.9 s</span>
+      </li>
+      <li>
+        <span class="gem-n">4</span>
+        <div><b>Gemini answers with one JSON action</b>
+        <pre>{"type":"command","action":"activate",
+ "target":"comments","say":"Going to the comments"}</pre></div>
+        <span class="status"><svg class="ico"><use href="#i-check"/></svg>Parsed</span>
+      </li>
+      <li>
+        <span class="gem-n">5</span>
+        <div><b>Checked before anything runs</b><p>Is "activate" one of this tab's actions? Yes. Does a visible element match "comments"? The Chrome port finds <i>Comments · 1,204</i>. Anything else (unknown action, invented setting, no match) becomes "Did you mean…" and nothing runs.</p></div>
+        <span class="status"><svg class="ico"><use href="#i-check"/></svg>Allowed</span>
+      </li>
+      <li>
+        <span class="gem-n">6</span>
+        <div><b>Her confirmation rule</b><p>She chose "ask before sending forms". This is a link, so it runs. A form would stop at "Send this form?".</p></div>
+        <span class="status"><svg class="ico"><use href="#i-check"/></svg>No check needed</span>
+      </li>
+      <li>
+        <span class="gem-n">7</span>
+        <div><b>Chrome acts, Headway answers</b><p>The content script scrolls to and focuses the comments; <code>chrome.tts</code> says "Going to the comments". The history row shows "asked Gemini · 3.1 s".</p></div>
+        <span class="status attn"><svg class="ico"><use href="#i-check"/></svg>Done</span>
+      </li>
+    </ol>
+  </div>
+
+  <!-- ===================== Onboarding ===================== -->
+  <div class="section-title"><h2>Onboarding: calibrate to one voice</h2><span>9 steps · about 12 minutes · saves after every take</span></div>
+  <div class="row">
+
+    <!-- 01 Welcome -->
+    <div class="slot">
+      <div class="slot-label"><b>01 · Welcome</b><span>first open</span></div>
+      <section class="panel" aria-label="Welcome">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">1 / 9</span></div>
+        <div class="progress" aria-hidden="true"><i class="now"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="p-body">
+          <p class="label">Set up your voice</p>
+          <h3 class="big">Use the web by speaking, the way you speak.</h3>
+          <p class="lede">You'll say a few short commands so Headway learns your voice. Everything you say is saved as you go, so you never have to repeat a take.</p>
+          <div class="list">
+            <div><svg class="ico"><use href="#i-wait"/></svg><span>About 12 minutes<small>Stop whenever you like and carry on later.</small></span></div>
+            <div><svg class="ico"><use href="#i-pause"/></svg><span>Rest when you need to<small>A break comes up every few commands.</small></span></div>
+            <div><svg class="ico"><use href="#i-speaker"/></svg><span>Kenyan English or Kiswahili<small>Or both. You choose your own commands.</small></span></div>
+          </div>
+        </div>
+        <div class="p-foot">
+          <button class="btn primary" type="button">Start <span class="kbd">Enter</span></button>
+          <button class="btn quiet" type="button">Someone is helping me set up</button>
+        </div>
+      </section>
+      <p class="note"><b>Why the second button:</b> many co-designers set up with a family member or therapist. It switches the copy to "they" and keeps her as the one who speaks. It never asks about a diagnosis.</p>
+    </div>
+
+    <!-- 02 Consent -->
+    <div class="slot">
+      <div class="slot-label"><b>02 · Your recordings</b><span>consent</span></div>
+      <section class="panel" aria-label="Consent">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">2 / 9</span></div>
+        <div class="progress" aria-hidden="true"><i class="done"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="p-body">
+          <h3>Where your voice goes</h3>
+          <p class="lede">Headway only listens when you start it.</p>
+          <div class="list" style="margin-bottom:16px">
+            <div><svg class="ico"><use href="#i-laptop"/></svg><span>Recordings stay on this computer<small>In Headway's storage. Not in the cloud, not in a chat.</small></span></div>
+            <div><svg class="ico"><use href="#i-cloud"/></svg><span>Each command is sent to write it down<small>To the Sauti speech server, then the audio is not kept there.</small></span></div>
+            <div><svg class="ico"><use href="#i-trash"/></svg><span>Delete everything with one button<small>In Settings, any time.</small></span></div>
+          </div>
+          <div class="list">
+            <label class="check"><span class="box on"><svg class="ico"><use href="#i-check"/></svg></span><span>I agree to Headway recording my voice for this setup.</span></label>
+            <label class="check"><span class="box"></span><span>Also use my recordings to train a model just for me. <small style="color:var(--muted)">Optional. You can say yes later.</small></span></label>
+          </div>
+        </div>
+        <div class="p-foot">
+          <button class="btn primary" type="button">I agree</button>
+          <button class="btn quiet" type="button">Not now</button>
+        </div>
+      </section>
+      <p class="note"><b>Two separate yeses.</b> Using the extension and training a personal adapter are different permissions (AGENTS.md rules 4–5). "Not stored on the server" must be true of the Modal endpoint before this copy ships.</p>
+    </div>
+
+    <!-- 03 Mic & room -->
+    <div class="slot">
+      <div class="slot-label"><b>03 · Microphone and room</b><span>noise floor</span></div>
+      <section class="panel" aria-label="Microphone and room">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">3 / 9</span></div>
+        <div class="progress" aria-hidden="true"><i class="done"></i><i class="done"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="p-body">
+          <h3>Stay quiet for five seconds</h3>
+          <p class="lede">Headway is listening to the room, so it can tell your voice from the background.</p>
+          <div class="prompt">
+            <p class="label">Room sound</p>
+            <div class="wave ghost" data-wave="room" aria-hidden="true"></div>
+            <div style="display:flex;justify-content:space-between;margin-top:12px">
+              <span class="status attn"><svg class="ico"><use href="#i-check"/></svg>Quiet room</span>
+              <span class="status">MacBook microphone ▾</span>
+            </div>
+          </div>
+          <p class="label" style="margin-top:6px">Now say your name, or any word</p>
+          <div class="prompt" style="margin:0">
+            <div class="wave" data-wave="voice" aria-hidden="true"></div>
+            <div style="display:flex;justify-content:space-between;margin-top:12px">
+              <span class="status attn"><svg class="ico"><use href="#i-check"/></svg>Heard you clearly</span>
+              <span class="status">4.6 s</span>
+            </div>
+          </div>
+        </div>
+        <div class="p-foot">
+          <button class="btn primary" type="button">Next</button>
+          <button class="btn quiet" type="button">Use a different microphone</button>
+        </div>
+      </section>
+      <p class="note"><b>Sets the silence floor</b> the server already uses (MIN_RMS), per person and per room, instead of one fixed number. The first take is never scored.</p>
+    </div>
+
+    <!-- 04 Trigger -->
+    <div class="slot">
+      <div class="slot-label"><b>04 · How you start talking</b><span>her trigger</span></div>
+      <section class="panel" aria-label="How you start talking">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">4 / 9</span></div>
+        <div class="progress" aria-hidden="true"><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="p-body">
+          <h3>How would you like to start?</h3>
+          <p class="lede">Pick what's easiest. You can change it later.</p>
+          <div class="choices" role="radiogroup">
+            <div class="choice on" role="radio" aria-checked="true"><span class="radio"></span><span><b>One key, from any page</b><small>Alt + Shift + H. Press again to finish.</small></span><svg class="ico"><use href="#i-key"/></svg></div>
+            <div class="choice" role="radio" aria-checked="false"><span class="radio"></span><span><b>A big button in this panel</b><small>Tap to start, tap to finish.</small></span><svg class="ico"><use href="#i-press"/></svg></div>
+            <div class="choice" role="radio" aria-checked="false"><span class="radio"></span><span><b>My switch</b><small>Press your switch once; we'll learn which key it sends.</small></span><svg class="ico"><use href="#i-switch"/></svg></div>
+          </div>
+          <p class="label" style="margin-top:20px">Finishing</p>
+          <div class="choices">
+            <div class="choice on"><span class="radio"></span><span><b>When I stop talking</b><small>Headway learns your pauses next.</small></span><span></span></div>
+            <div class="choice"><span class="radio"></span><span><b>When I press again</b><small>No time limit while you speak.</small></span><span></span></div>
+          </div>
+        </div>
+        <div class="p-foot">
+          <button class="btn primary" type="button">Try it <span class="kbd">Alt Shift H</span></button>
+        </div>
+      </section>
+      <p class="note"><b>chrome.commands</b> gives a key that works on any page, even when the page has focus. Stored with the toolkit's <code>shortcut</code> block, so it follows her profile. No wake word: nothing listens in the background.</p>
+    </div>
+
+    <!-- 05 Pace -->
+    <div class="slot">
+      <div class="slot-label"><b>05 · Your pace</b><span>end-of-speech wait</span></div>
+      <section class="panel" aria-label="Your pace">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">5 / 9</span></div>
+        <div class="progress" aria-hidden="true"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i><i></i><i></i><i></i><i></i></div>
+        <div class="p-body">
+          <h3>Take your time. We'll wait.</h3>
+          <p class="lede">You said "Open the first video on YouTube". Here is where a standard listener stops, and where Headway does.</p>
+          <div class="pace" aria-label="Two timelines of the same sentence. Standard listening cuts off after the first long pause and loses the second half. Headway waits through it.">
+            <svg viewBox="0 0 344 196" id="paceSvg" aria-hidden="true"></svg>
+          </div>
+          <div class="slider">
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <span class="label" style="margin:0">Wait after you stop</span>
+              <b style="font:650 20px/1 var(--display);font-variant-numeric:tabular-nums">2.4 s</b>
+            </div>
+            <div class="rail"><b></b><i></i></div>
+            <div class="ends"><span>1 s</span><span>5 s</span></div>
+          </div>
+        </div>
+        <div class="p-foot">
+          <button class="btn primary" type="button">Keep 2.4 seconds</button>
+          <button class="btn quiet" type="button">Say it again</button>
+        </div>
+      </section>
+      <p class="note"><b>The first "aha".</b> Same audio, two cut-off rules, drawn from her own recording. The suggested wait is her longest mid-sentence pause plus a margin; she can move it.</p>
+    </div>
+
+    <!-- 06 Words -->
+    <div class="slot">
+      <div class="slot-label"><b>06 · Your words</b><span>her command set</span></div>
+      <section class="panel" aria-label="Your words">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">6 / 9</span></div>
+        <div class="progress" aria-hidden="true"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i><i></i><i></i><i></i></div>
+        <div class="p-body">
+          <h3>Which commands do you want?</h3>
+          <p class="lede">Keep the ones you'll use. Say them however you like.</p>
+          <div class="seg" role="radiogroup" aria-label="Language"><span>English</span><span>Kiswahili</span><span class="on">Both</span></div>
+          <div class="cmds">
+            <div class="cmd"><span><b>Scroll down</b><small>also: "shuka chini"</small></span><span class="toggle on" aria-label="On"></span></div>
+            <div class="cmd"><span><b>Go back</b><small>also: "rudi nyuma"</small></span><span class="toggle on" aria-label="On"></span></div>
+            <div class="cmd"><span><b>Read this to me</b><small>also: "nisomee"</small></span><span class="toggle on" aria-label="On"></span></div>
+            <div class="cmd"><span><b>Next tab</b><small>no Kiswahili phrase yet</small></span><span class="toggle on" aria-label="On"></span></div>
+          </div>
+          <button class="btn" type="button" style="margin-top:12px;min-height:52px"><svg class="ico"><use href="#i-plus"/></svg>Add my own phrase</button>
+        </div>
+        <div class="p-foot">
+          <button class="btn primary" type="button">Record these · 4 commands</button>
+        </div>
+      </section>
+      <p class="note"><b>She chooses, we don't infer.</b> Each phrase maps to one action the Chrome port declares. Her own phrase ("nisomee") becomes an alias, stored in her toolkit profile.</p>
+    </div>
+
+    <!-- 07 Record -->
+    <div class="slot">
+      <div class="slot-label"><b>07 · Record a command</b><span>take 2 of 3</span></div>
+      <section class="panel" aria-label="Record a command">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">7 / 9</span></div>
+        <div class="progress" aria-hidden="true"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i><i></i><i></i></div>
+        <div class="p-body">
+          <div class="prompt">
+            <p class="label">Command 1 of 4 · say</p>
+            <p class="say">Scroll down</p>
+            <div class="takes"><i class="done"><svg class="ico"><use href="#i-check"/></svg></i><i class="done"><svg class="ico"><use href="#i-check"/></svg></i><i></i><span>2 saved</span></div>
+          </div>
+          <div class="proof">
+            <div class="proof-head"><span>What was heard · take 2</span><span>words</span></div>
+            <div class="reading"><span class="who">You said</span><span class="words">scroll down</span><span class="score"></span></div>
+            <div class="reading"><span class="who">Standard</span><span class="words"><s>school</s> <s>town</s></span><span class="score">0 / 2</span></div>
+            <div class="reading"><span class="who">Sauti</span><span class="words">scroll <s>town</s></span><span class="score">1 / 2</span></div>
+            <div class="reading best"><span class="who">Tuned</span><span class="words">scroll down</span><span class="score">2 / 2</span></div>
+          </div>
+          <p class="legend">Struck-through words were heard wrong.</p>
+          <div style="margin-top:auto;padding-bottom:16px">
+            <button class="speak" type="button"><span class="dot"><svg class="ico"><use href="#i-mic"/></svg></span><span>Say it once more<small>Last take for this command</small></span><span class="kbd">Alt Shift H</span></button>
+          </div>
+        </div>
+        <div class="p-foot" style="grid-template-columns:1fr 1fr">
+          <button class="btn quiet" type="button"><svg class="ico"><use href="#i-play"/></svg>Hear my take</button>
+          <button class="btn quiet" type="button">Skip this one</button>
+        </div>
+      </section>
+      <p class="note"><b>The showcase, take by take.</b> One recording, three readings: Chrome's standard recognition, the Sauti model as it ships, and Sauti with her calibration. Takes 1–2 teach Headway (aliases, word hints); take 3 is held back and only used to score her in step 9.</p>
+    </div>
+
+    <!-- 07b Listening state -->
+    <div class="slot">
+      <div class="slot-label"><b>07 · Listening</b><span>state</span></div>
+      <section class="panel" aria-label="Listening">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">7 / 9</span></div>
+        <div class="progress" aria-hidden="true"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i><i></i><i></i></div>
+        <div class="p-body">
+          <div class="prompt">
+            <p class="label">Command 1 of 4 · say</p>
+            <p class="say">Scroll down</p>
+            <div class="takes"><i class="done"><svg class="ico"><use href="#i-check"/></svg></i><i class="done"><svg class="ico"><use href="#i-check"/></svg></i><i></i><span>take 3</span></div>
+          </div>
+          <div class="wave" data-wave="live" aria-hidden="true" style="height:96px;margin:18px 0 6px"></div>
+          <div style="display:flex;justify-content:space-between">
+            <span class="status attn"><svg class="ico"><use href="#i-mic"/></svg>Listening</span>
+            <span class="status">quiet for 0.9 of 2.4 s</span>
+          </div>
+          <div style="margin-top:auto;padding-bottom:16px">
+            <button class="speak listening" type="button"><span class="dot"><svg class="ico"><use href="#i-mic"/></svg></span><span>I'm listening<small>Stops after 2.4 s of quiet, or press to finish</small></span><span class="kbd">Alt Shift H</span></button>
+          </div>
+        </div>
+        <div class="p-foot">
+          <button class="btn quiet" type="button">Cancel this take</button>
+        </div>
+      </section>
+      <p class="note"><b>The countdown is visible</b>, so a long pause never feels like a mistake. Media in the tab is muted while she speaks (the Controller's <code>muteAudio</code>).</p>
+    </div>
+
+    <!-- 08 Rest -->
+    <div class="slot">
+      <div class="slot-label"><b>08 · Rest</b><span>every 3 commands</span></div>
+      <section class="panel" aria-label="Rest">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">7 / 9</span></div>
+        <div class="progress" aria-hidden="true"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i><i></i><i></i></div>
+        <div class="p-body">
+          <div class="rest">
+            <svg class="ring-wrap" viewBox="0 0 132 132" aria-hidden="true">
+              <circle cx="66" cy="66" r="58" fill="none" stroke="var(--line-strong)" stroke-width="6"/>
+              <circle cx="66" cy="66" r="58" fill="none" stroke="var(--fg)" stroke-width="6" stroke-linecap="round" stroke-dasharray="364.4" stroke-dashoffset="91" transform="rotate(-90 66 66)"/>
+              <circle cx="66" cy="66" r="13" fill="#C8F031"/>
+            </svg>
+            <h3 class="big">Good place for a break.</h3>
+            <p class="lede">9 of 12 takes are saved. Have some water. Nothing will be lost if you close this panel.</p>
+          </div>
+        </div>
+        <div class="p-foot">
+          <button class="btn primary" type="button">I'm ready</button>
+          <button class="btn quiet" type="button">Finish later</button>
+        </div>
+      </section>
+      <p class="note"><b>Fatigue is a design input.</b> Breaks are offered, never forced; "Finish later" keeps every take and resumes at the next command.</p>
+    </div>
+
+    <!-- 09 Feedback -->
+    <div class="slot">
+      <div class="slot-label"><b>09 · Answers and checks</b><span>presentation</span></div>
+      <section class="panel" aria-label="Answers and checks">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">8 / 9</span></div>
+        <div class="progress" aria-hidden="true"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i><i></i></div>
+        <div class="p-body">
+          <h3>How should Headway answer?</h3>
+          <div class="choices" style="margin:12px 0 18px">
+            <div class="choice on"><span class="radio"></span><span><b>Say it out loud</b><small>"Scrolling down." You pick the voice.</small></span><svg class="ico"><use href="#i-speaker"/></svg></div>
+            <div class="choice"><span class="radio"></span><span><b>A short sound</b><small>A chime when done, a low tone if not.</small></span><span></span></div>
+            <div class="choice"><span class="radio"></span><span><b>Text in this panel only</b><small>Best with a screen reader.</small></span><span></span></div>
+          </div>
+          <p class="label">Before clicking something</p>
+          <div class="choices">
+            <div class="choice"><span class="radio"></span><span><b>Always ask me first</b></span><span></span></div>
+            <div class="choice on"><span class="radio"></span><span><b>Ask before sending forms</b><small>Clicks and links just happen.</small></span><span></span></div>
+            <div class="choice"><span class="radio"></span><span><b>Never ask</b></span><span></span></div>
+          </div>
+        </div>
+        <div class="p-foot">
+          <button class="btn primary" type="button">See my results</button>
+        </div>
+      </section>
+      <p class="note"><b>Her choice overrides inference.</b> The toolkit's <code>presentation.js</code> turns confirmations on from a "motor" profile; Headway sets <code>confirmActions</code> from this answer instead.</p>
+    </div>
+
+    <!-- 10 Results -->
+    <div class="slot">
+      <div class="slot-label"><b>10 · Your results</b><span>the before / after</span></div>
+      <section class="panel" aria-label="Your results">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">9 / 9</span></div>
+        <div class="progress" aria-hidden="true"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i></div>
+        <div class="p-body">
+          <p class="label">Understood the first time</p>
+          <div class="bigstat"><b>7</b><span>of your 8 test commands</span></div>
+          <p class="lede" style="margin-bottom:6px">On the takes Headway didn't learn from.</p>
+          <div class="bars">
+            <div class="bar-row"><span>Standard speech recognition</span><span class="n">2 / 8</span><div class="track"><div class="fill" style="width:25%"></div></div></div>
+            <div class="bar-row mid"><span>Sauti model, before setup</span><span class="n">4 / 8</span><div class="track"><div class="fill" style="width:50%"></div></div></div>
+            <div class="bar-row you"><span>Headway, tuned to you</span><span class="n">7 / 8</span><div class="track"><div class="fill" style="width:87.5%"></div></div></div>
+          </div>
+          <div class="proof" style="margin-top:20px">
+            <div class="proof-head"><span>Still tricky</span><span></span></div>
+            <div class="reading"><span class="who">You said</span><span class="words">next tab</span><span class="score"></span></div>
+            <div class="reading"><span class="who">Heard</span><span class="words"><s>neck</s> tab</span><span class="score">1 / 2</span></div>
+          </div>
+          <p class="legend">8 commands is a small test. Headway keeps learning from your corrections.</p>
+        </div>
+        <div class="p-foot">
+          <button class="btn primary" type="button">Start using Headway</button>
+          <button class="btn quiet" type="button">Record "next tab" again</button>
+        </div>
+      </section>
+      <p class="note"><b>Honest numbers only.</b> Computed live from her held-out takes, against both baselines. The sample size is on the screen. Values here are placeholders.</p>
+    </div>
+  </div>
+
+  <!-- ===================== In use ===================== -->
+  <div class="section-title"><h2>After setup: the panel in use</h2><span>on any permitted page</span></div>
+  <div class="row">
+
+    <!-- 11 Ready -->
+    <div class="slot">
+      <div class="slot-label"><b>11 · Ready</b><span>home</span></div>
+      <section class="panel" aria-label="Ready">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">youtube.com</span></div>
+        <div class="p-body">
+          <span class="status" style="margin-bottom:14px"><svg class="ico"><use href="#i-check"/></svg>Ready · model warm</span>
+          <button class="speak" type="button"><span class="dot"><svg class="ico"><use href="#i-mic"/></svg></span><span>Speak<small>or press your key on any page</small></span><span class="kbd">Alt Shift H</span></button>
+          <p class="label" style="margin-top:24px">Just now</p>
+          <div class="hist">
+            <div class="hist-row"><b>Scroll down</b><span class="status"><svg class="ico"><use href="#i-check"/></svg>Done</span><small>Heard "scroll down" · 1.8 s</small></div>
+            <div class="hist-row"><b>Open the first video</b><span class="status"><svg class="ico"><use href="#i-check"/></svg>Done</span><small>Heard "open the first video" · asked Gemini · 3.1 s</small></div>
+            <div class="hist-row"><b>Nisomee</b><span class="status"><svg class="ico"><use href="#i-speaker"/></svg>Reading</span><small>Your phrase for "Read this to me"</small></div>
+          </div>
+        </div>
+        <div class="p-foot" style="grid-template-columns:1fr 1fr">
+          <button class="btn quiet" type="button">My commands</button>
+          <button class="btn quiet" type="button">Settings</button>
+        </div>
+      </section>
+      <p class="note"><b>Times are shown</b> so the team can see latency in real use. "asked Gemini" marks the slow path; common commands never leave the command list.</p>
+    </div>
+
+    <!-- 11b Thinking -->
+    <div class="slot">
+      <div class="slot-label"><b>11b · Working it out</b><span>Gemini lane running</span></div>
+      <section class="panel" aria-label="Working it out">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">youtube.com</span></div>
+        <div class="p-body">
+          <span class="status attn" style="margin-bottom:14px"><svg class="ico"><use href="#i-wait"/></svg>Working out what you mean</span>
+          <div class="proof" style="margin-bottom:18px">
+            <div class="reading"><span class="who">Heard</span><span class="words">"take me to where people are commenting"</span><span class="score"></span></div>
+          </div>
+          <div class="list">
+            <div><svg class="ico"><use href="#i-check"/></svg><span>Written down<small>Sauti model · 1.4 s</small></span></div>
+            <div><svg class="ico"><use href="#i-check"/></svg><span>Not one of your commands<small>Checked your words and the command list</small></span></div>
+            <div style="color:var(--fg)"><svg class="ico" style="color:var(--fg)"><use href="#i-wait"/></svg><span><b style="font-weight:600">Asking Gemini</b><small>Only your words are sent, not the page</small></span></div>
+          </div>
+          <p class="legend" style="margin-top:14px">Nothing on the page changes until Headway is sure.</p>
+        </div>
+        <div class="p-foot">
+          <button class="btn" type="button">Stop <span class="kbd">Esc</span></button>
+        </div>
+      </section>
+      <p class="note"><b>The slow path is visible.</b> She sees which step it's on, and Stop calls the Controller's <code>stop()</code>. Most commands never get here.</p>
+    </div>
+
+    <!-- 12 Not sure -->
+    <div class="slot">
+      <div class="slot-label"><b>12 · Not sure</b><span>default to asking</span></div>
+      <section class="panel" aria-label="Not sure">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">youtube.com</span></div>
+        <div class="p-body">
+          <span class="status attn" style="margin-bottom:14px"><svg class="ico"><use href="#i-q"/></svg>Not sure · nothing was done</span>
+          <h3>Did you mean…</h3>
+          <div class="proof" style="margin-bottom:16px">
+            <div class="reading"><span class="who">Heard</span><span class="words">"<em>school</em> to the comments"</span><span class="score"></span></div>
+          </div>
+          <div style="display:grid;gap:10px">
+            <button class="chip primary" type="button" style="justify-content:space-between">Scroll to the comments <span class="kbd">1</span></button>
+            <button class="chip" type="button" style="justify-content:space-between">Go to the comments link <span class="kbd">2</span></button>
+            <button class="chip" type="button" style="justify-content:space-between">Neither, let me say it again <span class="kbd">3</span></button>
+          </div>
+          <div class="list" style="margin-top:18px">
+            <label class="check"><span class="box on"><svg class="ico"><use href="#i-check"/></svg></span><span>Remember: when I say "school", I mean "scroll".<small>You can undo this in My commands.</small></span></label>
+          </div>
+        </div>
+        <div class="p-foot">
+          <button class="btn quiet" type="button">Or say "one", "two" or "three"</button>
+        </div>
+      </section>
+      <p class="note"><b>Learning by correction.</b> The tick becomes a toolkit Librarian <em>proposal</em> she accepted, never a silent change. This is personalization that works on day one, before any model training.</p>
+    </div>
+
+    <!-- 13 Confirm -->
+    <div class="slot">
+      <div class="slot-label"><b>13 · Check before sending</b><span>confirmation</span></div>
+      <section class="panel" aria-label="Check before sending">
+        <div class="p-top"><svg class="mark" aria-hidden="true"><use href="#mark"/></svg><span class="name">Headway</span><span class="step">mpesa.example</span></div>
+        <div class="p-body">
+          <span class="status attn" style="margin-bottom:14px"><svg class="ico"><use href="#i-wait"/></svg>Waiting for you</span>
+          <h3 class="big">Send this form?</h3>
+          <p class="lede">You said "submit". The button on the page says <b style="color:var(--fg)">Pay KSh 250</b>.</p>
+          <div style="display:grid;gap:10px;margin-top:auto;padding-bottom:16px">
+            <button class="chip primary" type="button" style="justify-content:space-between;min-height:64px">Yes, send it <span class="kbd">say "yes"</span></button>
+            <button class="chip" type="button" style="justify-content:space-between;min-height:64px">No, cancel <span class="kbd">say "no"</span></button>
+          </div>
+        </div>
+        <div class="p-foot">
+          <button class="btn quiet" type="button">Show me the button on the page</button>
+        </div>
+      </section>
+      <p class="note"><b>Reads the real label back</b>, not Gemini's summary of it, so a mis-heard "submit" can be caught before money moves. Uses the Controller's built-in yes/no pending state.</p>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  // Theme toggle, remembered when storage is allowed.
+  var root = document.documentElement, btn = document.getElementById('themeBtn');
+  function current() {
+    var t = root.getAttribute('data-theme');
+    if (t) return t;
+    return window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  function label() { btn.textContent = current() === 'dark' ? 'Light' : 'Dark'; }
+  try { var saved = localStorage.getItem('headway-board-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+  label();
+  btn.addEventListener('click', function () {
+    var next = current() === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('headway-board-theme', next); } catch (e) {}
+    label();
+  });
+
+  // Deterministic sample waveforms (illustration only).
+  function rng(seed) { return function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; }
+  var shapes = {
+    room: { n: 74, f: function (i, r) { return 3 + r() * 5; } },
+    voice: { n: 74, f: function (i, r) { var on = i > 10 && i < 60; return on ? 8 + Math.abs(Math.sin(i / 3.2)) * 38 * (0.6 + r() * 0.5) : 3 + r() * 4; } },
+    live: { n: 74, f: function (i, r) { var on = (i > 4 && i < 22) || (i > 30 && i < 50); return on ? 10 + Math.abs(Math.sin(i / 2.6)) * 74 * (0.5 + r() * 0.5) : (i > 50 ? 3 + r() * 3 : 4 + r() * 5); } }
+  };
+  document.querySelectorAll('[data-wave]').forEach(function (el) {
+    var s = shapes[el.getAttribute('data-wave')], r = rng(7 + el.getAttribute('data-wave').length);
+    for (var i = 0; i < s.n; i++) { var b = document.createElement('i'); b.style.height = Math.round(s.f(i, r)) + 'px'; el.appendChild(b); }
+  });
+
+  // Pace diagram: same sentence, two cut-off rules.
+  var svg = document.getElementById('paceSvg'), NS = 'http://www.w3.org/2000/svg';
+  function add(tag, attrs, text) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text) e.textContent = text; svg.appendChild(e); return e; }
+  var words = [[6, 40, 'open'], [54, 100, 'the first'], [150, 214, 'video'], [226, 262, 'on YouTube']];
+  var cutoff = 121, endSpeech = 262, endWait = 324;
+  function lane(y, label, cut) {
+    add('text', { x: 0, y: y - 30 }, label);
+    var r = rng(11);
+    words.forEach(function (w) {
+      for (var x = w[0]; x < w[1]; x += 4) {
+        var h = 6 + Math.abs(Math.sin(x / 5.3)) * 22 * (0.55 + r() * 0.45);
+        var lost = cut && x > cut;
+        add('rect', { x: x, y: y - h / 2, width: 2.4, height: h, rx: 1.2, fill: lost ? 'var(--ghost-bar)' : 'var(--ink-bar)' });
+      }
+    });
+    add('line', { x1: 0, y1: y + 22, x2: 344, y2: y + 22, stroke: 'var(--line)', 'stroke-width': 1 });
+  }
+  lane(52, 'STANDARD LISTENING', cutoff);
+  add('line', { x1: cutoff, y1: 14, x2: cutoff, y2: 76, stroke: 'var(--fg)', 'stroke-width': 1.3, 'stroke-dasharray': '3 3' });
+  add('text', { x: cutoff + 6, y: 86 }, 'stops after 0.8 s quiet');
+  add('text', { x: 150, y: 20, 'font-style': 'italic' }, '"video on YouTube" lost');
+  lane(150, 'HEADWAY, YOUR PACE', null);
+  add('line', { x1: endWait, y1: 112, x2: endWait, y2: 174, stroke: 'var(--rule)', 'stroke-width': 3, 'stroke-linecap': 'round' });
+  add('line', { x1: endSpeech + 3, y1: 150, x2: endWait - 4, y2: 150, stroke: 'var(--muted)', 'stroke-width': 1, 'stroke-dasharray': '2 3' });
+  add('text', { x: 222, y: 190 }, 'waits 2.4 s, stops');
+  add('text', { x: 100, y: 190 }, '1.9 s pause kept');
+  add('line', { x1: 100, y1: 178, x2: 150, y2: 178, stroke: 'var(--muted)', 'stroke-width': 1 });
+})();
+</script>
+</body>
+</html>

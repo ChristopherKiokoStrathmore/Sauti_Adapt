@@ -20,8 +20,11 @@ test('built Headway extension loads in Chromium and shows its side panel', async
     const panel = await context.newPage();
     await panel.goto(`chrome-extension://${extensionId}/dist/sidepanel.html`);
     await expect(panel).toHaveTitle('Headway');
-    await expect(panel.getByRole('heading', { name: 'Pointer' })).toBeVisible();
-    await expect(panel.locator('#gaze-enabled')).not.toBeChecked();
+    await expect(panel.getByRole('heading', { name: 'Your voice' })).toBeVisible();
+    await expect(panel.getByRole('heading', { name: 'AI Browser Agent' })).toBeVisible();
+    // Headway Voice is audio-only: the head pointer is deliberately switched off.
+    await expect(panel.getByRole('heading', { name: 'Pointer' })).not.toBeVisible();
+    await expect(panel.locator('#agent-confirm')).toBeDisabled();
   } finally {
     await context.close();
     await rm(userData, { recursive: true, force: true });

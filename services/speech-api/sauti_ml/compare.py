@@ -13,6 +13,7 @@ import re
 import threading
 import time
 import unicodedata
+from urllib.parse import urlsplit
 from pathlib import Path
 
 from .contracts import Intent
@@ -114,10 +115,21 @@ def whisper_prediction(samples, key: str) -> dict:
     if not address or not token:
         return {'status': 'unavailable', 'intent': None,
                 'error': 'Modal CDLI GPU endpoint is not configured.'}
-    if not address.startswith('https://'):
+    parsed = urlsplit(address)
+    if (parsed.scheme != 'https' or not parsed.hostname
+            or not parsed.hostname.endswith('.modal.run')
+            or parsed.username or parsed.password or parsed.port
+            or parsed.path not in ('', '/') or parsed.query or parsed.fragment):
         return {'status': 'unavailable', 'intent': None,
-                'error': 'Modal GPU endpoint must use HTTPS.'}
-    payload = np.asarray(samples, dtype='<f4').tobytes()
+                'error': 'Modal GPU endpoint must be a direct HTTPS Modal URL.'}
+    if key not in MODEL_IDS or key == 'prototype':
+        return {'status': 'unavailable', 'intent': None,
+                'error': 'Unsupported GPU model selection.'}
+    audio = np.asarray(samples, dtype=np.float32)
+    if audio.ndim != 1 or not np.isfinite(audio).all() or audio.size > 480_000:
+        return {'status': 'rejected', 'intent': 'UNKNOWN',
+                'error': 'Audio does not meet the inference contract.'}
+    payload = audio.astype('<f4', copy=False).tobytes()
     request = urllib.request.Request(
         address, data=payload, method='POST',
         headers={

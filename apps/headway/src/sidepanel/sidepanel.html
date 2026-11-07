@@ -42,6 +42,32 @@
       </div>
     </section>
 
+    <!-- 02 AI browser agent. Existing voice onboarding remains untouched. -->
+    <section class="panel" aria-labelledby="agent-title">
+      <header class="panel-head"><span class="panel-index">02</span><h2 id="agent-title">AI Browser Agent</h2></header>
+      <div class="panel-body">
+        <p class="hint">Ask Headway to search, open a website, scroll, read or go back. Gemini suggests one action; nothing happens until you confirm it.</p>
+        <label class="field-label" for="agent-user">Personal user ID</label>
+        <input id="agent-user" type="text" autocomplete="off" placeholder="Your pilot account UUID">
+        <label class="field-label" for="agent-token">Personal access token</label>
+        <input id="agent-token" type="password" autocomplete="off" placeholder="Not stored">
+        <label class="field-label" for="agent-profile">Private voice profile ID</label>
+        <input id="agent-profile" type="text" autocomplete="off" placeholder="Pilot profile UUID">
+        <button type="button" id="agent-enable" class="btn btn-secondary">Enable current website</button>
+        <button type="button" id="agent-disable" class="btn btn-secondary">Disable current website</button>
+        <label class="field-label" for="agent-instruction">Instruction or reviewed speech transcript</label>
+        <textarea id="agent-instruction" rows="3" maxlength="400" placeholder="Search Google for Strathmore University"></textarea>
+        <button type="button" id="agent-plan" class="btn btn-primary">Ask Gemini to plan</button>
+        <label class="field-label" for="agent-model">Voice model</label>
+        <select id="agent-model"><option value="english">Fine tuned English Whisper</option><option value="swahili">Fine tuned Kiswahili Whisper</option></select>
+        <label class="field-label"><input id="agent-consent" type="checkbox"> I consent to sending this audio to our private speech service and the resulting transcript to Gemini for this instruction.</label>
+        <button type="button" id="agent-record" class="btn btn-secondary">Record spoken instruction</button>
+        <p id="agent-status" class="hint" aria-live="polite" role="status">Ready. Enable your website first.</p>
+        <button type="button" id="agent-confirm" class="btn btn-primary" disabled>Confirm and execute</button>
+        <button type="button" id="agent-cancel" class="btn btn-secondary">Cancel</button>
+        <p class="hint">Browser actions remain restricted to explicitly enabled websites. No purchases, sending messages, or form submissions.</p>
+      </div>
+    </section>
     <!-- 02 Pointer -->
     <section class="panel" aria-labelledby="pointer-title" data-feature="head-pointer">
       <header class="panel-head"><span class="panel-index">02</span><h2 id="pointer-title">Pointer</h2></header>

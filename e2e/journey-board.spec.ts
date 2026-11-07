@@ -160,6 +160,6 @@ test('public research screen remains separate and does not reveal participant re
   await page.goto('/admin');
   await expect(page.getByRole('heading', { name: 'Speech model laboratory' })).toBeVisible();
   const status = await (await request.get('/api/admin/status')).json();
-  expect(Object.keys(status).sort()).toEqual(['apiConfigured', 'comparisonEnabled', 'enrollmentEnabled', 'mode', 'online']);
+  expect(Object.keys(status).sort()).toEqual(['apiConfigured', 'comparisonEnabled', 'demoMode', 'enrollmentEnabled', 'mode', 'online']);
   expect(JSON.stringify(status)).not.toMatch(/participant_accounts|private_key|user_token/i);
 });

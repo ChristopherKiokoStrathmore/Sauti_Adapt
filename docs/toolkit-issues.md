@@ -9,7 +9,7 @@ Each entry is a draft to file on GitHub: https://github.com/AI-for-Accessibility
 
 **Where:** `toolkit/test/skill-test.js` (the `REGISTRY_IDS` and `SETTINGS_META` stand-ins)
 **Toolkit version:** pinned `7cf5006`; also present on current `main`
-**Status:** Draft, not yet filed
+**Status:** Fixed in PR #__ (https://github.com/AI-for-Accessibility-Collective/AI-for-Accessibility-Toolkit/pull/__). New skill that depends on it: PR #__ (https://github.com/AI-for-Accessibility-Collective/AI-for-Accessibility-Toolkit/pull/__)
 
 **What I did:** Added a new built-in skill (`unhurried-voice.md`) using the adapters `voice-commands`, `confirm-actions`, `big-targets` and `dismiss-overlays`, then ran `node toolkit/test/skill-test.js`.
 

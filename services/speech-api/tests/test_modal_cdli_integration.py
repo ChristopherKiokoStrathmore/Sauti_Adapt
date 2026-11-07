@@ -99,3 +99,21 @@ def test_personalised_comparison_stays_profile_gated(configured, monkeypatch):
         result = infer_one(configured, str(uuid4()), 'personalized_english')
     assert result['status'] == 'unavailable'
     outbound.assert_not_called()
+
+
+def test_reported_model_id_labels_the_result(configured):
+    with patch('urllib.request.urlopen', return_value=StubResponse({
+        'model': 'english', 'transcript': 'scroll down',
+        'model_id': 'sauti-adapt-finetuned-model/english', 'revision': 'abc123',
+    })):
+        result = whisper_prediction(configured, 'english')
+    assert result['model_id'] == 'sauti-adapt-finetuned-model/english'
+
+
+def test_missing_or_invalid_model_id_is_not_passed_through(configured):
+    for body in ({'model': 'english', 'transcript': 'scroll down'},
+                 {'model': 'english', 'transcript': 'scroll down', 'model_id': 42},
+                 {'model': 'english', 'transcript': 'scroll down', 'model_id': 'x' * 500}):
+        with patch('urllib.request.urlopen', return_value=StubResponse(body)):
+            result = whisper_prediction(configured, 'english')
+        assert 'model_id' not in result

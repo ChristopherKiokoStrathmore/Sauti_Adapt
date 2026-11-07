@@ -1,10 +1,18 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { originAllowed, forwardedClientIp } from '../../../lib/proxy';
-import { PARTICIPANT_COOKIE, readParticipantSession, sealSession, sessionCookieOptions } from '../../../lib/participant-session';
+import { PARTICIPANT_COOKIE, readParticipantSession, sealSession, sessionCookieOptions, assertSessionConfiguration } from '../../../lib/participant-session';
 
 export const runtime = 'nodejs';
 
+function checkSessionSettings(): Response | null {
+  if (process.env.NODE_ENV !== 'production') return null;
+  try { assertSessionConfiguration(); return null; }
+  catch { return Response.json({ error: 'Private session service is unavailable.' }, { status: 503 }); }
+}
+
 export async function GET(request: NextRequest) {
+  const settings = checkSessionSettings();
+  if (settings) return settings;
   const session = readParticipantSession(request);
   return NextResponse.json(
     { authenticated: Boolean(session), profile_id: session?.profileId || null },
@@ -13,6 +21,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const settings = checkSessionSettings();
+  if (settings) return settings;
   if (!originAllowed(request)) return Response.json({ error: 'Origin is not allowed.' }, { status: 403 });
   const previous = readParticipantSession(request);
   if (previous) {
@@ -55,7 +65,31 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   if (!originAllowed(request)) return Response.json({ error: 'Origin is not allowed.' }, { status: 403 });
-  const result = NextResponse.json({ status: 'signed_out' }, { headers: { 'cache-control': 'no-store' } });
-  result.cookies.set(PARTICIPANT_COOKIE, '', { ...sessionCookieOptions, maxAge: 0 });
-  return result;
+  const settings = checkSessionSettings();
+  if (settings) return settings;
+  const previous = readParticipantSession(request);
+  if (previous) {
+    const base = process.env.SPEECH_API_URL;
+    const key = process.env.SPEECH_API_TOKEN;
+    if (!base || !key) return Response.json({ error: 'Cannot revoke session without the speech service.' }, { status: 503 });
+    try {
+      const result = await fetch(new URL('/v1/session/revoke', base), {
+        method: 'POST',
+        headers: {
+          'x-api-key': key,
+          'x-sauti-user': previous.user,
+          'x-sauti-user-token': previous.token,
+        },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!result.ok) return Response.json({ error: 'Server sign out failed. Please retry.' },
+        { status: 502, headers: { 'cache-control': 'no-store' } });
+    } catch {
+      return Response.json({ error: 'Server sign out failed. Please retry.' }, { status: 502 });
+    }
+  }
+  const response = NextResponse.json({ status: 'signed_out' }, { headers: { 'cache-control': 'no-store' } });
+  response.cookies.set(PARTICIPANT_COOKIE, '', { ...sessionCookieOptions, maxAge: 0 });
+  return response;
 }

@@ -72,7 +72,7 @@ def test_automatic_account_creation_is_private_and_authenticated(monkeypatch, tm
     user_id, token = response.json()['user_id'], response.json()['token']
     assert verify_user(user_id, token)
     assert not verify_user(user_id, 'wrong-token')
-    assert token not in (tmp_path / 'participant_accounts.json').read_text()
+    assert token.encode() not in (tmp_path / 'participant_accounts.sqlite3').read_bytes()
     assert response.headers['cache-control'] == 'no-store'
 
 

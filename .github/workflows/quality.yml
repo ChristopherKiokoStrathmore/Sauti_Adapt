@@ -10,7 +10,9 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
       - run: pip install -r services/speech-api/requirements-dev.txt
-      - run: python -m pytest services/speech-api/tests ml/bench/tests tests/test_deployment_smoke.py -q
+      # ffmpeg for the Modal endpoint's real audio-decode tests (ml/modal/tests).
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: python -m pytest services/speech-api/tests ml/bench/tests ml/modal/tests tests/test_deployment_smoke.py -q
   javascript:
     runs-on: ubuntu-latest
     steps:

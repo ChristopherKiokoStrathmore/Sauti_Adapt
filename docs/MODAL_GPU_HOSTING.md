@@ -120,17 +120,26 @@ repository. Replace the secret value (and the speech API's
 `SAUTI_MODAL_BEARER_TOKEN`) after a test round with outside people.
 
 Request format: `POST`, `Authorization: Bearer <token>`,
-`Content-Type: application/octet-stream`, `X-Sauti-Model: english` or
-`swahili`, and a body of raw 16 kHz mono float32 little-endian samples,
-0.3 to 120 seconds. WAV or MP3 files are not accepted.
+`X-Sauti-Model: english` or `swahili`, and the audio file itself as the
+request body (Postman: Body > binary), 0.3 to 120 seconds.
+
+- **Any common audio file:** WAV, MP3, M4A/AAC, OGG/Opus, WebM, FLAC, AIFF,
+  AMR or WMA, at any sample rate and channel count, up to 25 MB. The endpoint
+  decodes it with ffmpeg on CPU to 16 kHz mono before it reaches the GPU.
+  Any `Content-Type` works except text, JSON and form data.
+- **Raw float32 (fastest, used by the speech API):** `Content-Type:
+  application/octet-stream` and raw 16 kHz mono float32 little-endian
+  samples. These skip ffmpeg. A body sent as `application/octet-stream` that
+  starts with a known container header (for example a WAV file) is decoded
+  instead of being read as raw samples. An MP3 with no ID3 tag sent as
+  `application/octet-stream` has no such header, so send MP3s as `audio/mpeg`.
 
 ```bash
-ffmpeg -i clip.wav -ac 1 -ar 16000 -f f32le clip.f32
 curl -sS -L --max-time 300 "$URL" \
   -H "Authorization: Bearer $SAUTI_GPU_BEARER_TOKEN" \
   -H "X-Sauti-Model: swahili" \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary @clip.f32
+  -H "Content-Type: audio/wav" \
+  --data-binary @clip.wav
 ```
 
 - Keep `-L` and do **not** add `-X POST`. During a slow cold start Modal
@@ -148,8 +157,8 @@ curl -sS -L --max-time 300 "$URL" \
 |---|---|
 | 200 | Transcribed (silence gives an empty transcript) |
 | 401 | Missing or wrong bearer token |
-| 413 | Audio empty or over 120 s (a trailing partial float32 sample of 1-3 bytes is dropped, not rejected) |
-| 415 | `Content-Type` is not `application/octet-stream` |
+| 413 | Audio empty, shorter than 0.3 s, longer than 120 s, or upload over 25 MB (a trailing partial float32 sample of 1-3 bytes is dropped, not rejected) |
+| 415 | Audio could not be decoded, took over 60 s to decode, or was sent as text, JSON or form data |
 | 422 | Unknown `X-Sauti-Model` |
 | 503 | Personalized adapter not installed |
 

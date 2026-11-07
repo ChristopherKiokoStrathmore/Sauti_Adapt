@@ -92,7 +92,12 @@ gpu_image = (
     )
     .env({"HF_HOME": "/models"})
 )
-api_image = modal.Image.debian_slim(python_version="3.11").pip_install("fastapi>=0.115,<1")
+api_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg")              # decodes WAV/MP3/M4A/OGG/WebM/FLAC uploads on CPU
+    .pip_install("fastapi>=0.115,<1")
+    .add_local_python_source("audio_input")
+)
 
 
 def split_into_windows(audio):
@@ -271,14 +276,20 @@ async def transcribe(request: Request):
     model_key = request.headers.get("x-sauti-model", "")
     if model_key not in ALL_KEYS:
         raise HTTPException(status_code=422, detail="Unknown model.")
-    if request.headers.get("content-type", "").split(";")[0] != "application/octet-stream":
-        raise HTTPException(status_code=415, detail="Expected 16 kHz float32 mono audio.")
-    audio = await request.body()
-    # float32 samples are 4 bytes; drop a trailing partial sample (1-3 bytes)
-    # instead of rejecting the request.
-    audio = audio[: len(audio) - len(audio) % 4]
-    if len(audio) > MAX_BYTES or not audio:
-        raise HTTPException(status_code=413, detail="Invalid audio size.")
+    # Imported here, not at module level: only api_image ships audio_input.
+    import asyncio
+    from audio_input import AudioInputError, prepare_audio
+
+    body = await request.body()
+    # Raw float32 passes straight through; any other audio format is decoded
+    # with ffmpeg to 16 kHz mono float32, off the event loop.
+    try:
+        audio = await asyncio.to_thread(
+            prepare_audio, request.headers.get("content-type"), body,
+            sample_rate=SAMPLE_RATE, min_samples=MIN_SAMPLES, max_seconds=MAX_SECONDS,
+        )
+    except AudioInputError as error:
+        raise HTTPException(status_code=error.status, detail=error.detail) from None
     # One container pool serves every model key, so switching between base and
     # personalized models never triggers another cold start. Comparison
     # results never execute actions.

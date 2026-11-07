@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Modal endpoint accepts common audio files**, not only raw float32. WAV, MP3, M4A/AAC, OGG/Opus, WebM, FLAC, AIFF, AMR and WMA at any sample rate or channel count are decoded with ffmpeg in the CPU API container (`ml/modal/audio_input.py`) to 16 kHz mono float32. Raw float32 (`application/octet-stream`, as the speech API sends) skips ffmpeg, and a trailing partial sample is dropped instead of rejected. Uploads are capped at 25 MB and decoding at 60 s. ffmpeg only opens local files in whitelisted audio containers, so playlist and concat inputs cannot make it read other files. Clips under 0.3 s now return `413` instead of a server error. Tests in `ml/modal/tests` run in CI with real ffmpeg. Checked locally with ffmpeg 9.0 on MP3, M4A, Opus, WebM, FLAC, OGG, AIFF and WAV. **NOT VERIFIED** on Modal (Debian's ffmpeg 5.1) until redeployed.
+
 - **Modal CDLI GPU endpoint deployed and working** (workspace `ulla39254`, 2026-11-07). `ml/modal/serve.py` is renamed to `ml/modal/server.py`; the deploy workflow and docs use `modal deploy ml/modal/server.py`.
   - Fixed: the GPU container crashed at startup (`No module named 'fastapi'`, because every container imports the module), so requests were cancelled. Earlier `401`s came from the `sauti-gpu-auth` secret missing or holding a different value in the hosting workspace.
   - One GPU container (L4, A10G fallback) holds both CDLI checkpoints and serves every model key, so a comparison never starts a second container. Hugging Face revisions are pinned; startup makes no network calls once weights are cached. Startup and request timeouts are separate.
